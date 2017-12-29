@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -37,7 +37,7 @@
 class Animation : public Resource {
 
 	GDCLASS(Animation, Resource);
-	RES_BASE_EXTENSION("anm");
+	RES_BASE_EXTENSION("anim");
 
 public:
 	enum TrackType {
@@ -67,10 +67,12 @@ private:
 		bool loop_wrap;
 		NodePath path; // path to something
 		bool imported;
+		bool enabled;
 		Track() {
 			interpolation = INTERPOLATION_LINEAR;
 			imported = false;
 			loop_wrap = true;
+			enabled = true;
 		}
 		virtual ~Track() {}
 	};
@@ -212,7 +214,7 @@ private:
 	}
 
 	bool _transform_track_optimize_key(const TKey<TransformKey> &t0, const TKey<TransformKey> &t1, const TKey<TransformKey> &t2, float p_alowed_linear_err, float p_alowed_angular_err, float p_max_optimizable_angle, const Vector3 &p_norm);
-	void _transform_track_optimize(int p_idx, float p_allowed_err = 0.05, float p_alowed_angular_err = 0.01, float p_max_optimizable_angle = Math_PI * 0.125);
+	void _transform_track_optimize(int p_idx, float p_allowed_linear_err = 0.05, float p_allowed_angular_err = 0.01, float p_max_optimizable_angle = Math_PI * 0.125);
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
@@ -239,13 +241,16 @@ public:
 	void track_set_imported(int p_track, bool p_imported);
 	bool track_is_imported(int p_track) const;
 
+	void track_set_enabled(int p_track, bool p_enabled);
+	bool track_is_enabled(int p_track) const;
+
 	int transform_track_insert_key(int p_track, float p_time, const Vector3 p_loc, const Quat &p_rot = Quat(), const Vector3 &p_scale = Vector3());
 	void track_insert_key(int p_track, float p_time, const Variant &p_key, float p_transition = 1);
 	void track_set_key_transition(int p_track, int p_key_idx, float p_transition);
 	void track_set_key_value(int p_track, int p_key_idx, const Variant &p_value);
 	int track_find_key(int p_track, float p_time, bool p_exact = false) const;
 	void track_remove_key(int p_track, int p_idx);
-	void track_remove_key_at_pos(int p_track, float p_pos);
+	void track_remove_key_at_position(int p_track, float p_pos);
 	int track_get_key_count(int p_track) const;
 	Variant track_get_key_value(int p_track, int p_key_idx) const;
 	float track_get_key_time(int p_track, int p_key_idx) const;
@@ -268,6 +273,8 @@ public:
 	void method_track_get_key_indices(int p_track, float p_time, float p_delta, List<int> *p_indices) const;
 	Vector<Variant> method_track_get_params(int p_track, int p_key_idx) const;
 	StringName method_track_get_name(int p_track, int p_key_idx) const;
+
+	void copy_track(int p_track, Ref<Animation> p_to_animation);
 
 	void set_length(float p_length);
 	float get_length() const;

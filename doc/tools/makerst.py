@@ -3,21 +3,26 @@
 
 import codecs
 import sys
+import os
 import xml.etree.ElementTree as ET
 
 input_list = []
+cur_file = ""
 
 for arg in sys.argv[1:]:
+    if arg.endswith(os.sep):
+        arg = arg[:-1]
     input_list.append(arg)
 
 if len(input_list) < 1:
-    print 'usage: makerst.py <classes.xml>'
+    print('usage: makerst.py <path to folders> and/or <path to .xml files> (order of arguments irrelevant)')
+    print('example: makerst.py "../../modules/" "../classes" path_to/some_class.xml')
     sys.exit(0)
 
 
 def validate_tag(elem, tag):
     if elem.tag != tag:
-        print "Tag mismatch, expected '" + tag + "', got " + elem.tag
+        print("Tag mismatch, expected '" + tag + "', got " + elem.tag)
         sys.exit(255)
 
 
@@ -34,11 +39,10 @@ def ul_string(str, ul):
 
 
 def make_class_list(class_list, columns):
-
     f = codecs.open('class_list.rst', 'wb', 'utf-8')
     prev = 0
     col_max = len(class_list) / columns + 1
-    print ('col max is ', col_max)
+    print(('col max is ', col_max))
     col_count = 0
     row_count = 0
     last_initial = ''
@@ -102,7 +106,6 @@ def make_class_list(class_list, columns):
 
 
 def rstize_text(text, cclass):
-
     # Linebreak + tabs in the XML should become two line breaks unless in a "codeblock"
     pos = 0
     while True:
@@ -172,6 +175,7 @@ def rstize_text(text, cclass):
             pos += 1
 
     # Handle [tags]
+    inside_code = False
     pos = 0
     while True:
         pos = text.find('[', pos)
@@ -186,41 +190,57 @@ def rstize_text(text, cclass):
         post_text = text[endq_pos + 1:]
         tag_text = text[pos + 1:endq_pos]
 
+        escape_post = False
+
         if tag_text in class_names:
             tag_text = make_type(tag_text)
+            escape_post = True
         else:  # command
             cmd = tag_text
             space_pos = tag_text.find(' ')
-            if cmd.find('html') == 0:
+            if cmd == '/codeblock':
+                tag_text = ''
+                inside_code = False
+                # Strip newline if the tag was alone on one
+                if pre_text[-1] == '\n':
+                    pre_text = pre_text[:-1]
+            elif cmd == '/code':
+                tag_text = '``'
+                inside_code = False
+                escape_post = True
+            elif inside_code:
+                tag_text = '[' + tag_text + ']'
+            elif cmd.find('html') == 0:
                 cmd = tag_text[:space_pos]
                 param = tag_text[space_pos + 1:]
                 tag_text = param
-            elif cmd.find('method') == 0:
+            elif cmd.find('method') == 0 or cmd.find('member') == 0 or cmd.find('signal') == 0:
                 cmd = tag_text[:space_pos]
                 param = tag_text[space_pos + 1:]
 
                 if param.find('.') != -1:
-                    (class_param, method_param) = param.split('.')
+                    ss = param.split('.')
+                    if len(ss) > 2:
+                        sys.exit("Bad reference: '" + param + "' in file: " + cur_file)
+                    (class_param, method_param) = ss
                     tag_text = ':ref:`' + class_param + '.' + method_param + '<class_' + class_param + '_' + method_param + '>`'
                 else:
                     tag_text = ':ref:`' + param + '<class_' + cclass + "_" + param + '>`'
+                escape_post = True
             elif cmd.find('image=') == 0:
                 tag_text = ""  # '![](' + cmd[6:] + ')'
             elif cmd.find('url=') == 0:
                 tag_text = ':ref:`' + cmd[4:] + '<' + cmd[4:] + ">`"
             elif cmd == '/url':
-                tag_text = ')'
+                tag_text = ''
+                escape_post = True
             elif cmd == 'center':
                 tag_text = ''
             elif cmd == '/center':
                 tag_text = ''
             elif cmd == 'codeblock':
                 tag_text = '\n::\n'
-            elif cmd == '/codeblock':
-                tag_text = ''
-                # Strip newline if the tag was alone on one
-                if pre_text[-1] == '\n':
-                    pre_text = pre_text[:-1]
+                inside_code = True
             elif cmd == 'br':
                 # Make a new paragraph instead of a linebreak, rst is not so linebreak friendly
                 tag_text = '\n\n'
@@ -233,16 +253,19 @@ def rstize_text(text, cclass):
                 tag_text = '**'
             elif cmd == 'u' or cmd == '/u':
                 tag_text = ''
-            elif cmd == 'code' or cmd == '/code':
+            elif cmd == 'code':
                 tag_text = '``'
+                inside_code = True
             else:
-                tag_text = ':ref:`' + tag_text + '<class_' + tag_text.lower() + '>`'
+                tag_text = make_type(tag_text)
+                escape_post = True
+
+        # Properly escape things like `[Node]s`
+        if escape_post and post_text and post_text[0].isalnum(): # not punctuation, escape
+            post_text = '\ ' + post_text
 
         text = pre_text + tag_text + post_text
         pos = len(pre_text) + len(tag_text)
-
- # tnode = ET.SubElement(parent,"div")
- # tnode.text=text
 
     return text
 
@@ -263,7 +286,6 @@ def make_method(
         event=False,
         pp=None
 ):
-
     if (declare or pp == None):
         t = '- '
     else:
@@ -293,16 +315,11 @@ def make_method(
 
     if declare or pp == None:
 
-        # span.attrib["class"]="funcdecl"
-        # a=ET.SubElement(span,"a")
-        # a.attrib["name"]=name+"_"+m.attrib["name"]
-        # a.text=name+"::"+m.attrib["name"]
-
-        s = ' **' + m.attrib['name'] + '** '
+        s = '**' + m.attrib['name'] + '** '
     else:
         s = ':ref:`' + m.attrib['name'] + '<class_' + cname + "_" + m.attrib['name'] + '>` '
 
-    s += ' **(**'
+    s += '**(**'
     argfound = False
     for a in mdata['argidx']:
         arg = mdata[a]
@@ -322,16 +339,11 @@ def make_method(
         if 'default' in arg.attrib:
             s += '=' + arg.attrib['default']
 
-        argfound = True
-
-    if argfound:
-        s += ' '
     s += ' **)**'
 
     if 'qualifiers' in m.attrib:
         s += ' ' + m.attrib['qualifiers']
 
-#	f.write(s)
     if (not declare):
         if (pp != None):
             pp.append((t, s))
@@ -346,24 +358,23 @@ def make_heading(title, underline):
 
 
 def make_rst_class(node):
-
     name = node.attrib['name']
 
     f = codecs.open("class_" + name.lower() + '.rst', 'wb', 'utf-8')
 
     # Warn contributors not to edit this file directly
     f.write(".. Generated automatically by doc/tools/makerst.py in Godot's source tree.\n")
-    f.write(".. DO NOT EDIT THIS FILE, but the doc/base/classes.xml source instead.\n\n")
+    f.write(".. DO NOT EDIT THIS FILE, but the " + name + ".xml source instead.\n")
+    f.write(".. The source is found in doc/classes or modules/<name>/doc_classes.\n\n")
 
     f.write(".. _class_" + name + ":\n\n")
     f.write(make_heading(name, '='))
 
     if 'inherits' in node.attrib:
         inh = node.attrib['inherits'].strip()
-#		whle inh in classes[cn]
         f.write('**Inherits:** ')
         first = True
-        while(inh in classes):
+        while (inh in classes):
             if (not first):
                 f.write(" **<** ")
             else:
@@ -427,10 +438,10 @@ def make_rst_class(node):
         f.write(sep)
         for s in ml:
             rt = s[0]
-            while(len(rt) < longest_s):
+            while (len(rt) < longest_s):
                 rt += " "
             st = s[1]
-            while(len(st) < longest_t):
+            while (len(st) < longest_t):
                 st += " "
             f.write("| " + rt + " | " + st + " |\n")
             f.write(sep)
@@ -440,7 +451,15 @@ def make_rst_class(node):
     if events != None and len(list(events)) > 0:
         f.write(make_heading('Signals', '-'))
         for m in list(events):
+            f.write(".. _class_" + name + "_" + m.attrib['name'] + ":\n\n")
             make_method(f, node.attrib['name'], m, True, name, True)
+            f.write('\n')
+            d = m.find('description')
+            if d == None or d.text.strip() == '':
+                continue
+            f.write(rstize_text(d.text.strip(), name))
+            f.write("\n\n")
+
         f.write('\n')
 
     members = node.find('members')
@@ -448,12 +467,14 @@ def make_rst_class(node):
         f.write(make_heading('Member Variables', '-'))
 
         for c in list(members):
+            # Leading two spaces necessary to prevent breaking the <ul>
+            f.write("  .. _class_" + name + "_" + c.attrib['name'] + ":\n\n")
             s = '- '
             s += make_type(c.attrib['type']) + ' '
             s += '**' + c.attrib['name'] + '**'
             if c.text.strip() != '':
-                s += ' - ' + c.text.strip()
-            f.write(s + '\n')
+                s += ' - ' + rstize_text(c.text.strip(), name)
+            f.write(s + '\n\n')
         f.write('\n')
 
     constants = node.find('constants')
@@ -479,8 +500,6 @@ def make_rst_class(node):
         f.write(make_heading('Member Function Description', '-'))
         for m in list(methods):
             f.write(".. _class_" + name + "_" + m.attrib['name'] + ":\n\n")
-#			f.write(ul_string(m.attrib['name'],"^"))
-            #f.write('\n<a name="'+m.attrib['name']+'">' + m.attrib['name'] + '</a>\n------\n')
             make_method(f, node.attrib['name'], m, True, name)
             f.write('\n')
             d = m.find('description')
@@ -491,26 +510,38 @@ def make_rst_class(node):
         f.write('\n')
 
 
-for file in input_list:
-    tree = ET.parse(file)
+file_list = []
+
+for path in input_list:
+    if os.path.basename(path) == 'modules':
+        for subdir, dirs, _ in os.walk(path):
+            if 'doc_classes' in dirs:
+                doc_dir = os.path.join(subdir, 'doc_classes')
+                class_file_names = [f for f in os.listdir(doc_dir) if f.endswith('.xml')]
+                file_list += [os.path.join(doc_dir, f) for f in class_file_names]
+    elif not os.path.isfile(path):
+        file_list += [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.xml')]
+    elif os.path.isfile(path) and path.endswith('.xml'):
+        file_list.append(path)
+
+for cur_file in file_list:
+    tree = ET.parse(cur_file)
     doc = tree.getroot()
 
     if 'version' not in doc.attrib:
-        print "Version missing from 'doc'"
+        print("Version missing from 'doc'")
         sys.exit(255)
 
     version = doc.attrib['version']
-
-    for c in list(doc):
-        if c.attrib['name'] in class_names:
-            continue
-        class_names.append(c.attrib['name'])
-        classes[c.attrib['name']] = c
+    if doc.attrib['name'] in class_names:
+        continue
+    class_names.append(doc.attrib['name'])
+    classes[doc.attrib['name']] = doc
 
 class_names.sort()
 
 # Don't make class list for Sphinx, :toctree: handles it
-#make_class_list(class_names, 2)
+# make_class_list(class_names, 2)
 
 for cn in class_names:
     c = classes[cn]

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -62,12 +62,12 @@ static void _compress_image(Image::CompressMode p_mode, Image *p_image) {
 		}
 		return;
 	}
-	String spath = EditorSettings::get_singleton()->get_settings_path();
+	String tmppath = EditorSettings::get_singleton()->get_cache_dir();
 
 	List<String> args;
 
-	String src_img = spath + "/" + "_tmp_src_img.png";
-	String dst_img = spath + "/" + "_tmp_dst_img.pvr";
+	String src_img = tmppath.plus_file("_tmp_src_img.png");
+	String dst_img = tmppath.plus_file("_tmp_dst_img.pvr");
 
 	args.push_back("-i");
 	args.push_back(src_img);

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,8 +31,8 @@
 
 #include "core/io/file_access_pack.h"
 #include "core/io/marshalls.h"
-#include "global_config.h"
 #include "os/os.h"
+#include "project_settings.h"
 
 #include "thirdparty/misc/md5.h"
 #include "thirdparty/misc/sha256.h"
@@ -55,7 +55,7 @@ FileAccess *FileAccess::create(AccessType p_access) {
 
 bool FileAccess::exists(const String &p_name) {
 
-	if (PackedData::get_singleton()->has_path(p_name))
+	if (PackedData::get_singleton() && PackedData::get_singleton()->has_path(p_name))
 		return true;
 
 	FileAccess *f = open(p_name, READ);
@@ -135,10 +135,10 @@ String FileAccess::fix_path(const String &p_path) const {
 
 		case ACCESS_RESOURCES: {
 
-			if (GlobalConfig::get_singleton()) {
+			if (ProjectSettings::get_singleton()) {
 				if (r_path.begins_with("res://")) {
 
-					String resource_path = GlobalConfig::get_singleton()->get_resource_path();
+					String resource_path = ProjectSettings::get_singleton()->get_resource_path();
 					if (resource_path != "") {
 
 						return r_path.replace("res:/", resource_path);
@@ -152,7 +152,7 @@ String FileAccess::fix_path(const String &p_path) const {
 
 			if (r_path.begins_with("user://")) {
 
-				String data_dir = OS::get_singleton()->get_data_dir();
+				String data_dir = OS::get_singleton()->get_user_data_dir();
 				if (data_dir != "") {
 
 					return r_path.replace("user:/", data_dir);
@@ -252,9 +252,83 @@ double FileAccess::get_double() const {
 	return m.d;
 };
 
+String FileAccess::get_token() const {
+
+	CharString token;
+
+	CharType c = get_8();
+
+	while (!eof_reached()) {
+
+		if (c <= ' ') {
+			if (!token.empty())
+				break;
+		} else {
+			token.push_back(c);
+		}
+		c = get_8();
+	}
+
+	token.push_back(0);
+	return String::utf8(token.get_data());
+}
+
+class CharBuffer {
+	Vector<char> vector;
+	char stack_buffer[256];
+
+	char *buffer;
+	int capacity;
+	int written;
+
+	bool grow() {
+
+		if (vector.resize(next_power_of_2(1 + written)) != OK) {
+
+			return false;
+		}
+
+		if (buffer == stack_buffer) { // first chunk?
+
+			for (int i = 0; i < written; i++) {
+
+				vector[i] = stack_buffer[i];
+			}
+		}
+
+		buffer = vector.ptrw();
+		capacity = vector.size();
+		ERR_FAIL_COND_V(written >= capacity, false);
+
+		return true;
+	}
+
+public:
+	_FORCE_INLINE_ CharBuffer() :
+			buffer(stack_buffer),
+			capacity(sizeof(stack_buffer) / sizeof(char)),
+			written(0) {
+	}
+
+	_FORCE_INLINE_ void push_back(char c) {
+
+		if (written >= capacity) {
+
+			ERR_FAIL_COND(!grow());
+		}
+
+		buffer[written++] = c;
+	}
+
+	_FORCE_INLINE_ const char *get_data() const {
+
+		return buffer;
+	}
+};
+
 String FileAccess::get_line() const {
 
-	CharString line;
+	CharBuffer line;
 
 	CharType c = get_8();
 
@@ -279,6 +353,8 @@ Vector<String> FileAccess::get_csv_line(String delim) const {
 	String l;
 	int qc = 0;
 	do {
+		ERR_FAIL_COND_V(eof_reached(), Vector<String>());
+
 		l += get_line() + "\n";
 		qc = 0;
 		for (int i = 0; i < l.length(); i++) {
@@ -452,13 +528,13 @@ void FileAccess::store_buffer(const uint8_t *p_src, int p_length) {
 		store_8(p_src[i]);
 }
 
-Vector<uint8_t> FileAccess::get_file_as_array(const String &p_file) {
+Vector<uint8_t> FileAccess::get_file_as_array(const String &p_path) {
 
-	FileAccess *f = FileAccess::open(p_file, READ);
+	FileAccess *f = FileAccess::open(p_path, READ);
 	ERR_FAIL_COND_V(!f, Vector<uint8_t>());
 	Vector<uint8_t> data;
 	data.resize(f->get_len());
-	f->get_buffer(data.ptr(), data.size());
+	f->get_buffer(data.ptrw(), data.size());
 	memdelete(f);
 	return data;
 }
@@ -490,6 +566,37 @@ String FileAccess::get_md5(const String &p_file) {
 	String ret = String::md5(md5.digest);
 
 	memdelete(f);
+	return ret;
+}
+
+String FileAccess::get_multiple_md5(const Vector<String> &p_file) {
+
+	MD5_CTX md5;
+	MD5Init(&md5);
+
+	for (int i = 0; i < p_file.size(); i++) {
+		FileAccess *f = FileAccess::open(p_file[i], READ);
+		ERR_CONTINUE(!f);
+
+		unsigned char step[32768];
+
+		while (true) {
+
+			int br = f->get_buffer(step, 32768);
+			if (br > 0) {
+
+				MD5Update(&md5, step, br);
+			}
+			if (br < 4096)
+				break;
+		}
+		memdelete(f);
+	}
+
+	MD5Final(&md5);
+
+	String ret = String::md5(md5.digest);
+
 	return ret;
 }
 

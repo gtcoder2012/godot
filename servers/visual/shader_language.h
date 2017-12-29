@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -72,6 +72,9 @@ public:
 		TK_TYPE_ISAMPLER2D,
 		TK_TYPE_USAMPLER2D,
 		TK_TYPE_SAMPLERCUBE,
+		TK_INTERPOLATION_FLAT,
+		TK_INTERPOLATION_NO_PERSPECTIVE,
+		TK_INTERPOLATION_SMOOTH,
 		TK_PRECISION_LOW,
 		TK_PRECISION_MID,
 		TK_PRECISION_HIGH,
@@ -118,6 +121,7 @@ public:
 		TK_CF_BREAK,
 		TK_CF_CONTINUE,
 		TK_CF_RETURN,
+		TK_CF_DISCARD,
 		TK_BRACKET_OPEN,
 		TK_BRACKET_CLOSE,
 		TK_CURLY_BRACKET_OPEN,
@@ -191,6 +195,12 @@ public:
 		PRECISION_DEFAULT,
 	};
 
+	enum DataInterpolation {
+		INTERPOLATION_FLAT,
+		INTERPOLATION_NO_PERSPECTIVE,
+		INTERPOLATION_SMOOTH,
+	};
+
 	enum Operator {
 		OP_EQUAL,
 		OP_NOT_EQUAL,
@@ -244,7 +254,8 @@ public:
 		FLOW_OP_DO,
 		FLOW_OP_BREAK,
 		FLOW_OP_SWITCH,
-		FLOW_OP_CONTINUE
+		FLOW_OP_CONTINUE,
+		FLOW_OP_DISCARD
 
 	};
 
@@ -264,6 +275,7 @@ public:
 			TYPE_FUNCTION,
 			TYPE_BLOCK,
 			TYPE_VARIABLE,
+			TYPE_VARIABLE_DECLARATION,
 			TYPE_CONSTANT,
 			TYPE_OPERATOR,
 			TYPE_CONTROL_FLOW,
@@ -313,6 +325,25 @@ public:
 		}
 	};
 
+	struct VariableDeclarationNode : public Node {
+
+		DataPrecision precision;
+		DataType datatype;
+
+		struct Declaration {
+
+			StringName name;
+			Node *initializer;
+		};
+
+		Vector<Declaration> declarations;
+		virtual DataType get_datatype() const { return datatype; }
+
+		VariableDeclarationNode() {
+			type = TYPE_VARIABLE_DECLARATION;
+		}
+	};
+
 	struct ConstantNode : public Node {
 
 		DataType datatype;
@@ -344,10 +375,12 @@ public:
 
 		Map<StringName, Variable> variables;
 		List<Node *> statements;
+		bool single_statement;
 		BlockNode() {
 			type = TYPE_BLOCK;
 			parent_block = NULL;
 			parent_function = NULL;
+			single_statement = false;
 		}
 	};
 
@@ -387,10 +420,12 @@ public:
 		DataPrecision return_precision;
 		Vector<Argument> arguments;
 		BlockNode *body;
+		bool can_discard;
 
 		FunctionNode() {
 			type = TYPE_FUNCTION;
 			return_precision = PRECISION_DEFAULT;
+			can_discard = false;
 		}
 	};
 
@@ -405,6 +440,7 @@ public:
 
 		struct Varying {
 			DataType type;
+			DataInterpolation interpolation;
 			DataPrecision precission;
 		};
 
@@ -485,6 +521,8 @@ public:
 
 	static bool is_token_datatype(TokenType p_type);
 	static DataType get_token_datatype(TokenType p_type);
+	static bool is_token_interpolation(TokenType p_type);
+	static DataInterpolation get_token_interpolation(TokenType p_type);
 	static bool is_token_precision(TokenType p_type);
 	static DataPrecision get_token_precision(TokenType p_type);
 	static String get_datatype_name(DataType p_type);
@@ -498,6 +536,21 @@ public:
 
 	static void get_keyword_list(List<String> *r_keywords);
 	static void get_builtin_funcs(List<String> *r_keywords);
+
+	struct BuiltInInfo {
+		DataType type;
+		bool constant;
+		BuiltInInfo() {}
+		BuiltInInfo(DataType p_type, bool p_constant = false) {
+			type = p_type;
+			constant = p_constant;
+		}
+	};
+
+	struct FunctionInfo {
+		Map<StringName, BuiltInInfo> built_ins;
+		bool can_discard;
+	};
 
 private:
 	struct KeyWord {
@@ -558,7 +611,10 @@ private:
 		IDENTIFIER_BUILTIN_VAR,
 	};
 
-	bool _find_identifier(const BlockNode *p_block, const Map<StringName, DataType> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type = NULL, IdentifierType *r_type = NULL);
+	bool _find_identifier(const BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type = NULL, IdentifierType *r_type = NULL);
+
+	bool _is_operator_assign(Operator p_op) const;
+	bool _validate_assign(Node *p_node, const Map<StringName, BuiltInInfo> &p_builtin_types);
 
 	bool _validate_operator(OperatorNode *p_op, DataType *r_ret_type = NULL);
 
@@ -582,16 +638,16 @@ private:
 	static const BuiltinFuncDef builtin_func_defs[];
 	bool _validate_function_call(BlockNode *p_block, OperatorNode *p_func, DataType *r_ret_type);
 
-	bool _parse_function_arguments(BlockNode *p_block, const Map<StringName, DataType> &p_builtin_types, OperatorNode *p_func, int *r_complete_arg = NULL);
+	bool _parse_function_arguments(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, OperatorNode *p_func, int *r_complete_arg = NULL);
 
-	Node *_parse_expression(BlockNode *p_block, const Map<StringName, DataType> &p_builtin_types);
+	Node *_parse_expression(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types);
 
 	ShaderLanguage::Node *_reduce_expression(BlockNode *p_block, ShaderLanguage::Node *p_node);
-	Node *_parse_and_reduce_expression(BlockNode *p_block, const Map<StringName, DataType> &p_builtin_types);
+	Node *_parse_and_reduce_expression(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types);
 
-	Error _parse_block(BlockNode *p_block, const Map<StringName, DataType> &p_builtin_types, bool p_just_one = false, bool p_can_break = false, bool p_can_continue = false);
+	Error _parse_block(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, bool p_just_one = false, bool p_can_break = false, bool p_can_continue = false);
 
-	Error _parse_shader(const Map<StringName, Map<StringName, DataType> > &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types);
+	Error _parse_shader(const Map<StringName, FunctionInfo> &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types);
 
 public:
 	//static void get_keyword_list(ShaderType p_type,List<String> *p_keywords);
@@ -599,8 +655,8 @@ public:
 	void clear();
 
 	static String get_shader_type(const String &p_code);
-	Error compile(const String &p_code, const Map<StringName, Map<StringName, DataType> > &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types);
-	Error complete(const String &p_code, const Map<StringName, Map<StringName, DataType> > &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types, List<String> *r_options, String &r_call_hint);
+	Error compile(const String &p_code, const Map<StringName, FunctionInfo> &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types);
+	Error complete(const String &p_code, const Map<StringName, FunctionInfo> &p_functions, const Set<String> &p_render_modes, const Set<String> &p_shader_types, List<String> *r_options, String &r_call_hint);
 
 	String get_error_text();
 	int get_error_line();

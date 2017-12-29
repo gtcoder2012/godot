@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -47,11 +47,11 @@ void Array::_ref(const Array &p_from) const {
 	ERR_FAIL_COND(!_fp); // should NOT happen.
 
 	if (_fp == _p)
-		return; //wathever it is, nothing to do here move along
+		return; // whatever it is, nothing to do here move along
 
 	bool success = _fp->refcount.ref();
 
-	ERR_FAIL_COND(!success); //should really not happen either
+	ERR_FAIL_COND(!success); // should really not happen either
 
 	_unref();
 
@@ -210,6 +210,17 @@ const Variant &Array::get(int p_idx) const {
 	return operator[](p_idx);
 }
 
+Array Array::duplicate() const {
+
+	Array new_arr;
+	int element_count = size();
+	new_arr.resize(element_count);
+	for (int i = 0; i < element_count; i++) {
+		new_arr[i] = get(i);
+	}
+
+	return new_arr;
+}
 struct _ArrayVariantSort {
 
 	_FORCE_INLINE_ bool operator()(const Variant &p_l, const Variant &p_r) const {
@@ -222,9 +233,10 @@ struct _ArrayVariantSort {
 	}
 };
 
-void Array::sort() {
+Array &Array::sort() {
 
 	_p->array.sort_custom<_ArrayVariantSort>();
+	return *this;
 }
 
 struct _ArrayVariantSortCustom {
@@ -242,19 +254,64 @@ struct _ArrayVariantSortCustom {
 		return res;
 	}
 };
-void Array::sort_custom(Object *p_obj, const StringName &p_function) {
+Array &Array::sort_custom(Object *p_obj, const StringName &p_function) {
 
-	ERR_FAIL_NULL(p_obj);
+	ERR_FAIL_NULL_V(p_obj, *this);
 
 	SortArray<Variant, _ArrayVariantSortCustom> avs;
 	avs.compare.obj = p_obj;
 	avs.compare.func = p_function;
-	avs.sort(_p->array.ptr(), _p->array.size());
+	avs.sort(_p->array.ptrw(), _p->array.size());
+	return *this;
 }
 
-void Array::invert() {
+template <typename Less>
+_FORCE_INLINE_ int bisect(const Vector<Variant> &p_array, const Variant &p_value, bool p_before, const Less &p_less) {
+
+	int lo = 0;
+	int hi = p_array.size();
+	if (p_before) {
+		while (lo < hi) {
+			const int mid = (lo + hi) / 2;
+			if (p_less(p_array.get(mid), p_value)) {
+				lo = mid + 1;
+			} else {
+				hi = mid;
+			}
+		}
+	} else {
+		while (lo < hi) {
+			const int mid = (lo + hi) / 2;
+			if (p_less(p_value, p_array.get(mid))) {
+				hi = mid;
+			} else {
+				lo = mid + 1;
+			}
+		}
+	}
+	return lo;
+}
+
+int Array::bsearch(const Variant &p_value, bool p_before) {
+
+	return bisect(_p->array, p_value, p_before, _ArrayVariantSort());
+}
+
+int Array::bsearch_custom(const Variant &p_value, Object *p_obj, const StringName &p_function, bool p_before) {
+
+	ERR_FAIL_NULL_V(p_obj, 0);
+
+	_ArrayVariantSortCustom less;
+	less.obj = p_obj;
+	less.func = p_function;
+
+	return bisect(_p->array, p_value, p_before, less);
+}
+
+Array &Array::invert() {
 
 	_p->array.invert();
+	return *this;
 }
 
 void Array::push_front(const Variant &p_value) {

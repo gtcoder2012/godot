@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -72,14 +72,24 @@ class VisualScriptEditor : public ScriptEditorBase {
 		CREATE_RETURN,
 	};
 
+	enum MemberAction {
+		MEMBER_EDIT,
+		MEMBER_REMOVE
+
+	};
+
+	enum MemberType {
+		MEMBER_FUNCTION,
+		MEMBER_VARIABLE,
+		MEMBER_SIGNAL
+	};
+
+	VSplitContainer *left_vsplit;
 	MenuButton *edit_menu;
 
 	Ref<VisualScript> script;
 
 	Button *base_type_select;
-
-	HSplitContainer *main_hsplit;
-	VSplitContainer *left_vsplit;
 
 	GraphEdit *graph;
 
@@ -93,6 +103,7 @@ class VisualScriptEditor : public ScriptEditorBase {
 
 	PropertySelector *method_select;
 	PropertySelector *new_connect_node_select;
+	PropertySelector *new_virtual_method_select;
 
 	VisualScriptEditorVariableEdit *variable_editor;
 
@@ -125,10 +136,7 @@ class VisualScriptEditor : public ScriptEditorBase {
 		Vector<Pair<Variant::Type, String> > args;
 	};
 
-	Map<int, VirtualInMenu> virtuals_in_menu;
-
-	PopupMenu *new_function_menu;
-
+	HashMap<StringName, Ref<StyleBox>, StringNameHasher> node_styles;
 	StringName edited_func;
 
 	void _update_graph_connections();
@@ -154,6 +162,10 @@ class VisualScriptEditor : public ScriptEditorBase {
 	static Clipboard *clipboard;
 
 	PopupMenu *port_action_popup;
+	PopupMenu *member_popup;
+
+	MemberType member_type;
+	String member_name;
 
 	PortAction port_action;
 	int port_action_node;
@@ -162,6 +174,8 @@ class VisualScriptEditor : public ScriptEditorBase {
 	int port_action_new_node;
 	void _port_action_menu(int p_option);
 	void _selected_connect_node_method_or_setget(const String &p_text);
+	void _cancel_connect_node_method_or_setget();
+	void _selected_new_virtual_method(const String &p_text);
 
 	int error_line;
 
@@ -173,7 +187,6 @@ class VisualScriptEditor : public ScriptEditorBase {
 	void _change_base_type();
 	void _member_selected();
 	void _member_edited();
-	void _override_pressed(int p_id);
 
 	void _begin_node_move();
 	void _end_node_move();
@@ -223,6 +236,9 @@ class VisualScriptEditor : public ScriptEditorBase {
 
 	VisualScriptNode::TypeGuess _guess_output_type(int p_port_action_node, int p_port_action_output, Set<int> &visited_nodes);
 
+	void _member_rmb_selected(const Vector2 &p_pos);
+	void _member_option(int p_option);
+
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
@@ -248,9 +264,11 @@ public:
 	virtual void get_breakpoints(List<int> *p_breakpoints);
 	virtual void add_callback(const String &p_function, PoolStringArray p_args);
 	virtual void update_settings();
+	virtual bool show_members_overview();
 	virtual void set_debugger_active(bool p_active);
 	virtual void set_tooltip_request_func(String p_method, Object *p_obj);
 	virtual Control *get_edit_menu();
+	virtual void clear_edit_menu();
 	virtual bool can_lose_focus_on_node_selection() { return false; }
 
 	static void register_editor();
@@ -259,6 +277,29 @@ public:
 
 	VisualScriptEditor();
 	~VisualScriptEditor();
+};
+
+// Singleton
+class _VisualScriptEditor : public Object {
+	GDCLASS(_VisualScriptEditor, Object);
+
+	friend class VisualScriptLanguage;
+
+protected:
+	static void _bind_methods();
+	static _VisualScriptEditor *singleton;
+
+	static Map<String, RefPtr> custom_nodes;
+	static Ref<VisualScriptNode> create_node_custom(const String &p_name);
+
+public:
+	static _VisualScriptEditor *get_singleton() { return singleton; }
+
+	void add_custom_node(const String &p_name, const String &p_category, const Ref<Script> &p_script);
+	void remove_custom_node(const String &p_name, const String &p_category);
+
+	_VisualScriptEditor();
+	~_VisualScriptEditor();
 };
 #endif
 

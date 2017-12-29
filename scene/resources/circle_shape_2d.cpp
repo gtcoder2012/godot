@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -58,7 +58,7 @@ void CircleShape2D::_bind_methods() {
 
 Rect2 CircleShape2D::get_rect() const {
 	Rect2 rect;
-	rect.pos = -Point2(get_radius(), get_radius());
+	rect.position = -Point2(get_radius(), get_radius());
 	rect.size = Point2(get_radius(), get_radius()) * 2.0;
 	return rect;
 }
@@ -76,8 +76,8 @@ void CircleShape2D::draw(const RID &p_to_rid, const Color &p_color) {
 	VisualServer::get_singleton()->canvas_item_add_polygon(p_to_rid, points, col);
 }
 
-CircleShape2D::CircleShape2D()
-	: Shape2D(Physics2DServer::get_singleton()->shape_create(Physics2DServer::SHAPE_CIRCLE)) {
+CircleShape2D::CircleShape2D() :
+		Shape2D(Physics2DServer::get_singleton()->circle_shape_create()) {
 
 	radius = 10;
 	_update_shape();

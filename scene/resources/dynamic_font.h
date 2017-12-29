@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -32,6 +32,7 @@
 
 #ifdef FREETYPE_ENABLED
 #include "io/resource_loader.h"
+#include "os/mutex.h"
 #include "os/thread_safe.h"
 #include "scene/resources/font.h"
 
@@ -72,7 +73,7 @@ private:
 
 	friend class DynamicFont;
 
-	Ref<DynamicFontAtSize> _get_dynamic_font_at_size(CacheID p_cache);
+	Ref<DynamicFontAtSize> _get_dynamic_font_at_size(CacheID p_cache_id);
 
 protected:
 	static void _bind_methods();
@@ -97,10 +98,11 @@ class DynamicFontAtSize : public Reference {
 	FT_Face face; /* handle to face object */
 	FT_StreamRec stream;
 
-	int ascent;
-	int descent;
-	int linegap;
-	int rect_margin;
+	float ascent;
+	float descent;
+	float linegap;
+	float rect_margin;
+	float oversampling;
 
 	uint32_t texture_flags;
 
@@ -121,6 +123,7 @@ class DynamicFontAtSize : public Reference {
 		bool found;
 		int texture_idx;
 		Rect2 rect;
+		Rect2 rect_uv;
 		float v_align;
 		float h_align;
 		float advance;
@@ -145,8 +148,9 @@ class DynamicFontAtSize : public Reference {
 	static HashMap<String, Vector<uint8_t> > _fontdata;
 	Error _load();
 
-protected:
 public:
+	static float font_oversampling;
+
 	float get_height() const;
 
 	float get_ascent() const;
@@ -157,6 +161,7 @@ public:
 	float draw_char(RID p_canvas_item, const Point2 &p_pos, CharType p_char, CharType p_next, const Color &p_modulate, const Vector<Ref<DynamicFontAtSize> > &p_fallbacks) const;
 
 	void set_texture_flags(uint32_t p_flags);
+	bool update_oversampling();
 
 	DynamicFontAtSize();
 	~DynamicFontAtSize();
@@ -232,9 +237,20 @@ public:
 
 	virtual float draw_char(RID p_canvas_item, const Point2 &p_pos, CharType p_char, CharType p_next = 0, const Color &p_modulate = Color(1, 1, 1)) const;
 
+	SelfList<DynamicFont> font_list;
+
+	static Mutex *dynamic_font_mutex;
+	static SelfList<DynamicFont>::List dynamic_fonts;
+
+	static void initialize_dynamic_fonts();
+	static void finish_dynamic_fonts();
+	static void update_oversampling();
+
 	DynamicFont();
 	~DynamicFont();
 };
+
+VARIANT_ENUM_CAST(DynamicFont::SpacingType);
 
 /////////////
 

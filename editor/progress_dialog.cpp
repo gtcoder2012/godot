@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -49,7 +49,7 @@ void BackgroundProgress::_add_task(const String &p_task, const String &p_label, 
 	Control *ec = memnew(Control);
 	ec->set_h_size_flags(SIZE_EXPAND_FILL);
 	ec->set_v_size_flags(SIZE_EXPAND_FILL);
-	t.progress->set_area_as_parent_rect();
+	t.progress->set_anchors_and_margins_preset(Control::PRESET_WIDE);
 	ec->add_child(t.progress);
 	ec->set_custom_minimum_size(Size2(80, 5) * EDSCALE);
 	t.hb->add_child(ec);
@@ -155,14 +155,15 @@ void ProgressDialog::_popup() {
 
 	Ref<StyleBox> style = get_stylebox("panel", "PopupMenu");
 	ms += style->get_minimum_size();
-	for (int i = 0; i < 4; i++) {
-		main->set_margin(Margin(i), style->get_margin(Margin(i)));
-	}
+	main->set_margin(MARGIN_LEFT, style->get_margin(MARGIN_LEFT));
+	main->set_margin(MARGIN_RIGHT, -style->get_margin(MARGIN_RIGHT));
+	main->set_margin(MARGIN_TOP, style->get_margin(MARGIN_TOP));
+	main->set_margin(MARGIN_BOTTOM, -style->get_margin(MARGIN_BOTTOM));
 
 	popup_centered(ms);
 }
 
-void ProgressDialog::add_task(const String &p_task, const String &p_label, int p_steps) {
+void ProgressDialog::add_task(const String &p_task, const String &p_label, int p_steps, bool p_can_cancel) {
 
 	ERR_FAIL_COND(tasks.has(p_task));
 	Task t;
@@ -179,17 +180,27 @@ void ProgressDialog::add_task(const String &p_task, const String &p_label, int p
 	main->add_child(t.vb);
 
 	tasks[p_task] = t;
+	if (p_can_cancel) {
+		cancel_hb->show();
+	} else {
+		cancel_hb->hide();
+	}
+	cancel_hb->raise();
+	cancelled = false;
 	_popup();
+	if (p_can_cancel) {
+		cancel->grab_focus();
+	}
 }
 
-void ProgressDialog::task_step(const String &p_task, const String &p_state, int p_step, bool p_force_redraw) {
+bool ProgressDialog::task_step(const String &p_task, const String &p_state, int p_step, bool p_force_redraw) {
 
-	ERR_FAIL_COND(!tasks.has(p_task));
+	ERR_FAIL_COND_V(!tasks.has(p_task), cancelled);
 
 	if (!p_force_redraw) {
 		uint64_t tus = OS::get_singleton()->get_ticks_usec();
 		if (tus - last_progress_tick < 50000) //50ms
-			return;
+			return cancelled;
 	}
 
 	Task &t = tasks[p_task];
@@ -200,7 +211,11 @@ void ProgressDialog::task_step(const String &p_task, const String &p_state, int 
 
 	t.state->set_text(p_state);
 	last_progress_tick = OS::get_singleton()->get_ticks_usec();
+	if (cancel_hb->is_visible()) {
+		OS::get_singleton()->force_process_input();
+	}
 	Main::iteration(); // this will not work on a lot of platforms, so it's only meant for the editor
+	return cancelled;
 }
 
 void ProgressDialog::end_task(const String &p_task) {
@@ -217,12 +232,29 @@ void ProgressDialog::end_task(const String &p_task) {
 		_popup();
 }
 
+void ProgressDialog::_cancel_pressed() {
+	cancelled = true;
+}
+
+void ProgressDialog::_bind_methods() {
+	ClassDB::bind_method("_cancel_pressed", &ProgressDialog::_cancel_pressed);
+}
+
 ProgressDialog::ProgressDialog() {
 
 	main = memnew(VBoxContainer);
 	add_child(main);
-	main->set_area_as_parent_rect();
+	main->set_anchors_and_margins_preset(Control::PRESET_WIDE);
 	set_exclusive(true);
 	last_progress_tick = 0;
 	singleton = this;
+	cancel_hb = memnew(HBoxContainer);
+	main->add_child(cancel_hb);
+	cancel_hb->hide();
+	cancel = memnew(Button);
+	cancel_hb->add_spacer();
+	cancel_hb->add_child(cancel);
+	cancel->set_text(TTR("Cancel"));
+	cancel_hb->add_spacer();
+	cancel->connect("pressed", this, "_cancel_pressed");
 }

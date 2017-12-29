@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -621,7 +621,7 @@ bool Body2DSW::sleep_test(real_t p_step) {
 	else if (!can_sleep)
 		return false;
 
-	if (Math::abs(angular_velocity) < get_space()->get_body_angular_velocity_sleep_treshold() && Math::abs(linear_velocity.length_squared()) < get_space()->get_body_linear_velocity_sleep_treshold() * get_space()->get_body_linear_velocity_sleep_treshold()) {
+	if (Math::abs(angular_velocity) < get_space()->get_body_angular_velocity_sleep_threshold() && Math::abs(linear_velocity.length_squared()) < get_space()->get_body_linear_velocity_sleep_threshold() * get_space()->get_body_linear_velocity_sleep_threshold()) {
 
 		still_time += p_step;
 
@@ -650,8 +650,11 @@ void Body2DSW::set_force_integration_callback(ObjectID p_id, const StringName &p
 	}
 }
 
-Body2DSW::Body2DSW()
-	: CollisionObject2DSW(TYPE_BODY), active_list(this), inertia_update_list(this), direct_state_query_list(this) {
+Body2DSW::Body2DSW() :
+		CollisionObject2DSW(TYPE_BODY),
+		active_list(this),
+		inertia_update_list(this),
+		direct_state_query_list(this) {
 
 	mode = Physics2DServer::BODY_MODE_RIGID;
 	active = true;
@@ -676,8 +679,6 @@ Body2DSW::Body2DSW()
 	area_linear_damp = 0;
 	contact_count = 0;
 	gravity_scale = 1.0;
-	using_one_way_cache = false;
-	one_way_collision_max_depth = 0.1;
 	first_integration = false;
 
 	still_time = 0;

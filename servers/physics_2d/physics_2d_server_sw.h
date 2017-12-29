@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -67,6 +67,9 @@ class Physics2DServerSW : public Physics2DServer {
 	static Physics2DServerSW *singletonsw;
 
 	//void _clear_query(Query2DSW *p_query);
+
+	RID _shape_create(ShapeType p_shape);
+
 public:
 	struct CollCbkData {
 
@@ -74,12 +77,21 @@ public:
 		real_t valid_depth;
 		int max;
 		int amount;
+		int invalid_by_dir;
 		Vector2 *ptr;
 	};
 
+	virtual RID line_shape_create();
+	virtual RID ray_shape_create();
+	virtual RID segment_shape_create();
+	virtual RID circle_shape_create();
+	virtual RID rectangle_shape_create();
+	virtual RID capsule_shape_create();
+	virtual RID convex_polygon_shape_create();
+	virtual RID concave_polygon_shape_create();
+
 	static void _shape_col_cbk(const Vector2 &p_point_A, const Vector2 &p_point_B, void *p_userdata);
 
-	virtual RID shape_create(ShapeType p_shape);
 	virtual void shape_set_data(RID p_shape, const Variant &p_data);
 	virtual void shape_set_custom_solver_bias(RID p_shape, real_t p_bias);
 
@@ -102,7 +114,7 @@ public:
 	virtual Vector<Vector2> space_get_contacts(RID p_space) const;
 	virtual int space_get_contact_count(RID p_space) const;
 
-	// this function only works on fixed process, errors and returns null otherwise
+	// this function only works on physics process, errors and returns null otherwise
 	virtual Physics2DDirectSpaceState *space_get_direct_state(RID p_space);
 
 	/* AREA API */
@@ -123,20 +135,22 @@ public:
 	virtual RID area_get_shape(RID p_area, int p_shape_idx) const;
 	virtual Transform2D area_get_shape_transform(RID p_area, int p_shape_idx) const;
 
+	virtual void area_set_shape_disabled(RID p_area, int p_shape, bool p_disabled);
+
 	virtual void area_remove_shape(RID p_area, int p_shape_idx);
 	virtual void area_clear_shapes(RID p_area);
 
-	virtual void area_attach_object_instance_ID(RID p_area, ObjectID p_ID);
-	virtual ObjectID area_get_object_instance_ID(RID p_area) const;
+	virtual void area_attach_object_instance_id(RID p_area, ObjectID p_ID);
+	virtual ObjectID area_get_object_instance_id(RID p_area) const;
 
 	virtual void area_set_param(RID p_area, AreaParameter p_param, const Variant &p_value);
 	virtual void area_set_transform(RID p_area, const Transform2D &p_transform);
 
-	virtual Variant area_get_param(RID p_parea, AreaParameter p_param) const;
+	virtual Variant area_get_param(RID p_area, AreaParameter p_param) const;
 	virtual Transform2D area_get_transform(RID p_area) const;
 	virtual void area_set_monitorable(RID p_area, bool p_monitorable);
 	virtual void area_set_collision_mask(RID p_area, uint32_t p_mask);
-	virtual void area_set_layer_mask(RID p_area, uint32_t p_mask);
+	virtual void area_set_collision_layer(RID p_area, uint32_t p_layer);
 
 	virtual void area_set_monitor_callback(RID p_area, Object *p_receiver, const StringName &p_method);
 	virtual void area_set_area_monitor_callback(RID p_area, Object *p_receiver, const StringName &p_method);
@@ -146,7 +160,7 @@ public:
 	/* BODY API */
 
 	// create a body of a given type
-	virtual RID body_create(BodyMode p_mode = BODY_MODE_RIGID, bool p_init_sleeping = false);
+	virtual RID body_create();
 
 	virtual void body_set_space(RID p_body, RID p_space);
 	virtual RID body_get_space(RID p_body) const;
@@ -167,20 +181,20 @@ public:
 	virtual void body_remove_shape(RID p_body, int p_shape_idx);
 	virtual void body_clear_shapes(RID p_body);
 
-	virtual void body_set_shape_as_trigger(RID p_body, int p_shape_idx, bool p_enable);
-	virtual bool body_is_shape_set_as_trigger(RID p_body, int p_shape_idx) const;
+	virtual void body_set_shape_disabled(RID p_body, int p_shape_idx, bool p_disabled);
+	virtual void body_set_shape_as_one_way_collision(RID p_body, int p_shape_idx, bool p_enable);
 
-	virtual void body_attach_object_instance_ID(RID p_body, uint32_t p_ID);
-	virtual uint32_t body_get_object_instance_ID(RID p_body) const;
+	virtual void body_attach_object_instance_id(RID p_body, uint32_t p_ID);
+	virtual uint32_t body_get_object_instance_id(RID p_body) const;
 
 	virtual void body_set_continuous_collision_detection_mode(RID p_body, CCDMode p_mode);
 	virtual CCDMode body_get_continuous_collision_detection_mode(RID p_body) const;
 
-	virtual void body_set_layer_mask(RID p_body, uint32_t p_mask);
-	virtual uint32_t body_get_layer_mask(RID p_body) const;
+	virtual void body_set_collision_layer(RID p_body, uint32_t p_layer);
+	virtual uint32_t body_get_collision_layer(RID p_body) const;
 
 	virtual void body_set_collision_mask(RID p_body, uint32_t p_mask);
-	virtual uint32_t body_get_collision_mask(RID p_) const;
+	virtual uint32_t body_get_collision_mask(RID p_body) const;
 
 	virtual void body_set_param(RID p_body, BodyParameter p_param, real_t p_value);
 	virtual real_t body_get_param(RID p_body, BodyParameter p_param) const;
@@ -203,8 +217,8 @@ public:
 	virtual void body_remove_collision_exception(RID p_body, RID p_body_b);
 	virtual void body_get_collision_exceptions(RID p_body, List<RID> *p_exceptions);
 
-	virtual void body_set_contacts_reported_depth_treshold(RID p_body, real_t p_treshold);
-	virtual real_t body_get_contacts_reported_depth_treshold(RID p_body) const;
+	virtual void body_set_contacts_reported_depth_threshold(RID p_body, real_t p_threshold);
+	virtual real_t body_get_contacts_reported_depth_threshold(RID p_body) const;
 
 	virtual void body_set_omit_force_integration(RID p_body, bool p_omit);
 	virtual bool body_is_omitting_force_integration(RID p_body) const;
@@ -212,18 +226,15 @@ public:
 	virtual void body_set_max_contacts_reported(RID p_body, int p_contacts);
 	virtual int body_get_max_contacts_reported(RID p_body) const;
 
-	virtual void body_set_one_way_collision_direction(RID p_body, const Vector2 &p_direction);
-	virtual Vector2 body_get_one_way_collision_direction(RID p_body) const;
-
-	virtual void body_set_one_way_collision_max_depth(RID p_body, real_t p_max_depth);
-	virtual real_t body_get_one_way_collision_max_depth(RID p_body) const;
-
 	virtual void body_set_force_integration_callback(RID p_body, Object *p_receiver, const StringName &p_method, const Variant &p_udata = Variant());
 	virtual bool body_collide_shape(RID p_body, int p_body_shape, RID p_shape, const Transform2D &p_shape_xform, const Vector2 &p_motion, Vector2 *r_results, int p_result_max, int &r_result_count);
 
 	virtual void body_set_pickable(RID p_body, bool p_pickable);
 
 	virtual bool body_test_motion(RID p_body, const Transform2D &p_from, const Vector2 &p_motion, real_t p_margin = 0.001, MotionResult *r_result = NULL);
+
+	// this function only works on physics process, errors and returns null otherwise
+	virtual Physics2DDirectBodyState *body_get_direct_state(RID p_body);
 
 	/* JOINT API */
 

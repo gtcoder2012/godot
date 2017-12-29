@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -69,7 +69,7 @@ public:
 	void set_hover_texture(const Ref<Texture> &p_hover);
 	void set_disabled_texture(const Ref<Texture> &p_disabled);
 	void set_focused_texture(const Ref<Texture> &p_focused);
-	void set_click_mask(const Ref<BitMap> &p_image);
+	void set_click_mask(const Ref<BitMap> &p_click_mask);
 
 	Ref<Texture> get_normal_texture() const;
 	Ref<Texture> get_pressed_texture() const;
@@ -81,7 +81,7 @@ public:
 	bool get_expand() const;
 	void set_expand(bool p_expand);
 
-	void set_stretch_mode(StretchMode stretch_mode);
+	void set_stretch_mode(StretchMode p_stretch_mode);
 	StretchMode get_stretch_mode() const;
 
 	TextureButton();

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,9 +30,10 @@
 #include "os.h"
 
 #include "dir_access.h"
-#include "global_config.h"
 #include "input.h"
 #include "os/file_access.h"
+#include "project_settings.h"
+#include "version_generated.gen.h"
 
 #include <stdarg.h>
 
@@ -62,19 +63,26 @@ void OS::debug_break(){
 	// something
 };
 
-void OS::print_error(const char *p_function, const char *p_file, int p_line, const char *p_code, const char *p_rationale, ErrorType p_type) {
-
-	const char *err_type;
-	switch (p_type) {
-		case ERR_ERROR: err_type = "**ERROR**"; break;
-		case ERR_WARNING: err_type = "**WARNING**"; break;
-		case ERR_SCRIPT: err_type = "**SCRIPT ERROR**"; break;
-		case ERR_SHADER: err_type = "**SHADER ERROR**"; break;
+void OS::_set_logger(CompositeLogger *p_logger) {
+	if (_logger) {
+		memdelete(_logger);
 	}
+	_logger = p_logger;
+}
 
-	if (p_rationale && *p_rationale)
-		print("%s: %s\n ", err_type, p_rationale);
-	print("%s: At: %s:%i:%s() - %s\n", err_type, p_file, p_line, p_function, p_code);
+void OS::add_logger(Logger *p_logger) {
+	if (!_logger) {
+		Vector<Logger *> loggers;
+		loggers.push_back(p_logger);
+		_logger = memnew(CompositeLogger(loggers));
+	} else {
+		_logger->add_logger(p_logger);
+	}
+}
+
+void OS::print_error(const char *p_function, const char *p_file, int p_line, const char *p_code, const char *p_rationale, Logger::ErrorType p_type) {
+
+	_logger->log_error(p_function, p_file, p_line, p_code, p_rationale, p_type);
 }
 
 void OS::print(const char *p_format, ...) {
@@ -82,17 +90,16 @@ void OS::print(const char *p_format, ...) {
 	va_list argp;
 	va_start(argp, p_format);
 
-	vprint(p_format, argp);
+	_logger->logv(p_format, argp, false);
 
 	va_end(argp);
 };
 
 void OS::printerr(const char *p_format, ...) {
-
 	va_list argp;
 	va_start(argp, p_format);
 
-	vprint(p_format, argp, true);
+	_logger->logv(p_format, argp, true);
 
 	va_end(argp);
 };
@@ -115,6 +122,16 @@ bool OS::is_in_low_processor_usage_mode() const {
 	return low_processor_usage_mode;
 }
 
+void OS::set_low_processor_usage_mode_sleep_usec(int p_usec) {
+
+	low_processor_usage_mode_sleep_usec = p_usec;
+}
+
+int OS::get_low_processor_usage_mode_sleep_usec() const {
+
+	return low_processor_usage_mode_sleep_usec;
+}
+
 void OS::set_clipboard(const String &p_text) {
 
 	_local_clipboard = p_text;
@@ -129,7 +146,7 @@ String OS::get_executable_path() const {
 	return _execpath;
 }
 
-int OS::get_process_ID() const {
+int OS::get_process_id() const {
 
 	return -1;
 };
@@ -171,11 +188,11 @@ static FileAccess *_OSPRF = NULL;
 
 static void _OS_printres(Object *p_obj) {
 
-	Resource *res = p_obj->cast_to<Resource>();
+	Resource *res = Object::cast_to<Resource>(p_obj);
 	if (!res)
 		return;
 
-	String str = itos(res->get_instance_ID()) + String(res->get_class()) + ":" + String(res->get_name()) + " - " + res->get_path();
+	String str = itos(res->get_instance_id()) + String(res->get_class()) + ":" + String(res->get_name()) + " - " + res->get_path();
 	if (_OSPRF)
 		_OSPRF->store_line(str);
 	else
@@ -191,6 +208,10 @@ void OS::show_virtual_keyboard(const String &p_existing_text, const Rect2 &p_scr
 }
 
 void OS::hide_virtual_keyboard() {
+}
+
+int OS::get_virtual_keyboard_height() const {
+	return 0;
 }
 
 void OS::print_all_resources(String p_to_file) {
@@ -258,29 +279,68 @@ String OS::get_locale() const {
 	return "en";
 }
 
-String OS::get_resource_dir() const {
+// Helper function to ensure that a dir name/path will be valid on the OS
+String OS::get_safe_dir_name(const String &p_dir_name, bool p_allow_dir_separator) const {
 
-	return GlobalConfig::get_singleton()->get_resource_path();
+	Vector<String> invalid_chars = String(": * ? \" < > |").split(" ");
+	if (p_allow_dir_separator) {
+		// Dir separators are allowed, but disallow ".." to avoid going up the filesystem
+		invalid_chars.push_back("..");
+	} else {
+		invalid_chars.push_back("/");
+	}
+
+	String safe_dir_name = p_dir_name.replace("\\", "/").strip_edges();
+	for (int i = 0; i < invalid_chars.size(); i++) {
+		safe_dir_name = safe_dir_name.replace(invalid_chars[i], "-");
+	}
+	return safe_dir_name;
 }
 
+// Path to data, config, cache, etc. OS-specific folders
+
+// Get properly capitalized engine name for system paths
+String OS::get_godot_dir_name() const {
+
+	// Default to lowercase, so only override when different case is needed
+	return String(VERSION_SHORT_NAME).to_lower();
+}
+
+// OS equivalent of XDG_DATA_HOME
+String OS::get_data_path() const {
+
+	return ".";
+}
+
+// OS equivalent of XDG_CONFIG_HOME
+String OS::get_config_path() const {
+
+	return ".";
+}
+
+// OS equivalent of XDG_CACHE_HOME
+String OS::get_cache_path() const {
+
+	return ".";
+}
+
+// OS specific path for user://
+String OS::get_user_data_dir() const {
+
+	return ".";
+};
+
+// Absolute path to res://
+String OS::get_resource_dir() const {
+
+	return ProjectSettings::get_singleton()->get_resource_path();
+}
+
+// Access system-specific dirs like Documents, Downloads, etc.
 String OS::get_system_dir(SystemDir p_dir) const {
 
 	return ".";
 }
-
-String OS::get_safe_application_name() const {
-	String an = GlobalConfig::get_singleton()->get("application/name");
-	Vector<String> invalid_char = String("\\ / : * ? \" < > |").split(" ");
-	for (int i = 0; i < invalid_char.size(); i++) {
-		an = an.replace(invalid_char[i], "-");
-	}
-	return an;
-}
-
-String OS::get_data_dir() const {
-
-	return ".";
-};
 
 Error OS::shell_open(String p_uri) {
 	return ERR_UNAVAILABLE;
@@ -370,9 +430,9 @@ OS::ScreenOrientation OS::get_screen_orientation() const {
 	return (OS::ScreenOrientation)_orientation;
 }
 
-void OS::_ensure_data_dir() {
+void OS::_ensure_user_data_dir() {
 
-	String dd = get_data_dir();
+	String dd = get_user_data_dir();
 	DirAccess *da = DirAccess::open(dd);
 	if (da) {
 		memdelete(da);
@@ -412,7 +472,7 @@ void OS::make_rendering_thread() {
 void OS::swap_buffers() {
 }
 
-String OS::get_unique_ID() const {
+String OS::get_unique_id() const {
 
 	ERR_FAIL_V("");
 }
@@ -476,15 +536,24 @@ String OS::get_joy_guid(int p_device) const {
 
 void OS::set_context(int p_context) {
 }
+
+OS::SwitchVSyncCallbackInThread OS::switch_vsync_function = NULL;
+
 void OS::set_use_vsync(bool p_enable) {
+	_use_vsync = p_enable;
+	if (switch_vsync_function) { //if a function was set, use function
+		switch_vsync_function(p_enable);
+	} else { //otherwise just call here
+		_set_use_vsync(p_enable);
+	}
 }
 
 bool OS::is_vsync_enabled() const {
 
-	return true;
+	return _use_vsync;
 }
 
-PowerState OS::get_power_state() {
+OS::PowerState OS::get_power_state() {
 	return POWERSTATE_UNKNOWN;
 }
 int OS::get_power_seconds_left() {
@@ -494,11 +563,66 @@ int OS::get_power_percent_left() {
 	return -1;
 }
 
+bool OS::has_feature(const String &p_feature) {
+
+	if (p_feature == get_name())
+		return true;
+#ifdef DEBUG_ENABLED
+	if (p_feature == "debug")
+		return true;
+#else
+	if (p_feature == "release")
+		return true;
+#endif
+
+	if (sizeof(void *) == 8 && p_feature == "64") {
+		return true;
+	}
+	if (sizeof(void *) == 4 && p_feature == "32") {
+		return true;
+	}
+#if defined(__x86_64) || defined(__x86_64__) || defined(__amd64__)
+	if (p_feature == "x86_64") {
+		return true;
+	}
+#elif (defined(__i386) || defined(__i386__))
+	if (p_feature == "x86") {
+		return true;
+	}
+#elif defined(__aarch64__)
+	if (p_feature == "arm64") {
+		return true;
+	}
+#elif defined(__arm__)
+#if defined(__ARM_ARCH_7A__)
+	if (p_feature == "armv7a" || p_feature == "armv7") {
+		return true;
+	}
+#endif
+#if defined(__ARM_ARCH_7S__)
+	if (p_feature == "armv7s" || p_feature == "armv7") {
+		return true;
+	}
+#endif
+	if (p_feature == "arm") {
+		return true;
+	}
+#endif
+
+	if (_check_internal_feature_support(p_feature))
+		return true;
+
+	return false;
+}
+
 OS::OS() {
+	void *volatile stack_bottom;
+
 	last_error = NULL;
 	singleton = this;
 	_keep_screen_on = true; // set default value to true, because this had been true before godot 2.0.
 	low_processor_usage_mode = false;
+	low_processor_usage_mode_sleep_usec = 10000;
 	_verbose_stdout = false;
 	_no_window = false;
 	_exit_code = 0;
@@ -506,10 +630,17 @@ OS::OS() {
 
 	_render_thread_mode = RENDER_THREAD_SAFE;
 
-	_allow_hidpi = true;
+	_allow_hidpi = false;
+	_stack_bottom = (void *)(&stack_bottom);
+
+	_logger = NULL;
+
+	Vector<Logger *> loggers;
+	loggers.push_back(memnew(StdLogger));
+	_set_logger(memnew(CompositeLogger(loggers)));
 }
 
 OS::~OS() {
-
+	memdelete(_logger);
 	singleton = NULL;
 }

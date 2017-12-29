@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,27 +28,23 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "viewport.h"
+
 #include "os/input.h"
 #include "os/os.h"
-#include "scene/3d/spatial.h"
-#include "servers/physics_2d_server.h"
-//#include "scene/3d/camera.h"
-
+#include "project_settings.h"
+#include "scene/2d/collision_object_2d.h"
 #include "scene/3d/camera.h"
 #include "scene/3d/collision_object.h"
 #include "scene/3d/listener.h"
-#include "scene/3d/spatial_indexer.h"
+#include "scene/3d/scenario_fx.h"
+#include "scene/3d/spatial.h"
 #include "scene/gui/control.h"
-#include "scene/resources/mesh.h"
-
-#include "scene/2d/collision_object_2d.h"
-
 #include "scene/gui/label.h"
 #include "scene/gui/panel.h"
 #include "scene/main/timer.h"
+#include "scene/resources/mesh.h"
 #include "scene/scene_string_names.h"
-
-#include "global_config.h"
+#include "servers/physics_2d_server.h"
 
 void ViewportTexture::setup_local_to_scene() {
 
@@ -67,12 +63,14 @@ void ViewportTexture::setup_local_to_scene() {
 	ERR_EXPLAIN("ViewportTexture: Path to node is invalid");
 	ERR_FAIL_COND(!vpn);
 
-	vp = vpn->cast_to<Viewport>();
+	vp = Object::cast_to<Viewport>(vpn);
 
 	ERR_EXPLAIN("ViewportTexture: Path to node does not point to a viewport");
 	ERR_FAIL_COND(!vp);
 
 	vp->viewport_textures.insert(this);
+
+	VS::get_singleton()->texture_set_proxy(proxy, vp->texture_rid);
 }
 
 void ViewportTexture::set_viewport_path_in_scene(const NodePath &p_path) {
@@ -109,15 +107,19 @@ Size2 ViewportTexture::get_size() const {
 }
 RID ViewportTexture::get_rid() const {
 
-	ERR_FAIL_COND_V(!vp, RID());
-	return vp->texture_rid;
+	//ERR_FAIL_COND_V(!vp, RID());
+	return proxy;
 }
 
 bool ViewportTexture::has_alpha() const {
 
 	return false;
 }
+Ref<Image> ViewportTexture::get_data() const {
 
+	ERR_FAIL_COND_V(!vp, Ref<Image>());
+	return VS::get_singleton()->texture_get_data(vp->texture_rid);
+}
 void ViewportTexture::set_flags(uint32_t p_flags) {
 
 	if (!vp)
@@ -147,6 +149,7 @@ ViewportTexture::ViewportTexture() {
 
 	vp = NULL;
 	set_local_to_scene(true);
+	proxy = VS::get_singleton()->texture_create();
 }
 
 ViewportTexture::~ViewportTexture() {
@@ -154,6 +157,8 @@ ViewportTexture::~ViewportTexture() {
 	if (vp) {
 		vp->viewport_textures.erase(this);
 	}
+
+	VS::get_singleton()->free(proxy);
 }
 
 /////////////////////////////////////
@@ -179,7 +184,6 @@ Viewport::GUI::GUI() {
 	key_focus = NULL;
 	mouse_over = NULL;
 
-	cancelled_input_ID = 0;
 	tooltip = NULL;
 	tooltip_popup = NULL;
 	tooltip_label = NULL;
@@ -319,7 +323,8 @@ void Viewport::update_worlds() {
 	if (!is_inside_tree())
 		return;
 
-	Rect2 xformed_rect = (global_canvas_transform * canvas_transform).affine_inverse().xform(get_visible_rect());
+	Rect2 abstracted_rect = Rect2(Vector2(), get_visible_rect().size);
+	Rect2 xformed_rect = (global_canvas_transform * canvas_transform).affine_inverse().xform(abstracted_rect);
 	find_world_2d()->_update_viewport(this, xformed_rect);
 	find_world_2d()->_update();
 
@@ -331,22 +336,18 @@ void Viewport::_test_new_mouseover(ObjectID new_collider) {
 	if (new_collider != physics_object_over) {
 
 		if (physics_object_over) {
-			Object *obj = ObjectDB::get_instance(physics_object_over);
-			if (obj) {
-				CollisionObject *co = obj->cast_to<CollisionObject>();
-				if (co) {
-					co->_mouse_exit();
-				}
+
+			CollisionObject *co = Object::cast_to<CollisionObject>(ObjectDB::get_instance(physics_object_over));
+			if (co) {
+				co->_mouse_exit();
 			}
 		}
 
 		if (new_collider) {
-			Object *obj = ObjectDB::get_instance(new_collider);
-			if (obj) {
-				CollisionObject *co = obj->cast_to<CollisionObject>();
-				if (co) {
-					co->_mouse_enter();
-				}
+
+			CollisionObject *co = Object::cast_to<CollisionObject>(ObjectDB::get_instance(new_collider));
+			if (co) {
+				co->_mouse_enter();
 			}
 		}
 
@@ -393,7 +394,7 @@ void Viewport::_notification(int p_what) {
 				contact_3d_debug_instance = VisualServer::get_singleton()->instance_create();
 				VisualServer::get_singleton()->instance_set_base(contact_3d_debug_instance, contact_3d_debug_multimesh);
 				VisualServer::get_singleton()->instance_set_scenario(contact_3d_debug_instance, find_world()->get_scenario());
-				VisualServer::get_singleton()->instance_geometry_set_flag(contact_3d_debug_instance, VS::INSTANCE_FLAG_VISIBLE_IN_ALL_ROOMS, true);
+				//VisualServer::get_singleton()->instance_geometry_set_flag(contact_3d_debug_instance, VS::INSTANCE_FLAG_VISIBLE_IN_ALL_ROOMS, true);
 			}
 
 			VS::get_singleton()->viewport_set_active(viewport, true);
@@ -459,10 +460,10 @@ void Viewport::_notification(int p_what) {
 			VS::get_singleton()->viewport_set_active(viewport, false);
 
 		} break;
-		case NOTIFICATION_FIXED_PROCESS: {
+		case NOTIFICATION_PHYSICS_PROCESS: {
 
 			if (gui.tooltip_timer >= 0) {
-				gui.tooltip_timer -= get_fixed_process_delta_time();
+				gui.tooltip_timer -= get_physics_process_delta_time();
 				if (gui.tooltip_timer < 0) {
 					_gui_show_tooltip();
 				}
@@ -494,7 +495,7 @@ void Viewport::_notification(int p_what) {
 			if (physics_object_picking && (to_screen_rect == Rect2() || Input::get_singleton()->get_mouse_mode() != Input::MOUSE_MODE_CAPTURED)) {
 
 				Vector2 last_pos(1e20, 1e20);
-				CollisionObject *last_object;
+				CollisionObject *last_object = NULL;
 				ObjectID last_id = 0;
 				PhysicsDirectSpaceState::RayResult result;
 				Physics2DDirectSpaceState *ss2d = Physics2DServer::get_singleton()->space_get_direct_state(find_world_2d()->get_space());
@@ -512,7 +513,7 @@ void Viewport::_notification(int p_what) {
 
 					if (mm.is_valid()) {
 
-						pos = mm->get_pos();
+						pos = mm->get_position();
 						motion_tested = true;
 						physics_last_mousepos = pos;
 					}
@@ -520,19 +521,19 @@ void Viewport::_notification(int p_what) {
 					Ref<InputEventMouseButton> mb = ev;
 
 					if (mb.is_valid()) {
-						pos = mb->get_pos();
+						pos = mb->get_position();
 					}
 
 					Ref<InputEventScreenDrag> sd = ev;
 
 					if (sd.is_valid()) {
-						pos = sd->get_pos();
+						pos = sd->get_position();
 					}
 
 					Ref<InputEventScreenTouch> st = ev;
 
 					if (st.is_valid()) {
-						pos = st->get_pos();
+						pos = st->get_position();
 					}
 
 					if (ss2d) {
@@ -542,11 +543,11 @@ void Viewport::_notification(int p_what) {
 
 						Vector2 point = get_canvas_transform().affine_inverse().xform(pos);
 						Physics2DDirectSpaceState::ShapeResult res[64];
-						int rc = ss2d->intersect_point(point, res, 64, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+						int rc = ss2d->intersect_point(point, res, 64, Set<RID>(), 0xFFFFFFFF, true);
 						for (int i = 0; i < rc; i++) {
 
 							if (res[i].collider_id && res[i].collider) {
-								CollisionObject2D *co = res[i].collider->cast_to<CollisionObject2D>();
+								CollisionObject2D *co = Object::cast_to<CollisionObject2D>(res[i].collider);
 								if (co) {
 
 									Map<ObjectID, uint64_t>::Element *E = physics_2d_mouseover.find(res[i].collider_id);
@@ -569,7 +570,7 @@ void Viewport::_notification(int p_what) {
 								Object *o = ObjectDB::get_instance(E->key());
 								if (o) {
 
-									CollisionObject2D *co = o->cast_to<CollisionObject2D>();
+									CollisionObject2D *co = Object::cast_to<CollisionObject2D>(o);
 									if (co) {
 										co->_mouse_exit();
 									}
@@ -589,19 +590,14 @@ void Viewport::_notification(int p_what) {
 
 					if (physics_object_capture != 0) {
 
-						Object *obj = ObjectDB::get_instance(physics_object_capture);
-						if (obj) {
-							CollisionObject *co = obj->cast_to<CollisionObject>();
-							if (co) {
-								co->_input_event(camera, ev, Vector3(), Vector3(), 0);
-								captured = true;
-								if (mb.is_valid() && mb->get_button_index() == 1 && !mb->is_pressed()) {
-									physics_object_capture = 0;
-								}
-
-							} else {
+						CollisionObject *co = Object::cast_to<CollisionObject>(ObjectDB::get_instance(physics_object_capture));
+						if (co) {
+							co->_input_event(camera, ev, Vector3(), Vector3(), 0);
+							captured = true;
+							if (mb.is_valid() && mb->get_button_index() == 1 && !mb->is_pressed()) {
 								physics_object_capture = 0;
 							}
+
 						} else {
 							physics_object_capture = 0;
 						}
@@ -612,7 +608,7 @@ void Viewport::_notification(int p_what) {
 					} else if (pos == last_pos) {
 
 						if (last_id) {
-							if (ObjectDB::get_instance(last_id)) {
+							if (ObjectDB::get_instance(last_id) && last_object) {
 								//good, exists
 								last_object->_input_event(camera, ev, result.position, result.normal, result.shape);
 								if (last_object->get_capture_input_on_drag() && mb.is_valid() && mb->get_button_index() == 1 && mb->is_pressed()) {
@@ -630,22 +626,19 @@ void Viewport::_notification(int p_what) {
 							PhysicsDirectSpaceState *space = PhysicsServer::get_singleton()->space_get_direct_state(find_world()->get_space());
 							if (space) {
 
-								bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+								bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, true);
 								ObjectID new_collider = 0;
 								if (col) {
 
-									if (result.collider) {
+									CollisionObject *co = Object::cast_to<CollisionObject>(result.collider);
+									if (co) {
 
-										CollisionObject *co = result.collider->cast_to<CollisionObject>();
-										if (co) {
-
-											co->_input_event(camera, ev, result.position, result.normal, result.shape);
-											last_object = co;
-											last_id = result.collider_id;
-											new_collider = last_id;
-											if (co->get_capture_input_on_drag() && mb.is_valid() && mb->get_button_index() == 1 && mb->is_pressed()) {
-												physics_object_capture = last_id;
-											}
+										co->_input_event(camera, ev, result.position, result.normal, result.shape);
+										last_object = co;
+										last_id = result.collider_id;
+										new_collider = last_id;
+										if (co->get_capture_input_on_drag() && mb.is_valid() && mb->get_button_index() == 1 && mb->is_pressed()) {
+											physics_object_capture = last_id;
 										}
 									}
 								}
@@ -669,14 +662,12 @@ void Viewport::_notification(int p_what) {
 					PhysicsDirectSpaceState *space = PhysicsServer::get_singleton()->space_get_direct_state(find_world()->get_space());
 					if (space) {
 
-						bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+						bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, true);
 						ObjectID new_collider = 0;
 						if (col) {
-							if (result.collider) {
-								CollisionObject *co = result.collider->cast_to<CollisionObject>();
-								if (co) {
-									new_collider = result.collider_id;
-								}
+							CollisionObject *co = Object::cast_to<CollisionObject>(result.collider);
+							if (co) {
+								new_collider = result.collider_id;
 							}
 						}
 
@@ -693,6 +684,16 @@ void Viewport::_notification(int p_what) {
 RID Viewport::get_viewport_rid() const {
 
 	return viewport;
+}
+
+void Viewport::set_use_arvr(bool p_use_arvr) {
+	arvr = p_use_arvr;
+
+	VS::get_singleton()->viewport_set_use_arvr(viewport, arvr);
+}
+
+bool Viewport::use_arvr() {
+	return arvr;
 }
 
 void Viewport::set_size(const Size2 &p_size) {
@@ -734,7 +735,7 @@ Size2 Viewport::get_size() const {
 
 void Viewport::_update_listener() {
 	/*
-	if (is_inside_tree() && audio_listener && (camera || listener) && (!get_parent() || (get_parent()->cast_to<Control>() && get_parent()->cast_to<Control>()->is_visible_in_tree())))  {
+	if (is_inside_tree() && audio_listener && (camera || listener) && (!get_parent() || (Object::cast_to<Control>(get_parent()) && Object::cast_to<Control>(get_parent())->is_visible_in_tree())))  {
 		SpatialSoundServer::get_singleton()->listener_set_space(internal_listener, find_world()->get_sound_space());
 	} else {
 		SpatialSoundServer::get_singleton()->listener_set_space(internal_listener, RID());
@@ -745,7 +746,7 @@ void Viewport::_update_listener() {
 void Viewport::_update_listener_2d() {
 
 	/*
-	if (is_inside_tree() && audio_listener && (!get_parent() || (get_parent()->cast_to<Control>() && get_parent()->cast_to<Control>()->is_visible_in_tree())))
+	if (is_inside_tree() && audio_listener && (!get_parent() || (Object::cast_to<Control>(get_parent()) && Object::cast_to<Control>(get_parent())->is_visible_in_tree())))
 		SpatialSound2DServer::get_singleton()->listener_set_space(internal_listener_2d, find_world_2d()->get_sound_space());
 	else
 		SpatialSound2DServer::get_singleton()->listener_set_space(internal_listener_2d, RID());
@@ -934,6 +935,9 @@ void Viewport::_camera_remove(Camera *p_camera) {
 
 	cameras.erase(p_camera);
 	if (camera == p_camera) {
+		if (camera && find_world().is_valid()) {
+			camera->notification(Camera::NOTIFICATION_LOST_CURRENT);
+		}
 		camera = NULL;
 	}
 }
@@ -1013,12 +1017,11 @@ void Viewport::_propagate_enter_world(Node *p_node) {
 		if (!p_node->is_inside_tree()) //may not have entered scene yet
 			return;
 
-		Spatial *s = p_node->cast_to<Spatial>();
-		if (s) {
+		if (Object::cast_to<Spatial>(p_node) || Object::cast_to<WorldEnvironment>(p_node)) {
 
-			s->notification(Spatial::NOTIFICATION_ENTER_WORLD);
+			p_node->notification(Spatial::NOTIFICATION_ENTER_WORLD);
 		} else {
-			Viewport *v = p_node->cast_to<Viewport>();
+			Viewport *v = Object::cast_to<Viewport>(p_node);
 			if (v) {
 
 				if (v->world.is_valid())
@@ -1038,7 +1041,7 @@ void Viewport::_propagate_viewport_notification(Node *p_node, int p_what) {
 	p_node->notification(p_what);
 	for (int i = 0; i < p_node->get_child_count(); i++) {
 		Node *c = p_node->get_child(i);
-		if (c->cast_to<Viewport>())
+		if (Object::cast_to<Viewport>(c))
 			continue;
 		_propagate_viewport_notification(c, p_what);
 	}
@@ -1051,12 +1054,11 @@ void Viewport::_propagate_exit_world(Node *p_node) {
 		if (!p_node->is_inside_tree()) //may have exited scene already
 			return;
 
-		Spatial *s = p_node->cast_to<Spatial>();
-		if (s) {
+		if (Object::cast_to<Spatial>(p_node) || Object::cast_to<WorldEnvironment>(p_node)) {
 
-			s->notification(Spatial::NOTIFICATION_EXIT_WORLD, true);
+			p_node->notification(Spatial::NOTIFICATION_EXIT_WORLD);
 		} else {
-			Viewport *v = p_node->cast_to<Viewport>();
+			Viewport *v = Object::cast_to<Viewport>(p_node);
 			if (v) {
 
 				if (v->world.is_valid())
@@ -1152,6 +1154,7 @@ void Viewport::set_size_override(bool p_enable, const Size2 &p_size, const Vecto
 	size_override_margin = p_margin;
 	_update_rect();
 	_update_stretch_transform();
+	emit_signal("size_changed");
 }
 
 Size2 Viewport::get_size_override() const {
@@ -1179,44 +1182,7 @@ bool Viewport::is_size_override_stretch_enabled() const {
 
 	return size_override_stretch;
 }
-#if 0
-void Viewport::set_as_render_target(bool p_enable){
 
-/*	if (render_target==p_enable)
-		return;
-
-	render_target=p_enable;
-
-	VS::get_singleton()->viewport_set_as_render_target(viewport,p_enable);
-	if (is_inside_tree()) {
-
-		if (p_enable)
-			_vp_exit_tree();
-		else
-			_vp_enter_tree();
-	}
-
-	if (p_enable) {
-
-		texture_rid = VS::get_singleton()->viewport_get_texture(viewport);
-	} else {
-
-		texture_rid=RID();
-	}
-
-	texture->set_flags(texture->flags);
-	texture->emit_changed();
-
-	update_configuration_warning();
-	*/
-}
-
-bool Viewport::is_set_as_render_target() const{
-
-	return render_target;
-
-}
-#endif
 void Viewport::set_update_mode(UpdateMode p_mode) {
 
 	update_mode = p_mode;
@@ -1225,17 +1191,6 @@ void Viewport::set_update_mode(UpdateMode p_mode) {
 Viewport::UpdateMode Viewport::get_update_mode() const {
 
 	return update_mode;
-}
-//RID get_texture() const;
-
-void Viewport::queue_screen_capture() {
-
-	//VS::get_singleton()->viewport_queue_screen_capture(viewport);
-}
-Ref<Image> Viewport::get_screen_capture() const {
-
-	//return VS::get_singleton()->viewport_get_screen_capture(viewport);
-	return Ref<Image>();
 }
 
 Ref<ViewportTexture> Viewport::get_texture() const {
@@ -1254,15 +1209,15 @@ bool Viewport::get_vflip() const {
 	return vflip;
 }
 
-void Viewport::set_clear_on_new_frame(bool p_enable) {
+void Viewport::set_clear_mode(ClearMode p_mode) {
 
-	clear_on_new_frame = p_enable;
-	//VisualServer::get_singleton()->viewport_set_clear_on_new_frame(viewport,p_enable);
+	clear_mode = p_mode;
+	VS::get_singleton()->viewport_set_clear_mode(viewport, VS::ViewportClearMode(p_mode));
 }
 
-bool Viewport::get_clear_on_new_frame() const {
+Viewport::ClearMode Viewport::get_clear_mode() const {
 
-	return clear_on_new_frame;
+	return clear_mode;
 }
 
 void Viewport::set_shadow_atlas_size(int p_size) {
@@ -1298,19 +1253,13 @@ Viewport::ShadowAtlasQuadrantSubdiv Viewport::get_shadow_atlas_quadrant_subdiv(i
 	return shadow_atlas_quadrant_subdiv[p_quadrant];
 }
 
-void Viewport::clear() {
-
-	//clear=true;
-	//VisualServer::get_singleton()->viewport_clear(viewport);
-}
-
 Transform2D Viewport::_get_input_pre_xform() const {
 
 	Transform2D pre_xf;
 
 	if (to_screen_rect != Rect2()) {
 
-		pre_xf.elements[2] = -to_screen_rect.pos;
+		pre_xf.elements[2] = -to_screen_rect.position;
 		pre_xf.scale(size / to_screen_rect.size);
 	}
 
@@ -1319,12 +1268,9 @@ Transform2D Viewport::_get_input_pre_xform() const {
 
 Vector2 Viewport::_get_window_offset() const {
 
-	/*
-	if (parent_control) {
-		return (parent_control->get_viewport()->get_final_transform() * parent_control->get_global_transform_with_canvas()).get_origin();
+	if (get_parent() && get_parent()->has_method("get_global_position")) {
+		return get_parent()->call("get_global_position");
 	}
-	*/
-
 	return Vector2();
 }
 
@@ -1349,7 +1295,7 @@ void Viewport::_vp_input(const Ref<InputEvent> &p_ev) {
 		return;
 
 #ifdef TOOLS_ENABLED
-	if (get_tree()->is_editor_hint() && get_tree()->get_edited_scene_root() && get_tree()->get_edited_scene_root()->is_a_parent_of(this)) {
+	if (Engine::get_singleton()->is_editor_hint() && get_tree()->get_edited_scene_root() && get_tree()->get_edited_scene_root()->is_a_parent_of(this)) {
 		return;
 	}
 #endif
@@ -1369,7 +1315,7 @@ void Viewport::_vp_unhandled_input(const Ref<InputEvent> &p_ev) {
 	if (disable_input)
 		return;
 #ifdef TOOLS_ENABLED
-	if (get_tree()->is_editor_hint() && get_tree()->get_edited_scene_root() && get_tree()->get_edited_scene_root()->is_a_parent_of(this)) {
+	if (Engine::get_singleton()->is_editor_hint() && get_tree()->get_edited_scene_root() && get_tree()->get_edited_scene_root()->is_a_parent_of(this)) {
 		return;
 	}
 #endif
@@ -1397,7 +1343,7 @@ Vector2 Viewport::get_mouse_position() const {
 void Viewport::warp_mouse(const Vector2 &p_pos) {
 
 	Vector2 gpos = (get_final_transform().affine_inverse() * _get_input_pre_xform()).affine_inverse().xform(p_pos);
-	Input::get_singleton()->warp_mouse_pos(gpos);
+	Input::get_singleton()->warp_mouse_position(gpos);
 }
 
 void Viewport::_gui_sort_subwindows() {
@@ -1451,6 +1397,10 @@ void Viewport::_gui_show_tooltip() {
 		gui.tooltip_popup = NULL;
 	}
 
+	if (!gui.tooltip) {
+		return;
+	}
+
 	Control *rp = gui.tooltip->get_root_parent_control();
 	if (!rp)
 		return;
@@ -1468,22 +1418,22 @@ void Viewport::_gui_show_tooltip() {
 
 	gui.tooltip_label->set_anchor_and_margin(MARGIN_LEFT, Control::ANCHOR_BEGIN, ttp->get_margin(MARGIN_LEFT));
 	gui.tooltip_label->set_anchor_and_margin(MARGIN_TOP, Control::ANCHOR_BEGIN, ttp->get_margin(MARGIN_TOP));
-	gui.tooltip_label->set_anchor_and_margin(MARGIN_RIGHT, Control::ANCHOR_END, ttp->get_margin(MARGIN_RIGHT));
-	gui.tooltip_label->set_anchor_and_margin(MARGIN_BOTTOM, Control::ANCHOR_END, ttp->get_margin(MARGIN_BOTTOM));
-	gui.tooltip_label->set_text(tooltip);
+	gui.tooltip_label->set_anchor_and_margin(MARGIN_RIGHT, Control::ANCHOR_END, -ttp->get_margin(MARGIN_RIGHT));
+	gui.tooltip_label->set_anchor_and_margin(MARGIN_BOTTOM, Control::ANCHOR_END, -ttp->get_margin(MARGIN_BOTTOM));
+	gui.tooltip_label->set_text(tooltip.strip_edges());
 	Rect2 r(gui.tooltip_pos + Point2(10, 10), gui.tooltip_label->get_combined_minimum_size() + ttp->get_minimum_size());
 	Rect2 vr = gui.tooltip_label->get_viewport_rect();
-	if (r.size.x + r.pos.x > vr.size.x)
-		r.pos.x = vr.size.x - r.size.x;
-	else if (r.pos.x < 0)
-		r.pos.x = 0;
+	if (r.size.x + r.position.x > vr.size.x)
+		r.position.x = vr.size.x - r.size.x;
+	else if (r.position.x < 0)
+		r.position.x = 0;
 
-	if (r.size.y + r.pos.y > vr.size.y)
-		r.pos.y = vr.size.y - r.size.y;
-	else if (r.pos.y < 0)
-		r.pos.y = 0;
+	if (r.size.y + r.position.y > vr.size.y)
+		r.position.y = vr.size.y - r.size.y;
+	else if (r.position.y < 0)
+		r.position.y = 0;
 
-	gui.tooltip_popup->set_global_position(r.pos);
+	gui.tooltip_popup->set_global_position(r.position);
 	gui.tooltip_popup->set_size(r.size);
 
 	gui.tooltip_popup->raise();
@@ -1505,12 +1455,12 @@ void Viewport::_gui_call_input(Control *p_control, const Ref<InputEvent> &p_inpu
 									 mb->get_button_index() == BUTTON_WHEEL_LEFT ||
 									 mb->get_button_index() == BUTTON_WHEEL_RIGHT));
 
-	bool ismouse = ev.is_valid() || p_input->cast_to<InputEventMouseMotion>() != NULL;
+	bool ismouse = ev.is_valid() || Object::cast_to<InputEventMouseMotion>(*p_input) != NULL;
 
 	CanvasItem *ci = p_control;
 	while (ci) {
 
-		Control *control = ci->cast_to<Control>();
+		Control *control = Object::cast_to<Control>(ci);
 		if (control) {
 			control->call_multilevel(SceneStringNames::get_singleton()->_gui_input, ev);
 			if (gui.key_event_accepted)
@@ -1583,10 +1533,10 @@ Control *Viewport::_gui_find_control(const Point2 &p_global) {
 
 Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_global, const Transform2D &p_xform, Transform2D &r_inv_xform) {
 
-	if (p_node->cast_to<Viewport>())
+	if (Object::cast_to<Viewport>(p_node))
 		return NULL;
 
-	Control *c = p_node->cast_to<Control>();
+	Control *c = Object::cast_to<Control>(p_node);
 
 	if (c) {
 		//print_line("at "+String(c->get_path())+" POS "+c->get_position()+" bt "+p_xform);
@@ -1611,7 +1561,7 @@ Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_
 			if (p_node == gui.tooltip_popup)
 				continue;
 
-			CanvasItem *ci = p_node->get_child(i)->cast_to<CanvasItem>();
+			CanvasItem *ci = Object::cast_to<CanvasItem>(p_node->get_child(i));
 			if (!ci || ci->is_set_as_toplevel())
 				continue;
 
@@ -1640,7 +1590,7 @@ bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_che
 		CanvasItem *ci = p_at_control;
 		while (ci) {
 
-			Control *control = ci->cast_to<Control>();
+			Control *control = Object::cast_to<Control>(ci);
 			if (control) {
 
 				if (control->can_drop_data(p_at_pos, gui.drag_data)) {
@@ -1669,9 +1619,6 @@ bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_che
 
 void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
-	if (p_event->get_id() == gui.cancelled_input_ID) {
-		return;
-	}
 	//?
 	/*
 	if (!is_visible()) {
@@ -1685,15 +1632,17 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 		gui.key_event_accepted = false;
 
-		Point2 mpos = mb->get_pos();
+		Point2 mpos = mb->get_position();
 		if (mb->is_pressed()) {
 
 			Size2 pos = mpos;
-			if (gui.mouse_focus && mb->get_button_index() != gui.mouse_focus_button) {
+			if (gui.mouse_focus && mb->get_button_index() != gui.mouse_focus_button && mb->get_button_index() == BUTTON_LEFT) {
 
 				//do not steal mouse focus and stuff
 
 			} else {
+
+				bool is_handled = false;
 
 				_gui_sort_modal_stack();
 				while (!gui.modal_stack.empty()) {
@@ -1706,15 +1655,25 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 							//cancel event, sorry, modal exclusive EATS UP ALL
 							//alternative, you can't pop out a window the same frame it was made modal (fixes many issues)
 							get_tree()->set_input_as_handled();
+
 							return; // no one gets the event if exclusive NO ONE
 						}
 
 						top->notification(Control::NOTIFICATION_MODAL_CLOSE);
 						top->_modal_stack_remove();
 						top->hide();
+
+						if (!top->pass_on_modal_close_click()) {
+							is_handled = true;
+						}
 					} else {
 						break;
 					}
+				}
+
+				if (is_handled) {
+					get_tree()->set_input_as_handled();
+					return;
 				}
 
 				//Matrix32 parent_xform;
@@ -1740,11 +1699,11 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			mb = mb->xformed_by(Transform2D()); // make a copy of the event
 
-			mb->set_global_pos(pos);
+			mb->set_global_position(pos);
 
 			pos = gui.focus_inv_xform.xform(pos);
 
-			mb->set_pos(pos);
+			mb->set_position(pos);
 
 #ifdef DEBUG_ENABLED
 			if (ScriptDebugger::get_singleton()) {
@@ -1765,7 +1724,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				CanvasItem *ci = gui.mouse_focus;
 				while (ci) {
 
-					Control *control = ci->cast_to<Control>();
+					Control *control = Object::cast_to<Control>(ci);
 					if (control) {
 						if (control->get_focus_mode() != Control::FOCUS_NONE) {
 							if (control != gui.key_focus) {
@@ -1789,7 +1748,6 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				_gui_call_input(gui.mouse_focus, mb);
 			}
 
-			get_tree()->call_group_flags(SceneTree::GROUP_CALL_REALTIME, "windows", "_cancel_input_ID", mb->get_id());
 			get_tree()->set_input_as_handled();
 
 			if (gui.drag_data.get_type() != Variant::NIL && mb->get_button_index() == BUTTON_LEFT) {
@@ -1841,17 +1799,20 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			Size2 pos = mpos;
 
 			mb = mb->xformed_by(Transform2D()); //make a copy
-			mb->set_global_pos(pos);
+			mb->set_global_position(pos);
 			pos = gui.focus_inv_xform.xform(pos);
-			mb->set_pos(pos);
+			mb->set_position(pos);
 
-			if (gui.mouse_focus->can_process()) {
-				_gui_call_input(gui.mouse_focus, mb);
-			}
+			Control *mouse_focus = gui.mouse_focus;
 
+			//disable mouse focus if needed before calling input, this makes popups on mouse press event work better, as the release will never be received otherwise
 			if (mb->get_button_index() == gui.mouse_focus_button) {
 				gui.mouse_focus = NULL;
 				gui.mouse_focus_button = -1;
+			}
+
+			if (mouse_focus->can_process()) {
+				_gui_call_input(mouse_focus, mb);
 			}
 
 			/*if (gui.drag_data.get_type()!=Variant::NIL && mb->get_button_index()==BUTTON_LEFT) {
@@ -1859,7 +1820,6 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				gui.drag_data=Variant(); //always clear
 			}*/
 
-			get_tree()->call_group_flags(SceneTree::GROUP_CALL_REALTIME, "windows", "_cancel_input_ID", mb->get_id());
 			get_tree()->set_input_as_handled();
 		}
 	}
@@ -1869,7 +1829,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 	if (mm.is_valid()) {
 
 		gui.key_event_accepted = false;
-		Point2 mpos = mm->get_pos();
+		Point2 mpos = mm->get_position();
 
 		gui.last_mouse_pos = mpos;
 
@@ -1886,7 +1846,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 					CanvasItem *ci = gui.mouse_focus;
 					while (ci) {
 
-						Control *control = ci->cast_to<Control>();
+						Control *control = Object::cast_to<Control>(ci);
 						if (control) {
 
 							gui.drag_data = control->get_drag_data(control->get_global_transform_with_canvas().affine_inverse().xform(mpos) - gui.drag_accum);
@@ -1927,8 +1887,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			Control *top = gui.modal_stack.back()->get();
 			if (over != top && !top->is_a_parent_of(over)) {
-
-				return; // don't send motion event to anything below modal stack top
+				over = NULL; //nothing can be found outside the modal stack
 			}
 		}
 
@@ -1961,7 +1920,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 		mm = mm->xformed_by(Transform2D()); //make a copy
 
-		mm->set_global_pos(mpos);
+		mm->set_global_position(mpos);
 		mm->set_speed(speed);
 		mm->set_relative(rel);
 
@@ -1999,7 +1958,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 		//pos = gui.focus_inv_xform.xform(pos);
 
-		mm->set_pos(pos);
+		mm->set_position(pos);
 
 		Control::CursorShape cursor_shape = over->get_cursor_shape(pos);
 		OS::get_singleton()->set_cursor_shape((OS::CursorShape)cursor_shape);
@@ -2020,6 +1979,113 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				OS::get_singleton()->set_cursor_shape(OS::CURSOR_CAN_DROP);
 			}
 			//change mouse accordingly i guess
+		}
+	}
+
+	Ref<InputEventScreenTouch> touch_event = p_event;
+	if (touch_event.is_valid()) {
+
+		Size2 pos = touch_event->get_position();
+		if (touch_event->is_pressed()) {
+
+			Control *over = _gui_find_control(pos);
+			if (over) {
+
+				if (!gui.modal_stack.empty()) {
+
+					Control *top = gui.modal_stack.back()->get();
+					if (over != top && !top->is_a_parent_of(over)) {
+
+						return;
+					}
+				}
+				if (over->can_process()) {
+
+					touch_event = touch_event->xformed_by(Transform2D()); //make a copy
+					if (over == gui.mouse_focus) {
+						pos = gui.focus_inv_xform.xform(pos);
+					} else {
+						pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
+					}
+					touch_event->set_position(pos);
+					_gui_call_input(over, touch_event);
+				}
+				get_tree()->set_input_as_handled();
+				return;
+			}
+		} else if (gui.mouse_focus) {
+
+			if (gui.mouse_focus->can_process()) {
+
+				touch_event = touch_event->xformed_by(Transform2D()); //make a copy
+				touch_event->set_position(gui.focus_inv_xform.xform(pos));
+
+				_gui_call_input(gui.mouse_focus, touch_event);
+			}
+			get_tree()->set_input_as_handled();
+			return;
+		}
+	}
+
+	Ref<InputEventGesture> gesture_event = p_event;
+	if (gesture_event.is_valid()) {
+
+		Size2 pos = gesture_event->get_position();
+
+		Control *over = _gui_find_control(pos);
+		if (over) {
+
+			if (over->can_process()) {
+
+				gesture_event = gesture_event->xformed_by(Transform2D()); //make a copy
+				if (over == gui.mouse_focus) {
+					pos = gui.focus_inv_xform.xform(pos);
+				} else {
+					pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
+				}
+				gesture_event->set_position(pos);
+				_gui_call_input(over, gesture_event);
+			}
+			get_tree()->set_input_as_handled();
+			return;
+		}
+	}
+
+	Ref<InputEventScreenDrag> drag_event = p_event;
+	if (drag_event.is_valid()) {
+
+		Control *over = gui.mouse_focus;
+		if (!over) {
+			over = _gui_find_control(drag_event->get_position());
+		}
+		if (over) {
+
+			if (!gui.modal_stack.empty()) {
+
+				Control *top = gui.modal_stack.back()->get();
+				if (over != top && !top->is_a_parent_of(over)) {
+
+					return;
+				}
+			}
+			if (over->can_process()) {
+
+				Transform2D localizer = over->get_global_transform_with_canvas().affine_inverse();
+				Size2 pos = localizer.xform(drag_event->get_position());
+				Vector2 speed = localizer.basis_xform(drag_event->get_speed());
+				Vector2 rel = localizer.basis_xform(drag_event->get_relative());
+
+				drag_event = drag_event->xformed_by(Transform2D()); //make a copy
+
+				drag_event->set_speed(speed);
+				drag_event->set_relative(rel);
+				drag_event->set_position(pos);
+
+				_gui_call_input(over, drag_event);
+			}
+
+			get_tree()->set_input_as_handled();
+			return;
 		}
 	}
 
@@ -2062,6 +2128,10 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 		//keyboard focus
 		//if (from && p_event->is_pressed() && !p_event->get_alt() && !p_event->get_metakey() && !p_event->key->get_command()) {
 
+		Ref<InputEventKey> k = p_event;
+		//need to check for mods, otherwise any combination of alt/ctrl/shift+<up/down/left/righ/etc> is handled here when it shouldn't be.
+		bool mods = k.is_valid() && (k->get_control() || k->get_alt() || k->get_shift() || k->get_metakey());
+
 		if (from && p_event->is_pressed()) {
 			Control *next = NULL;
 
@@ -2075,22 +2145,22 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				next = from->find_prev_valid_focus();
 			}
 
-			if (p_event->is_action("ui_up")) {
+			if (!mods && p_event->is_action("ui_up")) {
 
 				next = from->_get_focus_neighbour(MARGIN_TOP);
 			}
 
-			if (p_event->is_action("ui_left")) {
+			if (!mods && p_event->is_action("ui_left")) {
 
 				next = from->_get_focus_neighbour(MARGIN_LEFT);
 			}
 
-			if (p_event->is_action("ui_right")) {
+			if (!mods && p_event->is_action("ui_right")) {
 
 				next = from->_get_focus_neighbour(MARGIN_RIGHT);
 			}
 
-			if (p_event->is_action("ui_down")) {
+			if (!mods && p_event->is_action("ui_down")) {
 
 				next = from->_get_focus_neighbour(MARGIN_BOTTOM);
 			}
@@ -2145,7 +2215,7 @@ void Viewport::_gui_remove_from_modal_stack(List<Control *>::Element *MI, Object
 		if (!next) { //top of stack
 
 			Object *pfo = ObjectDB::get_instance(p_prev_focus_owner);
-			Control *pfoc = pfo->cast_to<Control>();
+			Control *pfoc = Object::cast_to<Control>(pfo);
 			if (!pfoc)
 				return;
 
@@ -2175,7 +2245,7 @@ void Viewport::_gui_force_drag(Control *p_base, const Variant &p_data, Control *
 void Viewport::_gui_set_drag_preview(Control *p_base, Control *p_control) {
 
 	ERR_FAIL_NULL(p_control);
-	ERR_FAIL_COND(!((Object *)p_control)->cast_to<Control>());
+	ERR_FAIL_COND(!Object::cast_to<Control>((Object *)p_control));
 	ERR_FAIL_COND(p_control->is_inside_tree());
 	ERR_FAIL_COND(p_control->get_parent() != NULL);
 
@@ -2276,7 +2346,6 @@ void Viewport::_gui_control_grab_focus(Control *p_control) {
 	//no need for change
 	if (gui.key_focus && gui.key_focus == p_control)
 		return;
-
 	get_tree()->call_group_flags(SceneTree::GROUP_CALL_REALTIME, "_viewports", "_gui_remove_focus");
 	gui.key_focus = p_control;
 	p_control->notification(Control::NOTIFICATION_FOCUS_ENTER);
@@ -2294,9 +2363,24 @@ List<Control *>::Element *Viewport::_gui_show_modal(Control *p_control) {
 
 	gui.modal_stack.push_back(p_control);
 	if (gui.key_focus)
-		p_control->_modal_set_prev_focus_owner(gui.key_focus->get_instance_ID());
+		p_control->_modal_set_prev_focus_owner(gui.key_focus->get_instance_id());
 	else
 		p_control->_modal_set_prev_focus_owner(0);
+
+	if (gui.mouse_focus && !p_control->is_a_parent_of(gui.mouse_focus)) {
+		Ref<InputEventMouseButton> mb;
+		mb.instance();
+		mb->set_position(gui.mouse_focus->get_local_mouse_position());
+		mb->set_global_position(gui.mouse_focus->get_local_mouse_position());
+		mb->set_button_index(gui.mouse_focus_button);
+		mb->set_pressed(false);
+		gui.mouse_focus->call_multilevel(SceneStringNames::get_singleton()->_gui_input, mb);
+
+		//if (gui.mouse_over == gui.mouse_focus) {
+		//	gui.mouse_focus->notification(Control::NOTIFICATION_MOUSE_EXIT);
+		//}
+		gui.mouse_focus = NULL;
+	}
 
 	return gui.modal_stack.back();
 }
@@ -2318,7 +2402,7 @@ void Viewport::_gui_grab_click_focus(Control *p_control) {
 		//send unclic
 
 		Point2 click = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(gui.last_mouse_pos);
-		mb->set_pos(click);
+		mb->set_position(click);
 		mb->set_button_index(gui.mouse_focus_button);
 		mb->set_pressed(false);
 		gui.mouse_focus->call_deferred(SceneStringNames::get_singleton()->_gui_input, mb);
@@ -2326,7 +2410,7 @@ void Viewport::_gui_grab_click_focus(Control *p_control) {
 		gui.mouse_focus = p_control;
 		gui.focus_inv_xform = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse();
 		click = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(gui.last_mouse_pos);
-		mb->set_pos(click);
+		mb->set_position(click);
 		mb->set_button_index(gui.mouse_focus_button);
 		mb->set_pressed(true);
 		gui.mouse_focus->call_deferred(SceneStringNames::get_singleton()->_gui_input, mb);
@@ -2339,8 +2423,13 @@ void Viewport::input(const Ref<InputEvent> &p_event) {
 
 	ERR_FAIL_COND(!is_inside_tree());
 
-	get_tree()->_call_input_pause(input_group, "_input", p_event); //not a bug, must happen before GUI, order is _input -> gui input -> _unhandled input
-	_gui_input_event(p_event);
+	if (!get_tree()->is_input_handled()) {
+		get_tree()->_call_input_pause(input_group, "_input", p_event); //not a bug, must happen before GUI, order is _input -> gui input -> _unhandled input
+	}
+
+	if (!get_tree()->is_input_handled()) {
+		_gui_input_event(p_event);
+	}
 	//get_tree()->call_group(SceneTree::GROUP_CALL_REVERSE|SceneTree::GROUP_CALL_REALTIME|SceneTree::GROUP_CALL_MULIILEVEL,gui_input_group,"_gui_input",p_event); //special one for GUI, as controls use their own process check
 }
 
@@ -2350,14 +2439,18 @@ void Viewport::unhandled_input(const Ref<InputEvent> &p_event) {
 
 	get_tree()->_call_input_pause(unhandled_input_group, "_unhandled_input", p_event);
 	//call_group(GROUP_CALL_REVERSE|GROUP_CALL_REALTIME|GROUP_CALL_MULIILEVEL,"unhandled_input","_unhandled_input",ev);
-	if (!get_tree()->input_handled && p_event->cast_to<InputEventKey>() != NULL) {
+	if (!get_tree()->input_handled && Object::cast_to<InputEventKey>(*p_event) != NULL) {
 		get_tree()->_call_input_pause(unhandled_key_input_group, "_unhandled_key_input", p_event);
 		//call_group(GROUP_CALL_REVERSE|GROUP_CALL_REALTIME|GROUP_CALL_MULIILEVEL,"unhandled_key_input","_unhandled_key_input",ev);
 	}
 
 	if (physics_object_picking && !get_tree()->input_handled) {
 
-		if (p_event->cast_to<InputEventMouseButton>() || p_event->cast_to<InputEventMouseMotion>() || p_event->cast_to<InputEventScreenDrag>() || p_event->cast_to<InputEventScreenTouch>()) {
+		if (Input::get_singleton()->get_mouse_mode() != Input::MOUSE_MODE_CAPTURED &&
+				(Object::cast_to<InputEventMouseButton>(*p_event) ||
+						Object::cast_to<InputEventMouseMotion>(*p_event) ||
+						Object::cast_to<InputEventScreenDrag>(*p_event) ||
+						Object::cast_to<InputEventScreenTouch>(*p_event))) {
 			physics_picking_events.push_back(p_event);
 		}
 	}
@@ -2417,7 +2510,7 @@ Rect2 Viewport::get_attach_to_screen_rect() const {
 void Viewport::set_physics_object_picking(bool p_enable) {
 
 	physics_object_picking = p_enable;
-	set_fixed_process(physics_object_picking);
+	set_physics_process(physics_object_picking);
 	if (!physics_object_picking)
 		physics_picking_events.clear();
 }
@@ -2472,7 +2565,7 @@ Control *Viewport::get_modal_stack_top() const {
 
 String Viewport::get_configuration_warning() const {
 
-	/*if (get_parent() && !get_parent()->cast_to<Control>() && !render_target) {
+	/*if (get_parent() && !Object::cast_to<Control>(get_parent()) && !render_target) {
 
 		return TTR("This viewport is not set as render target. If you intend for it to display its contents directly to the screen, make it a child of a Control so it can obtain a size. Otherwise, make it a RenderTarget and assign its internal texture to some node for display.");
 	}*/
@@ -2516,16 +2609,55 @@ bool Viewport::get_hdr() const {
 	return hdr;
 }
 
+void Viewport::set_usage(Usage p_usage) {
+
+	usage = p_usage;
+	VS::get_singleton()->viewport_set_usage(viewport, VS::ViewportUsage(p_usage));
+}
+
+Viewport::Usage Viewport::get_usage() const {
+	return usage;
+}
+
+void Viewport::set_debug_draw(DebugDraw p_debug_draw) {
+
+	debug_draw = p_debug_draw;
+	VS::get_singleton()->viewport_set_debug_draw(viewport, VS::ViewportDebugDraw(p_debug_draw));
+}
+
+Viewport::DebugDraw Viewport::get_debug_draw() const {
+
+	return debug_draw;
+}
+
+int Viewport::get_render_info(RenderInfo p_info) {
+
+	return VS::get_singleton()->viewport_get_render_info(viewport, VS::ViewportRenderInfo(p_info));
+}
+
+void Viewport::set_snap_controls_to_pixels(bool p_enable) {
+
+	snap_controls_to_pixels = p_enable;
+}
+
+bool Viewport::is_snap_controls_to_pixels_enabled() const {
+
+	return snap_controls_to_pixels;
+}
+
 void Viewport::_bind_methods() {
+
+	ClassDB::bind_method(D_METHOD("set_use_arvr", "use"), &Viewport::set_use_arvr);
+	ClassDB::bind_method(D_METHOD("use_arvr"), &Viewport::use_arvr);
 
 	ClassDB::bind_method(D_METHOD("set_size", "size"), &Viewport::set_size);
 	ClassDB::bind_method(D_METHOD("get_size"), &Viewport::get_size);
-	ClassDB::bind_method(D_METHOD("set_world_2d", "world_2d:World2D"), &Viewport::set_world_2d);
-	ClassDB::bind_method(D_METHOD("get_world_2d:World2D"), &Viewport::get_world_2d);
-	ClassDB::bind_method(D_METHOD("find_world_2d:World2D"), &Viewport::find_world_2d);
-	ClassDB::bind_method(D_METHOD("set_world", "world:World"), &Viewport::set_world);
-	ClassDB::bind_method(D_METHOD("get_world:World"), &Viewport::get_world);
-	ClassDB::bind_method(D_METHOD("find_world:World"), &Viewport::find_world);
+	ClassDB::bind_method(D_METHOD("set_world_2d", "world_2d"), &Viewport::set_world_2d);
+	ClassDB::bind_method(D_METHOD("get_world_2d"), &Viewport::get_world_2d);
+	ClassDB::bind_method(D_METHOD("find_world_2d"), &Viewport::find_world_2d);
+	ClassDB::bind_method(D_METHOD("set_world", "world"), &Viewport::set_world);
+	ClassDB::bind_method(D_METHOD("get_world"), &Viewport::get_world);
+	ClassDB::bind_method(D_METHOD("find_world"), &Viewport::find_world);
 
 	ClassDB::bind_method(D_METHOD("set_canvas_transform", "xform"), &Viewport::set_canvas_transform);
 	ClassDB::bind_method(D_METHOD("get_canvas_transform"), &Viewport::get_canvas_transform);
@@ -2550,16 +2682,13 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_size_override_enabled"), &Viewport::is_size_override_enabled);
 	ClassDB::bind_method(D_METHOD("set_size_override_stretch", "enabled"), &Viewport::set_size_override_stretch);
 	ClassDB::bind_method(D_METHOD("is_size_override_stretch_enabled"), &Viewport::is_size_override_stretch_enabled);
-	ClassDB::bind_method(D_METHOD("queue_screen_capture"), &Viewport::queue_screen_capture);
-	ClassDB::bind_method(D_METHOD("get_screen_capture"), &Viewport::get_screen_capture);
 
 	ClassDB::bind_method(D_METHOD("set_vflip", "enable"), &Viewport::set_vflip);
 	ClassDB::bind_method(D_METHOD("get_vflip"), &Viewport::get_vflip);
 
-	ClassDB::bind_method(D_METHOD("set_clear_on_new_frame", "enable"), &Viewport::set_clear_on_new_frame);
-	ClassDB::bind_method(D_METHOD("get_clear_on_new_frame"), &Viewport::get_clear_on_new_frame);
+	ClassDB::bind_method(D_METHOD("set_clear_mode", "mode"), &Viewport::set_clear_mode);
+	ClassDB::bind_method(D_METHOD("get_clear_mode"), &Viewport::get_clear_mode);
 
-	ClassDB::bind_method(D_METHOD("clear"), &Viewport::clear);
 	ClassDB::bind_method(D_METHOD("set_update_mode", "mode"), &Viewport::set_update_mode);
 	ClassDB::bind_method(D_METHOD("get_update_mode"), &Viewport::get_update_mode);
 
@@ -2569,7 +2698,15 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_hdr", "enable"), &Viewport::set_hdr);
 	ClassDB::bind_method(D_METHOD("get_hdr"), &Viewport::get_hdr);
 
-	ClassDB::bind_method(D_METHOD("get_texture:ViewportTexture"), &Viewport::get_texture);
+	ClassDB::bind_method(D_METHOD("set_usage", "usage"), &Viewport::set_usage);
+	ClassDB::bind_method(D_METHOD("get_usage"), &Viewport::get_usage);
+
+	ClassDB::bind_method(D_METHOD("set_debug_draw", "debug_draw"), &Viewport::set_debug_draw);
+	ClassDB::bind_method(D_METHOD("get_debug_draw"), &Viewport::get_debug_draw);
+
+	ClassDB::bind_method(D_METHOD("get_render_info", "info"), &Viewport::get_render_info);
+
+	ClassDB::bind_method(D_METHOD("get_texture"), &Viewport::get_texture);
 
 	ClassDB::bind_method(D_METHOD("set_physics_object_picking", "enable"), &Viewport::set_physics_object_picking);
 	ClassDB::bind_method(D_METHOD("get_physics_object_picking"), &Viewport::get_physics_object_picking);
@@ -2583,20 +2720,20 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_use_own_world", "enable"), &Viewport::set_use_own_world);
 	ClassDB::bind_method(D_METHOD("is_using_own_world"), &Viewport::is_using_own_world);
 
-	ClassDB::bind_method(D_METHOD("get_camera:Camera"), &Viewport::get_camera);
+	ClassDB::bind_method(D_METHOD("get_camera"), &Viewport::get_camera);
 
 	ClassDB::bind_method(D_METHOD("set_as_audio_listener", "enable"), &Viewport::set_as_audio_listener);
-	ClassDB::bind_method(D_METHOD("is_audio_listener", "enable"), &Viewport::is_audio_listener);
+	ClassDB::bind_method(D_METHOD("is_audio_listener"), &Viewport::is_audio_listener);
 
 	ClassDB::bind_method(D_METHOD("set_as_audio_listener_2d", "enable"), &Viewport::set_as_audio_listener_2d);
-	ClassDB::bind_method(D_METHOD("is_audio_listener_2d", "enable"), &Viewport::is_audio_listener_2d);
+	ClassDB::bind_method(D_METHOD("is_audio_listener_2d"), &Viewport::is_audio_listener_2d);
 	ClassDB::bind_method(D_METHOD("set_attach_to_screen_rect", "rect"), &Viewport::set_attach_to_screen_rect);
 
 	ClassDB::bind_method(D_METHOD("get_mouse_position"), &Viewport::get_mouse_position);
-	ClassDB::bind_method(D_METHOD("warp_mouse", "to_pos"), &Viewport::warp_mouse);
+	ClassDB::bind_method(D_METHOD("warp_mouse", "to_position"), &Viewport::warp_mouse);
 
 	ClassDB::bind_method(D_METHOD("gui_has_modal_stack"), &Viewport::gui_has_modal_stack);
-	ClassDB::bind_method(D_METHOD("gui_get_drag_data:Variant"), &Viewport::gui_get_drag_data);
+	ClassDB::bind_method(D_METHOD("gui_get_drag_data"), &Viewport::gui_get_drag_data);
 
 	ClassDB::bind_method(D_METHOD("set_disable_input", "disable"), &Viewport::set_disable_input);
 	ClassDB::bind_method(D_METHOD("is_input_disabled"), &Viewport::is_input_disabled);
@@ -2610,10 +2747,15 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_shadow_atlas_size", "size"), &Viewport::set_shadow_atlas_size);
 	ClassDB::bind_method(D_METHOD("get_shadow_atlas_size"), &Viewport::get_shadow_atlas_size);
 
+	ClassDB::bind_method(D_METHOD("set_snap_controls_to_pixels", "enabled"), &Viewport::set_snap_controls_to_pixels);
+	ClassDB::bind_method(D_METHOD("is_snap_controls_to_pixels_enabled"), &Viewport::is_snap_controls_to_pixels_enabled);
+
 	ClassDB::bind_method(D_METHOD("set_shadow_atlas_quadrant_subdiv", "quadrant", "subdiv"), &Viewport::set_shadow_atlas_quadrant_subdiv);
 	ClassDB::bind_method(D_METHOD("get_shadow_atlas_quadrant_subdiv", "quadrant"), &Viewport::get_shadow_atlas_quadrant_subdiv);
 
-	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "size"), "set_size", "get_size");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "arvr"), "set_use_arvr", "use_arvr");
+
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "size"), "set_size", "get_size");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "own_world"), "set_use_own_world", "is_using_own_world");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "world", PROPERTY_HINT_RESOURCE_TYPE, "World"), "set_world", "get_world");
 	//ADD_PROPERTY( PropertyInfo(Variant::OBJECT,"world_2d",PROPERTY_HINT_RESOURCE_TYPE,"World2D"), "set_world_2d", "get_world_2d") ;
@@ -2622,9 +2764,11 @@ void Viewport::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "msaa", PROPERTY_HINT_ENUM, "Disabled,2x,4x,8x,16x"), "set_msaa", "get_msaa");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "hdr"), "set_hdr", "get_hdr");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "disable_3d"), "set_disable_3d", "is_3d_disabled");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "usage", PROPERTY_HINT_ENUM, "2D,2D No-Sampling,3D,3D No-Effects"), "set_usage", "get_usage");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "debug_draw", PROPERTY_HINT_ENUM, "Disabled,Unshaded,Overdraw,Wireframe"), "set_debug_draw", "get_debug_draw");
 	ADD_GROUP("Render Target", "render_target_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "render_target_v_flip"), "set_vflip", "get_vflip");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "render_target_clear_on_new_frame"), "set_clear_on_new_frame", "get_clear_on_new_frame");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_target_clear_mode", PROPERTY_HINT_ENUM, "Always,Never,Next Frame"), "set_clear_mode", "get_clear_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_target_update_mode", PROPERTY_HINT_ENUM, "Disabled,Once,When Visible,Always"), "set_update_mode", "get_update_mode");
 	ADD_GROUP("Audio Listener", "audio_listener_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "audio_listener_enable_2d"), "set_as_audio_listener_2d", "is_audio_listener_2d");
@@ -2633,6 +2777,7 @@ void Viewport::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "physics_object_picking"), "set_physics_object_picking", "get_physics_object_picking");
 	ADD_GROUP("GUI", "gui_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_disable_input"), "set_disable_input", "is_input_disabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_snap_controls_to_pixels"), "set_snap_controls_to_pixels", "is_snap_controls_to_pixels_enabled");
 	ADD_GROUP("Shadow Atlas", "shadow_atlas_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "shadow_atlas_size"), "set_shadow_atlas_size", "get_shadow_atlas_size");
 	ADD_PROPERTYI(PropertyInfo(Variant::INT, "shadow_atlas_quad_0", PROPERTY_HINT_ENUM, "Disabled,1 Shadow,4 Shadows,16 Shadows,64 Shadows,256 Shadows,1024 Shadows"), "set_shadow_atlas_quadrant_subdiv", "get_shadow_atlas_quadrant_subdiv", 0);
@@ -2642,25 +2787,47 @@ void Viewport::_bind_methods() {
 
 	ADD_SIGNAL(MethodInfo("size_changed"));
 
-	BIND_CONSTANT(UPDATE_DISABLED);
-	BIND_CONSTANT(UPDATE_ONCE);
-	BIND_CONSTANT(UPDATE_WHEN_VISIBLE);
-	BIND_CONSTANT(UPDATE_ALWAYS);
+	BIND_ENUM_CONSTANT(UPDATE_DISABLED);
+	BIND_ENUM_CONSTANT(UPDATE_ONCE);
+	BIND_ENUM_CONSTANT(UPDATE_WHEN_VISIBLE);
+	BIND_ENUM_CONSTANT(UPDATE_ALWAYS);
 
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_1);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_4);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_16);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_64);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_256);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_1024);
-	BIND_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_MAX);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_1);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_4);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_16);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_64);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_256);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_1024);
+	BIND_ENUM_CONSTANT(SHADOW_ATLAS_QUADRANT_SUBDIV_MAX);
 
-	BIND_CONSTANT(MSAA_DISABLED);
-	BIND_CONSTANT(MSAA_2X);
-	BIND_CONSTANT(MSAA_4X);
-	BIND_CONSTANT(MSAA_8X);
-	BIND_CONSTANT(MSAA_16X);
+	BIND_ENUM_CONSTANT(RENDER_INFO_OBJECTS_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_VERTICES_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_MATERIAL_CHANGES_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_SHADER_CHANGES_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_SURFACE_CHANGES_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_DRAW_CALLS_IN_FRAME);
+	BIND_ENUM_CONSTANT(RENDER_INFO_MAX);
+
+	BIND_ENUM_CONSTANT(DEBUG_DRAW_DISABLED);
+	BIND_ENUM_CONSTANT(DEBUG_DRAW_UNSHADED);
+	BIND_ENUM_CONSTANT(DEBUG_DRAW_OVERDRAW);
+	BIND_ENUM_CONSTANT(DEBUG_DRAW_WIREFRAME);
+
+	BIND_ENUM_CONSTANT(MSAA_DISABLED);
+	BIND_ENUM_CONSTANT(MSAA_2X);
+	BIND_ENUM_CONSTANT(MSAA_4X);
+	BIND_ENUM_CONSTANT(MSAA_8X);
+	BIND_ENUM_CONSTANT(MSAA_16X);
+
+	BIND_ENUM_CONSTANT(USAGE_2D);
+	BIND_ENUM_CONSTANT(USAGE_2D_NO_SAMPLING);
+	BIND_ENUM_CONSTANT(USAGE_3D);
+	BIND_ENUM_CONSTANT(USAGE_3D_NO_EFFECTS);
+
+	BIND_ENUM_CONSTANT(CLEAR_MODE_ALWAYS);
+	BIND_ENUM_CONSTANT(CLEAR_MODE_NEVER);
+	BIND_ENUM_CONSTANT(CLEAR_MODE_ONLY_NEXT_FRAME);
 }
 
 Viewport::Viewport() {
@@ -2674,6 +2841,7 @@ Viewport::Viewport() {
 	default_texture.instance();
 	default_texture->vp = const_cast<Viewport *>(this);
 	viewport_textures.insert(default_texture.ptr());
+	VS::get_singleton()->texture_set_proxy(default_texture->proxy, texture_rid);
 
 	//internal_listener = SpatialSoundServer::get_singleton()->listener_create();
 	audio_listener = false;
@@ -2683,13 +2851,14 @@ Viewport::Viewport() {
 	parent = NULL;
 	listener = NULL;
 	camera = NULL;
+	arvr = false;
 	size_override = false;
 	size_override_stretch = false;
 	size_override_size = Size2(1, 1);
 	gen_mipmaps = false;
 
 	vflip = false;
-	clear_on_new_frame = true;
+
 	//clear=true;
 	update_mode = UPDATE_WHEN_VISIBLE;
 
@@ -2707,7 +2876,7 @@ Viewport::Viewport() {
 	set_shadow_atlas_quadrant_subdiv(2, SHADOW_ATLAS_QUADRANT_SUBDIV_16);
 	set_shadow_atlas_quadrant_subdiv(3, SHADOW_ATLAS_QUADRANT_SUBDIV_64);
 
-	String id = itos(get_instance_ID());
+	String id = itos(get_instance_id());
 	input_group = "_vp_input" + id;
 	gui_input_group = "_vp_gui_input" + id;
 	unhandled_input_group = "_vp_unhandled_input" + id;
@@ -2729,7 +2898,13 @@ Viewport::Viewport() {
 	gui.canvas_sort_index = 0;
 
 	msaa = MSAA_DISABLED;
-	hdr = false;
+	hdr = true;
+
+	usage = USAGE_3D;
+	debug_draw = DEBUG_DRAW_DISABLED;
+	clear_mode = CLEAR_MODE_ALWAYS;
+
+	snap_controls_to_pixels = true;
 }
 
 Viewport::~Viewport() {

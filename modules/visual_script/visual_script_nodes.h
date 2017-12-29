@@ -1,9 +1,9 @@
 /*************************************************************************/
-/*  visual_script_nodes.h                                               */
+/*  visual_script_nodes.h                                                */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -46,6 +46,7 @@ class VisualScriptFunction : public VisualScriptNode {
 	bool stack_less;
 	int stack_size;
 	ScriptInstance::RPCMode rpc_mode;
+	bool sequenced;
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
@@ -79,8 +80,17 @@ public:
 	void set_stack_less(bool p_enable);
 	bool is_stack_less() const;
 
+	void set_sequenced(bool p_enable);
+	bool is_sequenced() const;
+
 	void set_stack_size(int p_size);
 	int get_stack_size() const;
+
+	void set_return_type_enabled(bool p_returns);
+	bool is_return_type_enabled() const;
+
+	void set_return_type(Variant::Type p_type);
+	Variant::Type get_return_type() const;
 
 	void set_rpc_mode(ScriptInstance::RPCMode p_mode);
 	ScriptInstance::RPCMode get_rpc_mode() const;
@@ -127,6 +137,39 @@ public:
 	VisualScriptOperator();
 };
 
+class VisualScriptSelect : public VisualScriptNode {
+
+	GDCLASS(VisualScriptSelect, VisualScriptNode)
+
+	Variant::Type typed;
+
+protected:
+	static void _bind_methods();
+
+public:
+	virtual int get_output_sequence_port_count() const;
+	virtual bool has_input_sequence_port() const;
+
+	virtual String get_output_sequence_port_text(int p_port) const;
+
+	virtual int get_input_value_port_count() const;
+	virtual int get_output_value_port_count() const;
+
+	virtual PropertyInfo get_input_value_port_info(int p_idx) const;
+	virtual PropertyInfo get_output_value_port_info(int p_idx) const;
+
+	virtual String get_caption() const;
+	virtual String get_text() const;
+	virtual String get_category() const { return "operators"; }
+
+	void set_typed(Variant::Type p_op);
+	Variant::Type get_typed() const;
+
+	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
+
+	VisualScriptSelect();
+};
+
 class VisualScriptVariableGet : public VisualScriptNode {
 
 	GDCLASS(VisualScriptVariableGet, VisualScriptNode)
@@ -153,7 +196,7 @@ public:
 	virtual String get_text() const;
 	virtual String get_category() const { return "data"; }
 
-	void set_variable(StringName p_var);
+	void set_variable(StringName p_variable);
 	StringName get_variable() const;
 
 	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
@@ -187,7 +230,7 @@ public:
 	virtual String get_text() const;
 	virtual String get_category() const { return "data"; }
 
-	void set_variable(StringName p_var);
+	void set_variable(StringName p_variable);
 	StringName get_variable() const;
 
 	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
@@ -258,7 +301,7 @@ public:
 	virtual String get_text() const;
 	virtual String get_category() const { return "data"; }
 
-	void set_preload(const Ref<Resource> &p_value);
+	void set_preload(const Ref<Resource> &p_preload);
 	Ref<Resource> get_preload() const;
 
 	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
@@ -431,8 +474,8 @@ public:
 	enum MathConstant {
 		MATH_CONSTANT_ONE,
 		MATH_CONSTANT_PI,
-		MATH_CONSTANT_2PI,
 		MATH_CONSTANT_HALF_PI,
+		MATH_CONSTANT_TAU,
 		MATH_CONSTANT_E,
 		MATH_CONSTANT_SQRT2,
 		MATH_CONSTANT_INF,
@@ -679,8 +722,12 @@ public:
 
 	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
 
+	void _script_changed();
+
 	VisualScriptCustomNode();
 };
+
+VARIANT_ENUM_CAST(VisualScriptCustomNode::StartMode);
 
 class VisualScriptSubCall : public VisualScriptNode {
 

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,9 +31,9 @@
 #include "scene/resources/surface_tool.h"
 #include "servers/visual_server.h"
 
-Rect3 Particles::get_aabb() const {
+AABB Particles::get_aabb() const {
 
-	return Rect3();
+	return AABB();
 }
 PoolVector<Face3> Particles::get_faces(uint32_t p_usage_flags) const {
 
@@ -42,8 +42,7 @@ PoolVector<Face3> Particles::get_faces(uint32_t p_usage_flags) const {
 
 void Particles::set_emitting(bool p_emitting) {
 
-	emitting = p_emitting;
-	VS::get_singleton()->particles_set_emitting(particles, emitting);
+	VS::get_singleton()->particles_set_emitting(particles, p_emitting);
 }
 
 void Particles::set_amount(int p_amount) {
@@ -58,6 +57,15 @@ void Particles::set_lifetime(float p_lifetime) {
 	lifetime = p_lifetime;
 	VS::get_singleton()->particles_set_lifetime(particles, lifetime);
 }
+
+void Particles::set_one_shot(bool p_one_shot) {
+
+	one_shot = p_one_shot;
+	VS::get_singleton()->particles_set_one_shot(particles, one_shot);
+	if (!one_shot && is_emitting())
+		VisualServer::get_singleton()->particles_restart(particles);
+}
+
 void Particles::set_pre_process_time(float p_time) {
 
 	pre_process_time = p_time;
@@ -73,7 +81,7 @@ void Particles::set_randomness_ratio(float p_ratio) {
 	randomness_ratio = p_ratio;
 	VS::get_singleton()->particles_set_randomness_ratio(particles, randomness_ratio);
 }
-void Particles::set_visibility_aabb(const Rect3 &p_aabb) {
+void Particles::set_visibility_aabb(const AABB &p_aabb) {
 
 	visibility_aabb = p_aabb;
 	VS::get_singleton()->particles_set_custom_aabb(particles, visibility_aabb);
@@ -104,7 +112,7 @@ void Particles::set_speed_scale(float p_scale) {
 
 bool Particles::is_emitting() const {
 
-	return emitting;
+	return VS::get_singleton()->particles_get_emitting(particles);
 }
 int Particles::get_amount() const {
 
@@ -114,6 +122,11 @@ float Particles::get_lifetime() const {
 
 	return lifetime;
 }
+bool Particles::get_one_shot() const {
+
+	return one_shot;
+}
+
 float Particles::get_pre_process_time() const {
 
 	return pre_process_time;
@@ -126,7 +139,7 @@ float Particles::get_randomness_ratio() const {
 
 	return randomness_ratio;
 }
-Rect3 Particles::get_visibility_aabb() const {
+AABB Particles::get_visibility_aabb() const {
 
 	return visibility_aabb;
 }
@@ -233,7 +246,12 @@ String Particles::get_configuration_warning() const {
 	return warnings;
 }
 
-Rect3 Particles::capture_aabb() const {
+void Particles::restart() {
+
+	VisualServer::get_singleton()->particles_restart(particles);
+}
+
+AABB Particles::capture_aabb() const {
 
 	return VS::get_singleton()->particles_get_current_aabb(particles);
 }
@@ -249,11 +267,24 @@ void Particles::_validate_property(PropertyInfo &property) const {
 	}
 }
 
+void Particles::_notification(int p_what) {
+
+	if (p_what == NOTIFICATION_PAUSED || p_what == NOTIFICATION_UNPAUSED) {
+		if (can_process()) {
+			VS::get_singleton()->particles_set_speed_scale(particles, speed_scale);
+		} else {
+
+			VS::get_singleton()->particles_set_speed_scale(particles, 0);
+		}
+	}
+}
+
 void Particles::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_emitting", "emitting"), &Particles::set_emitting);
 	ClassDB::bind_method(D_METHOD("set_amount", "amount"), &Particles::set_amount);
 	ClassDB::bind_method(D_METHOD("set_lifetime", "secs"), &Particles::set_lifetime);
+	ClassDB::bind_method(D_METHOD("set_one_shot", "enable"), &Particles::set_one_shot);
 	ClassDB::bind_method(D_METHOD("set_pre_process_time", "secs"), &Particles::set_pre_process_time);
 	ClassDB::bind_method(D_METHOD("set_explosiveness_ratio", "ratio"), &Particles::set_explosiveness_ratio);
 	ClassDB::bind_method(D_METHOD("set_randomness_ratio", "ratio"), &Particles::set_randomness_ratio);
@@ -261,12 +292,13 @@ void Particles::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_use_local_coordinates", "enable"), &Particles::set_use_local_coordinates);
 	ClassDB::bind_method(D_METHOD("set_fixed_fps", "fps"), &Particles::set_fixed_fps);
 	ClassDB::bind_method(D_METHOD("set_fractional_delta", "enable"), &Particles::set_fractional_delta);
-	ClassDB::bind_method(D_METHOD("set_process_material", "material:Material"), &Particles::set_process_material);
+	ClassDB::bind_method(D_METHOD("set_process_material", "material"), &Particles::set_process_material);
 	ClassDB::bind_method(D_METHOD("set_speed_scale", "scale"), &Particles::set_speed_scale);
 
 	ClassDB::bind_method(D_METHOD("is_emitting"), &Particles::is_emitting);
 	ClassDB::bind_method(D_METHOD("get_amount"), &Particles::get_amount);
 	ClassDB::bind_method(D_METHOD("get_lifetime"), &Particles::get_lifetime);
+	ClassDB::bind_method(D_METHOD("get_one_shot"), &Particles::get_one_shot);
 	ClassDB::bind_method(D_METHOD("get_pre_process_time"), &Particles::get_pre_process_time);
 	ClassDB::bind_method(D_METHOD("get_explosiveness_ratio"), &Particles::get_explosiveness_ratio);
 	ClassDB::bind_method(D_METHOD("get_randomness_ratio"), &Particles::get_randomness_ratio);
@@ -274,7 +306,7 @@ void Particles::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_use_local_coordinates"), &Particles::get_use_local_coordinates);
 	ClassDB::bind_method(D_METHOD("get_fixed_fps"), &Particles::get_fixed_fps);
 	ClassDB::bind_method(D_METHOD("get_fractional_delta"), &Particles::get_fractional_delta);
-	ClassDB::bind_method(D_METHOD("get_process_material:Material"), &Particles::get_process_material);
+	ClassDB::bind_method(D_METHOD("get_process_material"), &Particles::get_process_material);
 	ClassDB::bind_method(D_METHOD("get_speed_scale"), &Particles::get_speed_scale);
 
 	ClassDB::bind_method(D_METHOD("set_draw_order", "order"), &Particles::set_draw_order);
@@ -282,28 +314,31 @@ void Particles::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_draw_order"), &Particles::get_draw_order);
 
 	ClassDB::bind_method(D_METHOD("set_draw_passes", "passes"), &Particles::set_draw_passes);
-	ClassDB::bind_method(D_METHOD("set_draw_pass_mesh", "pass", "mesh:Mesh"), &Particles::set_draw_pass_mesh);
+	ClassDB::bind_method(D_METHOD("set_draw_pass_mesh", "pass", "mesh"), &Particles::set_draw_pass_mesh);
 
 	ClassDB::bind_method(D_METHOD("get_draw_passes"), &Particles::get_draw_passes);
-	ClassDB::bind_method(D_METHOD("get_draw_pass_mesh:Mesh", "pass"), &Particles::get_draw_pass_mesh);
+	ClassDB::bind_method(D_METHOD("get_draw_pass_mesh", "pass"), &Particles::get_draw_pass_mesh);
 
+	ClassDB::bind_method(D_METHOD("restart"), &Particles::restart);
 	ClassDB::bind_method(D_METHOD("capture_aabb"), &Particles::capture_aabb);
 
-	ADD_GROUP("Parameters", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "emitting"), "set_emitting", "is_emitting");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "amount", PROPERTY_HINT_RANGE, "1,100000,1"), "set_amount", "get_amount");
+	ADD_GROUP("Time", "");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "lifetime", PROPERTY_HINT_RANGE, "0.01,600.0,0.01"), "set_lifetime", "get_lifetime");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "one_shot"), "set_one_shot", "get_one_shot");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "preprocess", PROPERTY_HINT_RANGE, "0.00,600.0,0.01"), "set_pre_process_time", "get_pre_process_time");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "speed_scale", PROPERTY_HINT_RANGE, "0.01,64,0.01"), "set_speed_scale", "get_speed_scale");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "explosiveness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_explosiveness_ratio", "get_explosiveness_ratio");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "randomness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_randomness_ratio", "get_randomness_ratio");
-	ADD_PROPERTY(PropertyInfo(Variant::RECT3, "visibility_aabb"), "set_visibility_aabb", "get_visibility_aabb");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "local_coords"), "set_use_local_coordinates", "get_use_local_coordinates");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "fixed_fps", PROPERTY_HINT_RANGE, "0,1000,1"), "set_fixed_fps", "get_fixed_fps");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "fract_delta"), "set_fractional_delta", "get_fractional_delta");
+	ADD_GROUP("Drawing", "");
+	ADD_PROPERTY(PropertyInfo(Variant::AABB, "visibility_aabb"), "set_visibility_aabb", "get_visibility_aabb");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "local_coords"), "set_use_local_coordinates", "get_use_local_coordinates");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "draw_order", PROPERTY_HINT_ENUM, "Index,Lifetime,View Depth"), "set_draw_order", "get_draw_order");
 	ADD_GROUP("Process Material", "");
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "process_material", PROPERTY_HINT_RESOURCE_TYPE, "ParticlesMaterial,ShaderMaterial"), "set_process_material", "get_process_material");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "process_material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial,ParticlesMaterial"), "set_process_material", "get_process_material");
 	ADD_GROUP("Draw Passes", "draw_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "draw_passes", PROPERTY_HINT_RANGE, "0," + itos(MAX_DRAW_PASSES) + ",1"), "set_draw_passes", "get_draw_passes");
 	for (int i = 0; i < MAX_DRAW_PASSES; i++) {
@@ -311,9 +346,10 @@ void Particles::_bind_methods() {
 		ADD_PROPERTYI(PropertyInfo(Variant::OBJECT, "draw_pass_" + itos(i + 1), PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_draw_pass_mesh", "get_draw_pass_mesh", i);
 	}
 
-	BIND_CONSTANT(DRAW_ORDER_INDEX);
-	BIND_CONSTANT(DRAW_ORDER_LIFETIME);
-	BIND_CONSTANT(DRAW_ORDER_VIEW_DEPTH);
+	BIND_ENUM_CONSTANT(DRAW_ORDER_INDEX);
+	BIND_ENUM_CONSTANT(DRAW_ORDER_LIFETIME);
+	BIND_ENUM_CONSTANT(DRAW_ORDER_VIEW_DEPTH);
+
 	BIND_CONSTANT(MAX_DRAW_PASSES);
 }
 
@@ -322,6 +358,7 @@ Particles::Particles() {
 	particles = VS::get_singleton()->particles_create();
 	set_base(particles);
 	set_emitting(true);
+	set_one_shot(false);
 	set_amount(8);
 	set_lifetime(1);
 	set_fixed_fps(0);
@@ -329,7 +366,7 @@ Particles::Particles() {
 	set_pre_process_time(0);
 	set_explosiveness_ratio(0);
 	set_randomness_ratio(0);
-	set_visibility_aabb(Rect3(Vector3(-4, -4, -4), Vector3(8, 8, 8)));
+	set_visibility_aabb(AABB(Vector3(-4, -4, -4), Vector3(8, 8, 8)));
 	set_use_local_coordinates(true);
 	set_draw_passes(1);
 	set_draw_order(DRAW_ORDER_INDEX);
@@ -371,7 +408,7 @@ void ParticlesMaterial::init_shaders() {
 	shader_names->anim_speed = "anim_speed";
 	shader_names->anim_offset = "anim_offset";
 
-	shader_names->initial_linear_velocity = "initial_linear_velocity_random";
+	shader_names->initial_linear_velocity_random = "initial_linear_velocity_random";
 	shader_names->initial_angle_random = "initial_angle_random";
 	shader_names->angular_velocity_random = "angular_velocity_random";
 	shader_names->orbit_velocity_random = "orbit_velocity_random";
@@ -404,6 +441,7 @@ void ParticlesMaterial::init_shaders() {
 	shader_names->emission_texture_point_count = "emission_texture_point_count";
 	shader_names->emission_texture_points = "emission_texture_points";
 	shader_names->emission_texture_normal = "emission_texture_normal";
+	shader_names->emission_texture_color = "emission_texture_color";
 
 	shader_names->trail_divisor = "trail_divisor";
 	shader_names->trail_size_modifier = "trail_size_modifier";
@@ -422,8 +460,6 @@ void ParticlesMaterial::finish_shaders() {
 }
 
 void ParticlesMaterial::_update_shader() {
-
-	print_line("updating shader");
 
 	dirty_materials.remove(&element);
 
@@ -481,6 +517,28 @@ void ParticlesMaterial::_update_shader() {
 	code += "uniform float anim_speed_random;\n";
 	code += "uniform float anim_offset_random;\n";
 
+	switch (emission_shape) {
+		case EMISSION_SHAPE_POINT: {
+			//do none
+		} break;
+		case EMISSION_SHAPE_SPHERE: {
+			code += "uniform float emission_sphere_radius;\n";
+		} break;
+		case EMISSION_SHAPE_BOX: {
+			code += "uniform vec3 emission_box_extents;\n";
+		} break;
+		case EMISSION_SHAPE_DIRECTED_POINTS: {
+			code += "uniform sampler2D emission_texture_normal : hint_black;\n";
+		} //fallthrough
+		case EMISSION_SHAPE_POINTS: {
+			code += "uniform sampler2D emission_texture_points : hint_black;\n";
+			code += "uniform int emission_texture_point_count;\n";
+			if (emission_color_texture.is_valid()) {
+				code += "uniform sampler2D emission_texture_color : hint_white;\n";
+			}
+		} break;
+	}
+
 	code += "uniform vec4 color_value : hint_color;\n";
 
 	code += "uniform int trail_divisor;\n";
@@ -515,25 +573,6 @@ void ParticlesMaterial::_update_shader() {
 	if (tex_parameters[PARAM_ANIM_OFFSET].is_valid())
 		code += "uniform sampler2D anim_offset_texture;\n";
 
-	switch (emission_shape) {
-		case EMISSION_SHAPE_POINT: {
-			//do none
-		} break;
-		case EMISSION_SHAPE_SPHERE: {
-			code += "uniform float emission_sphere_radius;\n";
-		} break;
-		case EMISSION_SHAPE_BOX: {
-			code += "uniform vec3 emission_box_extents;\n";
-		} break;
-		case EMISSION_SHAPE_DIRECTED_POINTS: {
-			code += "uniform sampler2D emission_texture_normal : hint_black;\n";
-		} //fallthrough
-		case EMISSION_SHAPE_POINTS: {
-			code += "uniform sampler2D emission_texture_points : hint_black;\n";
-			code += "uniform int emission_texture_point_count;\n";
-		} break;
-	}
-
 	if (trail_size_modifier.is_valid()) {
 		code += "uniform sampler2D trail_size_modifier;\n";
 	}
@@ -545,240 +584,329 @@ void ParticlesMaterial::_update_shader() {
 	//need a random function
 	code += "\n\n";
 	code += "float rand_from_seed(inout uint seed) {\n";
-	code += "   int k;\n";
-	code += "   int s = int(seed);\n";
-	code += "   if (s == 0)\n";
+	code += "	int k;\n";
+	code += "	int s = int(seed);\n";
+	code += "	if (s == 0)\n";
 	code += "	s = 305420679;\n";
-	code += "   k = s / 127773;\n";
-	code += "   s = 16807 * (s - k * 127773) - 2836 * k;\n";
-	code += "   if (s < 0)\n";
-	code += "	s += 2147483647;\n";
-	code += "   seed = uint(s);\n";
-	code += "   return float(seed % uint(65536))/65535.0;\n";
+	code += "	k = s / 127773;\n";
+	code += "	s = 16807 * (s - k * 127773) - 2836 * k;\n";
+	code += "	if (s < 0)\n";
+	code += "		s += 2147483647;\n";
+	code += "	seed = uint(s);\n";
+	code += "	return float(seed % uint(65536))/65535.0;\n";
 	code += "}\n";
+	code += "\n";
+
+	code += "float rand_from_seed_m1_p1(inout uint seed) {\n";
+	code += "	return rand_from_seed(seed)*2.0-1.0;\n";
+	code += "}\n";
+	code += "\n";
+
 	//improve seed quality
 	code += "uint hash(uint x) {\n";
-	code += "   x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
-	code += "   x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
-	code += "   x = (x >> uint(16)) ^ x;\n";
-	code += "   return x;\n";
+	code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
+	code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
+	code += "	x = (x >> uint(16)) ^ x;\n";
+	code += "	return x;\n";
 	code += "}\n";
-	code += "void vertex() {\n\n";
 	code += "\n";
 
-	code += " uint base_number=NUMBER/uint(trail_divisor);\n";
-	code += " uint alt_seed=hash(base_number+uint(1));\n";
-	code += " float angle_rand=rand_from_seed(alt_seed);\n";
-	code += " float scale_rand=rand_from_seed(alt_seed);\n";
-	code += " float hue_rot_rand=rand_from_seed(alt_seed);\n";
-	code += " float anim_offset_rand=rand_from_seed(alt_seed);\n";
+	code += "void vertex() {\n";
+	code += "	uint base_number = NUMBER/uint(trail_divisor);\n";
+	code += "	uint alt_seed = hash(base_number+uint(1)+RANDOM_SEED);\n";
+	code += "	float angle_rand = rand_from_seed(alt_seed);\n";
+	code += "	float scale_rand = rand_from_seed(alt_seed);\n";
+	code += "	float hue_rot_rand = rand_from_seed(alt_seed);\n";
+	code += "	float anim_offset_rand = rand_from_seed(alt_seed);\n";
+	code += "	float pi = 3.14159;\n";
+	code += "	float degree_to_rad = pi / 180.0;\n";
 	code += "\n";
-	code += "\n";
-	code += "\n";
-	code += "\n";
-	code += " if (RESTART) {\n";
+
+	if (emission_shape >= EMISSION_SHAPE_POINTS) {
+		code += "	int point = min(emission_texture_point_count-1,int(rand_from_seed(alt_seed) * float(emission_texture_point_count)));\n";
+		code += "	ivec2 emission_tex_size = textureSize( emission_texture_points, 0 );\n";
+		code += "	ivec2 emission_tex_ofs = ivec2( point % emission_tex_size.x, point / emission_tex_size.x );\n";
+	}
+	code += "	if (RESTART) {\n";
 
 	if (tex_parameters[PARAM_INITIAL_LINEAR_VELOCITY].is_valid())
-		code += "    float tex_linear_velocity = textureLod(linear_velocity_texture,vec2(0.0,0.0),0.0).r;\n";
+		code += "		float tex_linear_velocity = textureLod(linear_velocity_texture,vec2(0.0,0.0),0.0).r;\n";
 	else
-		code += "    float tex_linear_velocity = 0.0;\n";
+		code += "		float tex_linear_velocity = 0.0;\n";
 
 	if (tex_parameters[PARAM_ANGLE].is_valid())
-		code += "    float tex_angle = textureLod(angle_texture,vec2(0.0,0.0),0.0).r;\n";
+		code += "		float tex_angle = textureLod(angle_texture,vec2(0.0,0.0),0.0).r;\n";
 	else
-		code += "    float tex_angle = 0.0;\n";
+		code += "		float tex_angle = 0.0;\n";
 
 	if (tex_parameters[PARAM_ANIM_OFFSET].is_valid())
-		code += "    float tex_anim_offset = textureLod(anim_offset_texture,vec2(0.0,0.0),0.0).r;\n";
+		code += "		float tex_anim_offset = textureLod(anim_offset_texture,vec2(0.0,0.0),0.0).r;\n";
 	else
-		code += "    float tex_anim_offset = 0.0;\n";
+		code += "		float tex_anim_offset = 0.0;\n";
 
-	code += "    float angle1 = rand_from_seed(alt_seed)*spread*3.1416;\n";
-	code += "    float angle2 = rand_from_seed(alt_seed)*20.0*3.1416; // make it more random like\n";
-	code += "    vec3 rot_xz=vec3( sin(angle1), 0.0, cos(angle1) );\n";
-	code += "    vec3 rot = vec3( cos(angle2)*rot_xz.x,sin(angle2)*rot_xz.x, rot_xz.z);\n";
-	code += "    VELOCITY=(rot*initial_linear_velocity+rot*initial_linear_velocity_random*rand_from_seed(alt_seed));\n";
-	code += "    float base_angle=(initial_angle+tex_angle)*mix(1.0,angle_rand,initial_angle_random);\n";
-	code += "    CUSTOM.x=base_angle*3.1416/180.0;\n"; //angle
-	code += "    CUSTOM.y=0.0;\n"; //phase
-	code += "    CUSTOM.z=(anim_offset+tex_anim_offset)*mix(1.0,anim_offset_rand,anim_offset_random);\n"; //animation offset (0-1)
+	code += "		float spread_rad = spread*degree_to_rad;\n";
+
+	if (flags[FLAG_DISABLE_Z]) {
+
+		code += "		float angle1_rad = rand_from_seed_m1_p1(alt_seed)*spread_rad;\n";
+		code += "		vec3 rot = vec3( cos(angle1_rad), sin(angle1_rad),0.0 );\n";
+		code += "		VELOCITY = rot*initial_linear_velocity*mix(1.0, rand_from_seed(alt_seed), initial_linear_velocity_random);\n";
+
+	} else {
+		//initiate velocity spread in 3D
+		code += "		float angle1_rad = rand_from_seed_m1_p1(alt_seed)*spread_rad;\n";
+		code += "		float angle2_rad = rand_from_seed_m1_p1(alt_seed)*spread_rad*(1.0-flatness);\n";
+		code += "		vec3 direction_xz = vec3( sin(angle1_rad), 0, cos(angle1_rad));\n";
+		code += "		vec3 direction_yz = vec3( 0, sin(angle2_rad), cos(angle2_rad));\n";
+		code += "		direction_yz.z = direction_yz.z / sqrt(direction_yz.z); //better uniform distribution\n";
+		code += "		vec3 direction = vec3(direction_xz.x * direction_yz.z, direction_yz.y, direction_xz.z * direction_yz.z);\n";
+		code += "		direction = normalize(direction);\n";
+		code += "		VELOCITY = direction*initial_linear_velocity*mix(1.0, rand_from_seed(alt_seed), initial_linear_velocity_random);\n";
+	}
+
+	code += "		float base_angle = (initial_angle+tex_angle)*mix(1.0,angle_rand,initial_angle_random);\n";
+	code += "		CUSTOM.x = base_angle*degree_to_rad;\n"; //angle
+	code += "		CUSTOM.y = 0.0;\n"; //phase
+	code += "		CUSTOM.z = (anim_offset+tex_anim_offset)*mix(1.0,anim_offset_rand,anim_offset_random);\n"; //animation offset (0-1)
 	switch (emission_shape) {
 		case EMISSION_SHAPE_POINT: {
 			//do none
 		} break;
 		case EMISSION_SHAPE_SPHERE: {
-			code += "    TRANSFORM[3].xyz = normalize(vec3(rand_from_seed(alt_seed) * 2.0 - 1.0, rand_from_seed(alt_seed) * 2.0-1.0, rand_from_seed(alt_seed) * 2.0-1.0 ))*emission_sphere_radius;\n";
+			code += "		TRANSFORM[3].xyz = normalize(vec3(rand_from_seed(alt_seed) * 2.0 - 1.0, rand_from_seed(alt_seed) * 2.0-1.0, rand_from_seed(alt_seed) * 2.0-1.0 ))*emission_sphere_radius;\n";
 		} break;
 		case EMISSION_SHAPE_BOX: {
-			code += "    TRANSFORM[3].xyz = vec3(rand_from_seed(alt_seed) * 2.0 - 1.0, rand_from_seed(alt_seed) * 2.0-1.0, rand_from_seed(alt_seed) * 2.0-1.0)*emission_box_extents;\n";
+			code += "		TRANSFORM[3].xyz = vec3(rand_from_seed(alt_seed) * 2.0 - 1.0, rand_from_seed(alt_seed) * 2.0-1.0, rand_from_seed(alt_seed) * 2.0-1.0)*emission_box_extents;\n";
 		} break;
 		case EMISSION_SHAPE_POINTS:
 		case EMISSION_SHAPE_DIRECTED_POINTS: {
-			code += "    int point = min(emission_texture_point_count-1,int(rand_from_seed(alt_seed) * float(emission_texture_point_count)));\n";
-			code += "    ivec2 tex_size = textureSize( emission_texture_points, 0 );\n";
-			code += "    ivec2 tex_ofs = ivec2( point % tex_size.x, point / tex_size.x );\n";
-			code += "    TRANSFORM[3].xyz = texelFetch(emission_texture_points, tex_ofs,0).xyz;\n";
+			code += "		TRANSFORM[3].xyz = texelFetch(emission_texture_points, emission_tex_ofs,0).xyz;\n";
+
 			if (emission_shape == EMISSION_SHAPE_DIRECTED_POINTS) {
-				code += "    vec3 normal = texelFetch(emission_texture_normal, tex_ofs,0).xyz;\n";
-				code += "    vec3 v0 = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0, 1.0, 0.0);\n";
-				code += "    vec3 tangent = normalize(cross(v0, normal));\n";
-				code += "    vec3 bitangent = normalize(cross(tangent, normal));\n";
-				code += "    VELOCITY = mat3(tangent,bitangent,normal) * VELOCITY;\n";
+				if (flags[FLAG_DISABLE_Z]) {
+
+					code += "		mat2 rotm;";
+					code += "		rotm[0] = texelFetch(emission_texture_normal, emission_tex_ofs,0).xy;\n";
+					code += "		rotm[1] = rotm[0].yx * vec2(1.0,-1.0);\n";
+					code += "		VELOCITY.xy = rotm * VELOCITY.xy;\n";
+				} else {
+					code += "		vec3 normal = texelFetch(emission_texture_normal, emission_tex_ofs,0).xyz;\n";
+					code += "		vec3 v0 = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0, 1.0, 0.0);\n";
+					code += "		vec3 tangent = normalize(cross(v0, normal));\n";
+					code += "		vec3 bitangent = normalize(cross(tangent, normal));\n";
+					code += "		VELOCITY = mat3(tangent,bitangent,normal) * VELOCITY;\n";
+				}
 			}
 		} break;
 	}
-	code += "    VELOCITY = (EMISSION_TRANSFORM * vec4(VELOCITY,0.0)).xyz;\n";
-	code += "    TRANSFORM = EMISSION_TRANSFORM * TRANSFORM;\n";
+	code += "		VELOCITY = (EMISSION_TRANSFORM * vec4(VELOCITY,0.0)).xyz;\n";
+	code += "		TRANSFORM = EMISSION_TRANSFORM * TRANSFORM;\n";
+	if (flags[FLAG_DISABLE_Z]) {
+		code += "		VELOCITY.z = 0.0;\n";
+		code += "		TRANSFORM[3].z = 0.0;\n";
+	}
 
-	code += " } else {\n";
+	code += "	} else {\n";
 
-	code += "    CUSTOM.y+=DELTA/LIFETIME;\n";
+	code += "		CUSTOM.y += DELTA/LIFETIME;\n";
 	if (tex_parameters[PARAM_INITIAL_LINEAR_VELOCITY].is_valid())
-		code += "    float tex_linear_velocity = textureLod(linear_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_linear_velocity = textureLod(linear_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_linear_velocity = 0.0;\n";
+		code += "		float tex_linear_velocity = 0.0;\n";
 
-	if (tex_parameters[PARAM_ORBIT_VELOCITY].is_valid())
-		code += "    float tex_orbit_velocity = textureLod(orbit_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
-	else
-		code += "    float tex_orbit_velocity = 0.0;\n";
+	if (flags[FLAG_DISABLE_Z]) {
+
+		if (tex_parameters[PARAM_ORBIT_VELOCITY].is_valid())
+			code += "		float tex_orbit_velocity = textureLod(orbit_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		else
+			code += "		float tex_orbit_velocity = 0.0;\n";
+	}
 
 	if (tex_parameters[PARAM_ANGULAR_VELOCITY].is_valid())
-		code += "    float tex_angular_velocity = textureLod(angular_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_angular_velocity = textureLod(angular_velocity_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_angular_velocity = 0.0;\n";
+		code += "		float tex_angular_velocity = 0.0;\n";
 
 	if (tex_parameters[PARAM_LINEAR_ACCEL].is_valid())
-		code += "    float tex_linear_accel = textureLod(linear_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_linear_accel = textureLod(linear_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_linear_accel = 0.0;\n";
+		code += "		float tex_linear_accel = 0.0;\n";
 
 	if (tex_parameters[PARAM_RADIAL_ACCEL].is_valid())
-		code += "    float tex_radial_accel = textureLod(radial_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_radial_accel = textureLod(radial_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_radial_accel = 0.0;\n";
+		code += "		float tex_radial_accel = 0.0;\n";
 
 	if (tex_parameters[PARAM_TANGENTIAL_ACCEL].is_valid())
-		code += "    float tex_tangent_accel = textureLod(tangent_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_tangent_accel = textureLod(tangent_accel_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_tangent_accel = 0.0;\n";
+		code += "		float tex_tangent_accel = 0.0;\n";
 
 	if (tex_parameters[PARAM_DAMPING].is_valid())
-		code += "    float tex_damping = textureLod(damping_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_damping = textureLod(damping_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_damping = 0.0;\n";
+		code += "		float tex_damping = 0.0;\n";
 
 	if (tex_parameters[PARAM_ANGLE].is_valid())
-		code += "    float tex_angle = textureLod(angle_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_angle = textureLod(angle_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_angle = 0.0;\n";
+		code += "		float tex_angle = 0.0;\n";
 
 	if (tex_parameters[PARAM_ANIM_SPEED].is_valid())
-		code += "    float tex_anim_speed = textureLod(anim_speed_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_anim_speed = textureLod(anim_speed_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_anim_speed = 0.0;\n";
+		code += "		float tex_anim_speed = 0.0;\n";
 
 	if (tex_parameters[PARAM_ANIM_OFFSET].is_valid())
-		code += "    float tex_anim_offset = textureLod(anim_offset_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "		float tex_anim_offset = textureLod(anim_offset_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += "    float tex_anim_offset = 0.0;\n";
+		code += "		float tex_anim_offset = 0.0;\n";
 
-	code += "    vec3 force = gravity; \n";
-	code += "    vec3 pos = TRANSFORM[3].xyz; \n";
-	code += "    //apply linear acceleration\n";
-	code += "    force+=normalize(VELOCITY) * (linear_accel+tex_linear_accel)*mix(1.0,rand_from_seed(alt_seed),linear_accel_random);\n";
-	code += "    //apply radial acceleration\n";
-	code += "    vec3 org = vec3(0.0);\n";
-	code += "   // if (!p_system->local_coordinates)\n";
-	code += "	//org=p_transform.origin;\n";
-	code += "    force+=normalize(pos-org) * (radial_accel+tex_radial_accel)*mix(1.0,rand_from_seed(alt_seed),radial_accel_random);\n";
-	code += "    //apply tangential acceleration;\n";
-	code += "    force+=normalize(cross(normalize(pos-org),normalize(gravity))) * ((tangent_accel+tex_tangent_accel)*mix(1.0,rand_from_seed(alt_seed),radial_accel_random));\n";
-	code += "    //apply attractor forces\n";
-	code += "    VELOCITY+=force * DELTA;\n";
-	if (tex_parameters[PARAM_INITIAL_LINEAR_VELOCITY].is_valid())
-		code += "    VELOCITY=normalize(VELOCITY)*tex_linear_velocity;\n";
-	code += "    if (damping+tex_damping>0.0) {\n";
-	code += "    \n";
-	code += "    	float v = length(VELOCITY);\n";
-	code += "    	float damp = (damping+tex_damping)*mix(1.0,rand_from_seed(alt_seed),damping_random);\n";
-	code += "    	v -= damp * DELTA;\n";
-	code += "    	if (v<0.0) {\n";
-	code += "    		VELOCITY=vec3(0.0);\n";
-	code += "    	} else {\n";
-	code += "    		VELOCITY=normalize(VELOCITY) * v;\n";
+	code += "		vec3 force = gravity; \n";
+	code += "		vec3 pos = TRANSFORM[3].xyz; \n";
+	if (flags[FLAG_DISABLE_Z]) {
+		code += "		pos.z = 0.0; \n";
+	}
+	code += "		//apply linear acceleration\n";
+	code += "		force += length(VELOCITY) > 0.0 ? normalize(VELOCITY) * (linear_accel+tex_linear_accel)*mix(1.0,rand_from_seed(alt_seed),linear_accel_random) : vec3(0.0);\n";
+	code += "		//apply radial acceleration\n";
+	code += "		vec3 org = EMISSION_TRANSFORM[3].xyz;\n";
+	code += "		vec3 diff = pos-org;\n";
+	code += "		force += length(diff) > 0.0 ? normalize(diff) * (radial_accel+tex_radial_accel)*mix(1.0,rand_from_seed(alt_seed),radial_accel_random) : vec3(0.0);\n";
+	code += "		//apply tangential acceleration;\n";
+	if (flags[FLAG_DISABLE_Z]) {
+		code += "		force += length(diff.yx) > 0.0 ? vec3(normalize(diff.yx * vec2(-1.0,1.0)),0.0) * ((tangent_accel+tex_tangent_accel)*mix(1.0,rand_from_seed(alt_seed),tangent_accel_random)) : vec3(0.0);\n";
+
+	} else {
+		code += "		vec3 crossDiff = cross(normalize(diff),normalize(gravity));\n";
+		code += "		force += length(crossDiff) > 0.0 ? normalize(crossDiff) * ((tangent_accel+tex_tangent_accel)*mix(1.0,rand_from_seed(alt_seed),tangent_accel_random)) : vec3(0.0);\n";
+	}
+	code += "		//apply attractor forces\n";
+	code += "		VELOCITY += force * DELTA;\n";
+	code += "		//orbit velocity\n";
+	if (flags[FLAG_DISABLE_Z]) {
+
+		code += "		float orbit_amount = (orbit_velocity+tex_orbit_velocity)*mix(1.0,rand_from_seed(alt_seed),orbit_velocity_random);\n";
+		code += "		if (orbit_amount!=0.0) {\n";
+		code += "		     float ang = orbit_amount * DELTA * pi * 2.0;\n";
+		code += "		     mat2 rot = mat2(vec2(cos(ang),-sin(ang)),vec2(sin(ang),cos(ang)));\n";
+		code += "		     TRANSFORM[3].xy-=diff.xy;\n";
+		code += "		     TRANSFORM[3].xy+=rot * diff.xy;\n";
+		code += "		}\n";
+	}
+
+	if (tex_parameters[PARAM_INITIAL_LINEAR_VELOCITY].is_valid()) {
+		code += "		VELOCITY = normalize(VELOCITY)*tex_linear_velocity;\n";
+	}
+	code += "		if (damping + tex_damping > 0.0) {\n";
+	code += "		\n";
+	code += "			float v = length(VELOCITY);\n";
+	code += "			float damp = (damping+tex_damping)*mix(1.0,rand_from_seed(alt_seed),damping_random);\n";
+	code += "			v -= damp * DELTA;\n";
+	code += "			if (v < 0.0) {\n";
+	code += "				VELOCITY = vec3(0.0);\n";
+	code += "			} else {\n";
+	code += "				VELOCITY = normalize(VELOCITY) * v;\n";
+	code += "			}\n";
+	code += "		}\n";
+	code += "		float base_angle = (initial_angle+tex_angle)*mix(1.0,angle_rand,initial_angle_random);\n";
+	code += "		base_angle += CUSTOM.y*LIFETIME*(angular_velocity+tex_angular_velocity)*mix(1.0,rand_from_seed(alt_seed)*2.0-1.0,angular_velocity_random);\n";
+	code += "		CUSTOM.x = base_angle*degree_to_rad;\n"; //angle
+	code += "		CUSTOM.z = (anim_offset+tex_anim_offset)*mix(1.0,anim_offset_rand,anim_offset_random)+CUSTOM.y*(anim_speed+tex_anim_speed)*mix(1.0,rand_from_seed(alt_seed),anim_speed_random);\n"; //angle
+	if (flags[FLAG_ANIM_LOOP]) {
+		code += "		CUSTOM.z = mod(CUSTOM.z,1.0);\n"; //loop
+
+	} else {
+		code += "		CUSTOM.z = clamp(CUSTOM.z,0.0,1.0);\n"; //0 to 1 only
+	}
 	code += "	}\n";
-	code += "    }\n";
-	code += "    float base_angle=(initial_angle+tex_angle)*mix(1.0,angle_rand,initial_angle_random)*3.1416/180.0;\n";
-	code += "    CUSTOM.x=((base_angle+tex_angle)+CUSTOM.y*LIFETIME*(angular_velocity+tex_angular_velocity)*mix(1.0,rand_from_seed(alt_seed)*2.0-1.0,angular_velocity_random))*3.1416/180.0;\n"; //angle
-	code += "    CUSTOM.z=(anim_offset+tex_anim_offset)*mix(1.0,anim_offset_rand,anim_offset_random)+CUSTOM.y*LIFETIME*(anim_speed+tex_anim_speed)*mix(1.0,rand_from_seed(alt_seed),anim_speed_random);\n"; //angle
-	code += "  }\n";
 	//apply color
 	//apply hue rotation
 	if (tex_parameters[PARAM_SCALE].is_valid())
-		code += " float tex_scale = textureLod(scale_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "	float tex_scale = textureLod(scale_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += " float tex_scale = 1.0;\n";
+		code += "	float tex_scale = 1.0;\n";
 
 	if (tex_parameters[PARAM_HUE_VARIATION].is_valid())
-		code += " float tex_hue_variation = textureLod(hue_variation_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
+		code += "	float tex_hue_variation = textureLod(hue_variation_texture,vec2(CUSTOM.y,0.0),0.0).r;\n";
 	else
-		code += " float tex_hue_variation = 0.0;\n";
+		code += "	float tex_hue_variation = 0.0;\n";
 
-	code += "  float hue_rot_angle = (hue_variation+tex_hue_variation)*3.1416*2.0*mix(1.0,hue_rot_rand*2.0-1.0,hue_variation_random);\n";
-	code += "  float hue_rot_c = cos(hue_rot_angle);\n";
-	code += "  float hue_rot_s = sin(hue_rot_angle);\n";
-	code += "  mat4 hue_rot_mat =	mat4( vec4(0.299,  0.587,  0.114, 0.0),\n";
-	code += "			    	 vec4(0.299,  0.587,  0.114, 0.0),\n";
-	code += "			    	 vec4(0.299,  0.587,  0.114, 0.0),\n";
-	code += "				 vec4(0.000,  0.000,  0.000, 1.0)) +\n";
-	code += "	\n";
-	code += "			mat4(	 vec4(0.701, -0.587, -0.114, 0.0),\n";
-	code += "				vec4(-0.299,  0.413, -0.114, 0.0),\n";
-	code += "				vec4(-0.300, -0.588,  0.886, 0.0),\n";
-	code += "			 	 vec4(0.000,  0.000,  0.000, 0.0)) * hue_rot_c +\n";
-	code += "\n";
-	code += "			mat4(	 vec4(0.168,  0.330, -0.497, 0.0),\n";
-	code += "				vec4(-0.328,  0.035,  0.292, 0.0),\n";
-	code += "				 vec4(1.250, -1.050, -0.203, 0.0),\n";
-	code += "				 vec4(0.000,  0.000,  0.000, 0.0)) * hue_rot_s;\n";
+	code += "	float hue_rot_angle = (hue_variation+tex_hue_variation)*pi*2.0*mix(1.0,hue_rot_rand*2.0-1.0,hue_variation_random);\n";
+	code += "	float hue_rot_c = cos(hue_rot_angle);\n";
+	code += "	float hue_rot_s = sin(hue_rot_angle);\n";
+	code += "	mat4 hue_rot_mat = mat4( vec4(0.299,  0.587,  0.114, 0.0),\n";
+	code += "			vec4(0.299,  0.587,  0.114, 0.0),\n";
+	code += "			vec4(0.299,  0.587,  0.114, 0.0),\n";
+	code += "			vec4(0.000,  0.000,  0.000, 1.0)) +\n";
+	code += "		mat4( vec4(0.701, -0.587, -0.114, 0.0),\n";
+	code += "			vec4(-0.299,  0.413, -0.114, 0.0),\n";
+	code += "			vec4(-0.300, -0.588,  0.886, 0.0),\n";
+	code += "			vec4(0.000,  0.000,  0.000, 0.0)) * hue_rot_c +\n";
+	code += "		mat4( vec4(0.168,  0.330, -0.497, 0.0),\n";
+	code += "			vec4(-0.328,  0.035,  0.292, 0.0),\n";
+	code += "			vec4(1.250, -1.050, -0.203, 0.0),\n";
+	code += "			vec4(0.000,  0.000,  0.000, 0.0)) * hue_rot_s;\n";
 	if (color_ramp.is_valid()) {
-		code += " COLOR = textureLod(color_ramp,vec2(CUSTOM.y,0.0),0.0) * hue_rot_mat;\n";
+		code += "	COLOR = textureLod(color_ramp,vec2(CUSTOM.y,0.0),0.0) * hue_rot_mat;\n";
 	} else {
-		code += " COLOR = color_value * hue_rot_mat;\n";
+		code += "	COLOR = color_value * hue_rot_mat;\n";
+	}
+	if (emission_color_texture.is_valid() && emission_shape >= EMISSION_SHAPE_POINTS) {
+		code += "	COLOR*= texelFetch(emission_texture_color,emission_tex_ofs,0);\n";
 	}
 	if (trail_color_modifier.is_valid()) {
-		code += "if (trail_divisor>1) { COLOR*=textureLod(trail_color_modifier,vec2(float(int(NUMBER)%trail_divisor)/float(trail_divisor-1),0.0),0.0); }\n";
+		code += "	if (trail_divisor > 1) { COLOR *= textureLod(trail_color_modifier,vec2(float(int(NUMBER)%trail_divisor)/float(trail_divisor-1),0.0),0.0); }\n";
 	}
 	code += "\n";
-	//orient particle Y towards velocity
-	if (flags[FLAG_ALIGN_Y_TO_VELOCITY]) {
-		code += " if (length(VELOCITY)>0.0) {TRANSFORM[1].xyz=normalize(VELOCITY);} else {TRANSFORM[1].xyz=normalize(TRANSFORM[1].xyz);}\n";
-		code += " if (TRANSFORM[1].xyz==normalize(TRANSFORM[0].xyz)) {\n";
-		code += "\tTRANSFORM[0].xyz=normalize(cross(normalize(TRANSFORM[1].xyz),normalize(TRANSFORM[2].xyz)));\n";
-		code += "\tTRANSFORM[2].xyz=normalize(cross(normalize(TRANSFORM[0].xyz),normalize(TRANSFORM[1].xyz)));\n";
-		code += " } else {\n";
-		code += "\tTRANSFORM[2].xyz=normalize(cross(normalize(TRANSFORM[0].xyz),normalize(TRANSFORM[1].xyz)));\n";
-		code += "\tTRANSFORM[0].xyz=normalize(cross(normalize(TRANSFORM[1].xyz),normalize(TRANSFORM[2].xyz)));\n";
-		code += " }\n";
+
+	if (flags[FLAG_DISABLE_Z]) {
+
+		if (flags[FLAG_ALIGN_Y_TO_VELOCITY]) {
+			code += "	if (length(VELOCITY) > 0.0) { TRANSFORM[1].xyz = normalize(VELOCITY); } else { TRANSFORM[1].xyz = normalize(TRANSFORM[1].xyz); }\n";
+			code += "	TRANSFORM[0].xyz = normalize(cross(TRANSFORM[1].xyz,TRANSFORM[2].xyz));\n";
+			code += "	TRANSFORM[2] = vec4(0.0,0.0,1.0,0.0);\n";
+		} else {
+			code += "	TRANSFORM[0] = vec4(cos(CUSTOM.x),-sin(CUSTOM.x),0.0,0.0);\n";
+			code += "	TRANSFORM[1] = vec4(sin(CUSTOM.x),cos(CUSTOM.x),0.0,0.0);\n";
+			code += "	TRANSFORM[2] = vec4(0.0,0.0,1.0,0.0);\n";
+		}
+
 	} else {
-		code += "\tTRANSFORM[0].xyz=normalize(TRANSFORM[0].xyz);\n";
-		code += "\tTRANSFORM[1].xyz=normalize(TRANSFORM[1].xyz);\n";
-		code += "\tTRANSFORM[2].xyz=normalize(TRANSFORM[2].xyz);\n";
-	}
-	//turn particle by rotation in Y
-	if (flags[FLAG_ROTATE_Y]) {
-		code += "\tTRANSFORM = TRANSFORM * mat4( vec4(cos(CUSTOM.x),0.0,-sin(CUSTOM.x),0.0), vec4(0.0,1.0,0.0,0.0),vec4(sin(CUSTOM.x),0.0,cos(CUSTOM.x),0.0),vec4(0.0,0.0,0.0,1.0));\n";
+		//orient particle Y towards velocity
+		if (flags[FLAG_ALIGN_Y_TO_VELOCITY]) {
+			code += "	if (length(VELOCITY) > 0.0) { TRANSFORM[1].xyz = normalize(VELOCITY); } else { TRANSFORM[1].xyz = normalize(TRANSFORM[1].xyz); }\n";
+			code += "	if (TRANSFORM[1].xyz == normalize(TRANSFORM[0].xyz)) {\n";
+			code += "		TRANSFORM[0].xyz = normalize(cross(normalize(TRANSFORM[1].xyz),normalize(TRANSFORM[2].xyz)));\n";
+			code += "		TRANSFORM[2].xyz = normalize(cross(normalize(TRANSFORM[0].xyz),normalize(TRANSFORM[1].xyz)));\n";
+			code += "	} else {\n";
+			code += "		TRANSFORM[2].xyz = normalize(cross(normalize(TRANSFORM[0].xyz),normalize(TRANSFORM[1].xyz)));\n";
+			code += "		TRANSFORM[0].xyz = normalize(cross(normalize(TRANSFORM[1].xyz),normalize(TRANSFORM[2].xyz)));\n";
+			code += "	}\n";
+		} else {
+			code += "	TRANSFORM[0].xyz = normalize(TRANSFORM[0].xyz);\n";
+			code += "	TRANSFORM[1].xyz = normalize(TRANSFORM[1].xyz);\n";
+			code += "	TRANSFORM[2].xyz = normalize(TRANSFORM[2].xyz);\n";
+		}
+		//turn particle by rotation in Y
+		if (flags[FLAG_ROTATE_Y]) {
+			code += "	TRANSFORM = TRANSFORM * mat4( vec4(cos(CUSTOM.x),0.0,-sin(CUSTOM.x),0.0), vec4(0.0,1.0,0.0,0.0),vec4(sin(CUSTOM.x),0.0,cos(CUSTOM.x),0.0),vec4(0.0,0.0,0.0,1.0));\n";
+		}
 	}
 	//scale by scale
-	code += " float base_scale=mix(scale*tex_scale,1.0,scale_random*scale_rand);\n";
+	code += "	float base_scale = mix(scale*tex_scale,1.0,scale_random*scale_rand);\n";
+	code += "	if (base_scale==0.0) base_scale=0.000001;\n";
 	if (trail_size_modifier.is_valid()) {
-		code += "if (trail_divisor>1) { base_scale*=textureLod(trail_size_modifier,vec2(float(int(NUMBER)%trail_divisor)/float(trail_divisor-1),0.0),0.0).r; } \n";
+		code += "	if (trail_divisor > 1) { base_scale *= textureLod(trail_size_modifier,vec2(float(int(NUMBER)%trail_divisor)/float(trail_divisor-1),0.0),0.0).r; } \n";
 	}
 
-	code += " TRANSFORM[0].xyz*=base_scale;\n";
-	code += " TRANSFORM[1].xyz*=base_scale;\n";
-	code += " TRANSFORM[2].xyz*=base_scale;\n";
+	code += "	TRANSFORM[0].xyz *= base_scale;\n";
+	code += "	TRANSFORM[1].xyz *= base_scale;\n";
+	code += "	TRANSFORM[2].xyz *= base_scale;\n";
+	if (flags[FLAG_DISABLE_Z]) {
+		code += "	VELOCITY.z = 0.0;\n";
+		code += "	TRANSFORM[3].z = 0.0;\n";
+	}
 	code += "}\n";
 	code += "\n";
 
@@ -812,9 +940,7 @@ void ParticlesMaterial::_queue_shader_change() {
 	if (material_mutex)
 		material_mutex->lock();
 
-	print_line("queuing change");
 	if (!element.in_list()) {
-		print_line("not in list, adding");
 		dirty_materials.add(&element);
 	}
 
@@ -968,16 +1094,11 @@ float ParticlesMaterial::get_param_randomness(Parameter p_param) const {
 
 static void _adjust_curve_range(const Ref<Texture> &p_texture, float p_min, float p_max) {
 
-	Ref<CurveTexture> curve = p_texture;
-	if (!curve.is_valid())
+	Ref<CurveTexture> curve_tex = p_texture;
+	if (!curve_tex.is_valid())
 		return;
 
-	if (curve->get_max() == 1.0) {
-		curve->set_max(p_max);
-	}
-	if (curve->get_min() == 0.0) {
-		curve->set_min(p_min);
-	}
+	curve_tex->ensure_default_setup(p_min, p_max);
 }
 
 void ParticlesMaterial::set_param_texture(Parameter p_param, const Ref<Texture> &p_texture) {
@@ -1021,16 +1142,9 @@ void ParticlesMaterial::set_param_texture(Parameter p_param, const Ref<Texture> 
 		case PARAM_SCALE: {
 			VisualServer::get_singleton()->material_set_param(_get_material(), shader_names->scale_texture, p_texture);
 
-			Ref<CurveTexture> curve = p_texture;
-			if (curve.is_valid()) {
-				if (curve->get_min() == 0 && curve->get_max() == 1) {
-
-					curve->set_max(32);
-					PoolVector<Vector2> points;
-					points.push_back(Vector2(0, 1));
-					points.push_back(Vector2(1, 1));
-					curve->set_points(points);
-				}
+			Ref<CurveTexture> curve_tex = p_texture;
+			if (curve_tex.is_valid()) {
+				curve_tex->ensure_default_setup();
 			}
 
 		} break;
@@ -1086,6 +1200,9 @@ void ParticlesMaterial::set_flag(Flags p_flag, bool p_enable) {
 	ERR_FAIL_INDEX(p_flag, FLAG_MAX);
 	flags[p_flag] = p_enable;
 	_queue_shader_change();
+	if (p_flag == FLAG_DISABLE_Z) {
+		_change_notify();
+	}
 }
 
 bool ParticlesMaterial::get_flag(Flags p_flag) const {
@@ -1130,6 +1247,16 @@ void ParticlesMaterial::set_emission_normal_texture(const Ref<Texture> &p_normal
 	VisualServer::get_singleton()->material_set_param(_get_material(), shader_names->emission_texture_normal, texture);
 }
 
+void ParticlesMaterial::set_emission_color_texture(const Ref<Texture> &p_colors) {
+
+	emission_color_texture = p_colors;
+	RID texture;
+	if (p_colors.is_valid())
+		texture = p_colors->get_rid();
+	VisualServer::get_singleton()->material_set_param(_get_material(), shader_names->emission_texture_color, texture);
+	_queue_shader_change();
+}
+
 void ParticlesMaterial::set_emission_point_count(int p_count) {
 
 	emission_point_count = p_count;
@@ -1158,6 +1285,11 @@ Ref<Texture> ParticlesMaterial::get_emission_normal_texture() const {
 	return emission_normal_texture;
 }
 
+Ref<Texture> ParticlesMaterial::get_emission_color_texture() const {
+
+	return emission_color_texture;
+}
+
 int ParticlesMaterial::get_emission_point_count() const {
 
 	return emission_point_count;
@@ -1165,9 +1297,8 @@ int ParticlesMaterial::get_emission_point_count() const {
 
 void ParticlesMaterial::set_trail_divisor(int p_divisor) {
 
-	VisualServer::get_singleton()->material_set_param(_get_material(), shader_names->trail_divisor, p_divisor);
 	trail_divisor = p_divisor;
-	_change_notify();
+	VisualServer::get_singleton()->material_set_param(_get_material(), shader_names->trail_divisor, p_divisor);
 }
 
 int ParticlesMaterial::get_trail_divisor() const {
@@ -1181,14 +1312,7 @@ void ParticlesMaterial::set_trail_size_modifier(const Ref<CurveTexture> &p_trail
 
 	Ref<CurveTexture> curve = trail_size_modifier;
 	if (curve.is_valid()) {
-		if (curve->get_min() == 0 && curve->get_max() == 1) {
-
-			curve->set_max(32);
-			PoolVector<Vector2> points;
-			points.push_back(Vector2(0, 1));
-			points.push_back(Vector2(1, 1));
-			curve->set_points(points);
-		}
+		curve->ensure_default_setup();
 	}
 
 	RID texture;
@@ -1233,6 +1357,12 @@ Vector3 ParticlesMaterial::get_gravity() const {
 	return gravity;
 }
 
+RID ParticlesMaterial::get_shader_rid() const {
+
+	ERR_FAIL_COND_V(!shader_map.has(current_key), RID());
+	return shader_map[current_key].shader;
+}
+
 void ParticlesMaterial::_validate_property(PropertyInfo &property) const {
 
 	if (property.name == "color" && color_ramp.is_valid()) {
@@ -1247,7 +1377,7 @@ void ParticlesMaterial::_validate_property(PropertyInfo &property) const {
 		property.usage = 0;
 	}
 
-	if (property.name == "emission_point_texture" && (emission_shape != EMISSION_SHAPE_POINTS && emission_shape != EMISSION_SHAPE_DIRECTED_POINTS)) {
+	if ((property.name == "emission_point_texture" || property.name == "emission_color_texture") && (emission_shape < EMISSION_SHAPE_POINTS)) {
 		property.usage = 0;
 	}
 
@@ -1258,6 +1388,15 @@ void ParticlesMaterial::_validate_property(PropertyInfo &property) const {
 	if (property.name == "emission_point_count" && (emission_shape != EMISSION_SHAPE_POINTS && emission_shape != EMISSION_SHAPE_DIRECTED_POINTS)) {
 		property.usage = 0;
 	}
+
+	if (property.name.begins_with("orbit_") && !flags[FLAG_DISABLE_Z]) {
+		property.usage = 0;
+	}
+}
+
+Shader::Mode ParticlesMaterial::get_shader_mode() const {
+
+	return Shader::MODE_PARTICLES;
 }
 
 void ParticlesMaterial::_bind_methods() {
@@ -1280,8 +1419,8 @@ void ParticlesMaterial::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_color", "color"), &ParticlesMaterial::set_color);
 	ClassDB::bind_method(D_METHOD("get_color"), &ParticlesMaterial::get_color);
 
-	ClassDB::bind_method(D_METHOD("set_color_ramp", "ramp:Texture"), &ParticlesMaterial::set_color_ramp);
-	ClassDB::bind_method(D_METHOD("get_color_ramp:Texture"), &ParticlesMaterial::get_color_ramp);
+	ClassDB::bind_method(D_METHOD("set_color_ramp", "ramp"), &ParticlesMaterial::set_color_ramp);
+	ClassDB::bind_method(D_METHOD("get_color_ramp"), &ParticlesMaterial::get_color_ramp);
 
 	ClassDB::bind_method(D_METHOD("set_flag", "flag", "enable"), &ParticlesMaterial::set_flag);
 	ClassDB::bind_method(D_METHOD("get_flag", "flag"), &ParticlesMaterial::get_flag);
@@ -1295,11 +1434,14 @@ void ParticlesMaterial::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_emission_box_extents", "extents"), &ParticlesMaterial::set_emission_box_extents);
 	ClassDB::bind_method(D_METHOD("get_emission_box_extents"), &ParticlesMaterial::get_emission_box_extents);
 
-	ClassDB::bind_method(D_METHOD("set_emission_point_texture", "texture:Texture"), &ParticlesMaterial::set_emission_point_texture);
-	ClassDB::bind_method(D_METHOD("get_emission_point_texture:Texture"), &ParticlesMaterial::get_emission_point_texture);
+	ClassDB::bind_method(D_METHOD("set_emission_point_texture", "texture"), &ParticlesMaterial::set_emission_point_texture);
+	ClassDB::bind_method(D_METHOD("get_emission_point_texture"), &ParticlesMaterial::get_emission_point_texture);
 
-	ClassDB::bind_method(D_METHOD("set_emission_normal_texture", "texture:Texture"), &ParticlesMaterial::set_emission_normal_texture);
-	ClassDB::bind_method(D_METHOD("get_emission_normal_texture:Texture"), &ParticlesMaterial::get_emission_normal_texture);
+	ClassDB::bind_method(D_METHOD("set_emission_normal_texture", "texture"), &ParticlesMaterial::set_emission_normal_texture);
+	ClassDB::bind_method(D_METHOD("get_emission_normal_texture"), &ParticlesMaterial::get_emission_normal_texture);
+
+	ClassDB::bind_method(D_METHOD("set_emission_color_texture", "texture"), &ParticlesMaterial::set_emission_color_texture);
+	ClassDB::bind_method(D_METHOD("get_emission_color_texture"), &ParticlesMaterial::get_emission_color_texture);
 
 	ClassDB::bind_method(D_METHOD("set_emission_point_count", "point_count"), &ParticlesMaterial::set_emission_point_count);
 	ClassDB::bind_method(D_METHOD("get_emission_point_count"), &ParticlesMaterial::get_emission_point_count);
@@ -1307,11 +1449,11 @@ void ParticlesMaterial::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_trail_divisor", "divisor"), &ParticlesMaterial::set_trail_divisor);
 	ClassDB::bind_method(D_METHOD("get_trail_divisor"), &ParticlesMaterial::get_trail_divisor);
 
-	ClassDB::bind_method(D_METHOD("set_trail_size_modifier", "texture:CurveTexture"), &ParticlesMaterial::set_trail_size_modifier);
-	ClassDB::bind_method(D_METHOD("get_trail_size_modifier:CurveTexture"), &ParticlesMaterial::get_trail_size_modifier);
+	ClassDB::bind_method(D_METHOD("set_trail_size_modifier", "texture"), &ParticlesMaterial::set_trail_size_modifier);
+	ClassDB::bind_method(D_METHOD("get_trail_size_modifier"), &ParticlesMaterial::get_trail_size_modifier);
 
-	ClassDB::bind_method(D_METHOD("set_trail_color_modifier", "texture:GradientTexture"), &ParticlesMaterial::set_trail_color_modifier);
-	ClassDB::bind_method(D_METHOD("get_trail_color_modifier:GradientTexture"), &ParticlesMaterial::get_trail_color_modifier);
+	ClassDB::bind_method(D_METHOD("set_trail_color_modifier", "texture"), &ParticlesMaterial::set_trail_color_modifier);
+	ClassDB::bind_method(D_METHOD("get_trail_color_modifier"), &ParticlesMaterial::get_trail_color_modifier);
 
 	ClassDB::bind_method(D_METHOD("get_gravity"), &ParticlesMaterial::get_gravity);
 	ClassDB::bind_method(D_METHOD("set_gravity", "accel_vec"), &ParticlesMaterial::set_gravity);
@@ -1326,10 +1468,12 @@ void ParticlesMaterial::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "emission_box_extents"), "set_emission_box_extents", "get_emission_box_extents");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "emission_point_texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture"), "set_emission_point_texture", "get_emission_point_texture");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "emission_normal_texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture"), "set_emission_normal_texture", "get_emission_normal_texture");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "emission_color_texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture"), "set_emission_color_texture", "get_emission_color_texture");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "emission_point_count", PROPERTY_HINT_RANGE, "0,1000000,1"), "set_emission_point_count", "get_emission_point_count");
 	ADD_GROUP("Flags", "flag_");
 	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "flag_align_y"), "set_flag", "get_flag", FLAG_ALIGN_Y_TO_VELOCITY);
 	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "flag_rotate_y"), "set_flag", "get_flag", FLAG_ROTATE_Y);
+	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "flag_disable_z"), "set_flag", "get_flag", FLAG_DISABLE_Z);
 	ADD_GROUP("Spread", "");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "spread", PROPERTY_HINT_RANGE, "0,180,0.01"), "set_spread", "get_spread");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "flatness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_flatness", "get_flatness");
@@ -1379,40 +1523,41 @@ void ParticlesMaterial::_bind_methods() {
 	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "hue_variation_random", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_param_randomness", "get_param_randomness", PARAM_HUE_VARIATION);
 	ADD_PROPERTYI(PropertyInfo(Variant::OBJECT, "hue_variation_curve", PROPERTY_HINT_RESOURCE_TYPE, "CurveTexture"), "set_param_texture", "get_param_texture", PARAM_HUE_VARIATION);
 	ADD_GROUP("Animation", "anim_");
-	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "anim_speed", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_param", "get_param", PARAM_ANIM_SPEED);
+	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "anim_speed", PROPERTY_HINT_RANGE, "0,128,0.01"), "set_param", "get_param", PARAM_ANIM_SPEED);
 	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "anim_speed_random", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_param_randomness", "get_param_randomness", PARAM_ANIM_SPEED);
 	ADD_PROPERTYI(PropertyInfo(Variant::OBJECT, "anim_speed_curve", PROPERTY_HINT_RESOURCE_TYPE, "CurveTexture"), "set_param_texture", "get_param_texture", PARAM_ANIM_SPEED);
 	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "anim_offset", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_param", "get_param", PARAM_ANIM_OFFSET);
 	ADD_PROPERTYI(PropertyInfo(Variant::REAL, "anim_offset_random", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_param_randomness", "get_param_randomness", PARAM_ANIM_OFFSET);
 	ADD_PROPERTYI(PropertyInfo(Variant::OBJECT, "anim_offset_curve", PROPERTY_HINT_RESOURCE_TYPE, "CurveTexture"), "set_param_texture", "get_param_texture", PARAM_ANIM_OFFSET);
+	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "anim_loop"), "set_flag", "get_flag", FLAG_ANIM_LOOP);
 
-	BIND_CONSTANT(PARAM_INITIAL_LINEAR_VELOCITY);
-	BIND_CONSTANT(PARAM_ANGULAR_VELOCITY);
-	BIND_CONSTANT(PARAM_ORBIT_VELOCITY);
-	BIND_CONSTANT(PARAM_LINEAR_ACCEL);
-	BIND_CONSTANT(PARAM_RADIAL_ACCEL);
-	BIND_CONSTANT(PARAM_TANGENTIAL_ACCEL);
-	BIND_CONSTANT(PARAM_DAMPING);
-	BIND_CONSTANT(PARAM_ANGLE);
-	BIND_CONSTANT(PARAM_SCALE);
-	BIND_CONSTANT(PARAM_HUE_VARIATION);
-	BIND_CONSTANT(PARAM_ANIM_SPEED);
-	BIND_CONSTANT(PARAM_ANIM_OFFSET);
-	BIND_CONSTANT(PARAM_MAX);
+	BIND_ENUM_CONSTANT(PARAM_INITIAL_LINEAR_VELOCITY);
+	BIND_ENUM_CONSTANT(PARAM_ANGULAR_VELOCITY);
+	BIND_ENUM_CONSTANT(PARAM_ORBIT_VELOCITY);
+	BIND_ENUM_CONSTANT(PARAM_LINEAR_ACCEL);
+	BIND_ENUM_CONSTANT(PARAM_RADIAL_ACCEL);
+	BIND_ENUM_CONSTANT(PARAM_TANGENTIAL_ACCEL);
+	BIND_ENUM_CONSTANT(PARAM_DAMPING);
+	BIND_ENUM_CONSTANT(PARAM_ANGLE);
+	BIND_ENUM_CONSTANT(PARAM_SCALE);
+	BIND_ENUM_CONSTANT(PARAM_HUE_VARIATION);
+	BIND_ENUM_CONSTANT(PARAM_ANIM_SPEED);
+	BIND_ENUM_CONSTANT(PARAM_ANIM_OFFSET);
+	BIND_ENUM_CONSTANT(PARAM_MAX);
 
-	BIND_CONSTANT(FLAG_ALIGN_Y_TO_VELOCITY);
-	BIND_CONSTANT(FLAG_ROTATE_Y);
-	BIND_CONSTANT(FLAG_MAX);
+	BIND_ENUM_CONSTANT(FLAG_ALIGN_Y_TO_VELOCITY);
+	BIND_ENUM_CONSTANT(FLAG_ROTATE_Y);
+	BIND_ENUM_CONSTANT(FLAG_MAX);
 
-	BIND_CONSTANT(EMISSION_SHAPE_POINT);
-	BIND_CONSTANT(EMISSION_SHAPE_SPHERE);
-	BIND_CONSTANT(EMISSION_SHAPE_BOX);
-	BIND_CONSTANT(EMISSION_SHAPE_POINTS);
-	BIND_CONSTANT(EMISSION_SHAPE_DIRECTED_POINTS);
+	BIND_ENUM_CONSTANT(EMISSION_SHAPE_POINT);
+	BIND_ENUM_CONSTANT(EMISSION_SHAPE_SPHERE);
+	BIND_ENUM_CONSTANT(EMISSION_SHAPE_BOX);
+	BIND_ENUM_CONSTANT(EMISSION_SHAPE_POINTS);
+	BIND_ENUM_CONSTANT(EMISSION_SHAPE_DIRECTED_POINTS);
 }
 
-ParticlesMaterial::ParticlesMaterial()
-	: element(this) {
+ParticlesMaterial::ParticlesMaterial() :
+		element(this) {
 
 	set_spread(45);
 	set_flatness(0);

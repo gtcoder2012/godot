@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -73,7 +73,6 @@ class ParticlesEditor : public Control {
 
 	void _generate_aabb();
 	void _generate_emission_points();
-	void _resource_seleted(const String &p_res);
 	void _node_selected(const NodePath &p_path);
 
 	void _menu_option(int);
@@ -102,8 +101,8 @@ class ParticlesEditorPlugin : public EditorPlugin {
 public:
 	virtual String get_name() const { return "Particles"; }
 	bool has_main_screen() const { return false; }
-	virtual void edit(Object *p_node);
-	virtual bool handles(Object *p_node) const;
+	virtual void edit(Object *p_object);
+	virtual bool handles(Object *p_object) const;
 	virtual void make_visible(bool p_visible);
 
 	ParticlesEditorPlugin(EditorNode *p_node);

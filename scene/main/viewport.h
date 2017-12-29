@@ -1,9 +1,10 @@
+
 /*************************************************************************/
 /*  viewport.h                                                           */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -58,6 +59,8 @@ class ViewportTexture : public Texture {
 	friend class Viewport;
 	Viewport *vp;
 
+	RID proxy;
+
 protected:
 	static void _bind_methods();
 
@@ -76,6 +79,8 @@ public:
 
 	virtual void set_flags(uint32_t p_flags);
 	virtual uint32_t get_flags() const;
+
+	virtual Ref<Image> get_data() const;
 
 	ViewportTexture();
 	~ViewportTexture();
@@ -113,6 +118,38 @@ public:
 		MSAA_16X,
 	};
 
+	enum Usage {
+		USAGE_2D,
+		USAGE_2D_NO_SAMPLING,
+		USAGE_3D,
+		USAGE_3D_NO_EFFECTS,
+	};
+
+	enum RenderInfo {
+
+		RENDER_INFO_OBJECTS_IN_FRAME,
+		RENDER_INFO_VERTICES_IN_FRAME,
+		RENDER_INFO_MATERIAL_CHANGES_IN_FRAME,
+		RENDER_INFO_SHADER_CHANGES_IN_FRAME,
+		RENDER_INFO_SURFACE_CHANGES_IN_FRAME,
+		RENDER_INFO_DRAW_CALLS_IN_FRAME,
+		RENDER_INFO_MAX
+	};
+
+	enum DebugDraw {
+		DEBUG_DRAW_DISABLED,
+		DEBUG_DRAW_UNSHADED,
+		DEBUG_DRAW_OVERDRAW,
+		DEBUG_DRAW_WIREFRAME,
+	};
+
+	enum ClearMode {
+
+		CLEAR_MODE_ALWAYS,
+		CLEAR_MODE_NEVER,
+		CLEAR_MODE_ONLY_NEXT_FRAME
+	};
+
 private:
 	friend class ViewportTexture;
 
@@ -120,6 +157,8 @@ private:
 
 	Listener *listener;
 	Set<Listener *> listeners;
+
+	bool arvr;
 
 	Camera *camera;
 	Set<Camera *> cameras;
@@ -153,9 +192,11 @@ private:
 
 	bool transparent_bg;
 	bool vflip;
-	bool clear_on_new_frame;
+	ClearMode clear_mode;
 	bool filter;
 	bool gen_mipmaps;
+
+	bool snap_controls_to_pixels;
 
 	bool physics_object_picking;
 	List<Ref<InputEvent> > physics_picking_events;
@@ -195,6 +236,10 @@ private:
 	RID texture_rid;
 	uint32_t texture_flags;
 
+	DebugDraw debug_draw;
+
+	Usage usage;
+
 	int shadow_atlas_size;
 	ShadowAtlasQuadrantSubdiv shadow_atlas_quadrant_subdiv[4];
 
@@ -224,7 +269,6 @@ private:
 		float tooltip_timer;
 		float tooltip_delay;
 		List<Control *> modal_stack;
-		unsigned int cancelled_input_ID;
 		Transform2D focus_inv_xform;
 		bool subwindow_order_dirty;
 		List<Control *> subwindows;
@@ -318,6 +362,9 @@ public:
 	Listener *get_listener() const;
 	Camera *get_camera() const;
 
+	void set_use_arvr(bool p_use_arvr);
+	bool use_arvr();
+
 	void set_as_audio_listener(bool p_enable);
 	bool is_audio_listener() const;
 
@@ -359,9 +406,8 @@ public:
 	void set_vflip(bool p_enable);
 	bool get_vflip() const;
 
-	void set_clear_on_new_frame(bool p_enable);
-	bool get_clear_on_new_frame() const;
-	void clear();
+	void set_clear_mode(ClearMode p_mode);
+	ClearMode get_clear_mode() const;
 
 	void set_update_mode(UpdateMode p_mode);
 	UpdateMode get_update_mode() const;
@@ -381,9 +427,6 @@ public:
 
 	Vector2 get_camera_coords(const Vector2 &p_viewport_coords) const;
 	Vector2 get_camera_rect_size() const;
-
-	void queue_screen_capture();
-	Ref<Image> get_screen_capture() const;
 
 	void set_use_own_world(bool p_world);
 	bool is_using_own_world() const;
@@ -416,6 +459,17 @@ public:
 
 	virtual String get_configuration_warning() const;
 
+	void set_usage(Usage p_usage);
+	Usage get_usage() const;
+
+	void set_debug_draw(DebugDraw p_debug_draw);
+	DebugDraw get_debug_draw() const;
+
+	int get_render_info(RenderInfo p_info);
+
+	void set_snap_controls_to_pixels(bool p_enable);
+	bool is_snap_controls_to_pixels_enabled() const;
+
 	Viewport();
 	~Viewport();
 };
@@ -423,5 +477,9 @@ public:
 VARIANT_ENUM_CAST(Viewport::UpdateMode);
 VARIANT_ENUM_CAST(Viewport::ShadowAtlasQuadrantSubdiv);
 VARIANT_ENUM_CAST(Viewport::MSAA);
+VARIANT_ENUM_CAST(Viewport::Usage);
+VARIANT_ENUM_CAST(Viewport::DebugDraw);
+VARIANT_ENUM_CAST(Viewport::ClearMode);
+VARIANT_ENUM_CAST(Viewport::RenderInfo);
 
 #endif

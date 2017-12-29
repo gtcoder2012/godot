@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -64,6 +64,8 @@ public:
 		MATH_DECIMALS,
 		MATH_STEPIFY,
 		MATH_LERP,
+		MATH_INVERSE_LERP,
+		MATH_RANGE_LERP,
 		MATH_DECTIME,
 		MATH_RANDOMIZE,
 		MATH_RAND,
@@ -75,6 +77,10 @@ public:
 		MATH_RAD2DEG,
 		MATH_LINEAR2DB,
 		MATH_DB2LINEAR,
+		MATH_POLAR2CARTESIAN,
+		MATH_CARTESIAN2POLAR,
+		MATH_WRAP,
+		MATH_WRAPF,
 		LOGIC_MAX,
 		LOGIC_MIN,
 		LOGIC_CLAMP,
@@ -130,6 +136,7 @@ public:
 
 	virtual VisualScriptNodeInstance *instance(VisualScriptInstance *p_instance);
 
+	VisualScriptBuiltinFunc(VisualScriptBuiltinFunc::BuiltinFunc func);
 	VisualScriptBuiltinFunc();
 };
 

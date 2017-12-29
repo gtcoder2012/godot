@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -52,8 +52,11 @@ void MainLoop::_bind_methods() {
 	BIND_CONSTANT(NOTIFICATION_WM_FOCUS_IN);
 	BIND_CONSTANT(NOTIFICATION_WM_FOCUS_OUT);
 	BIND_CONSTANT(NOTIFICATION_WM_QUIT_REQUEST);
+	BIND_CONSTANT(NOTIFICATION_WM_GO_BACK_REQUEST);
 	BIND_CONSTANT(NOTIFICATION_WM_UNFOCUS_REQUEST);
 	BIND_CONSTANT(NOTIFICATION_OS_MEMORY_WARNING);
+	BIND_CONSTANT(NOTIFICATION_TRANSLATION_CHANGED);
+	BIND_CONSTANT(NOTIFICATION_WM_ABOUT);
 };
 
 void MainLoop::set_init_script(const Ref<Script> &p_init_script) {

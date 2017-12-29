@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -45,8 +45,9 @@ void BodySW::_update_transform_dependant() {
 	// update inertia tensor
 	Basis tb = principal_inertia_axes;
 	Basis tbt = tb.transposed();
-	tb.scale(_inv_inertia);
-	_inv_inertia_tensor = tb * tbt;
+	Basis diag;
+	diag.scale(_inv_inertia);
+	_inv_inertia_tensor = tb * diag * tbt;
 }
 
 void BodySW::update_inertias() {
@@ -421,6 +422,18 @@ void BodySW::_compute_area_gravity_and_dampenings(const AreaSW *p_area) {
 	area_angular_damp += p_area->get_angular_damp();
 }
 
+void BodySW::set_axis_lock(PhysicsServer::BodyAxis p_axis, bool lock) {
+	if (lock) {
+		locked_axis |= p_axis;
+	} else {
+		locked_axis &= ~p_axis;
+	}
+}
+
+bool BodySW::is_axis_locked(PhysicsServer::BodyAxis p_axis) const {
+	return locked_axis & p_axis;
+}
+
 void BodySW::integrate_forces(real_t p_step) {
 
 	if (mode == PhysicsServer::BODY_MODE_STATIC)
@@ -558,6 +571,22 @@ void BodySW::integrate_velocities(real_t p_step) {
 	if (fi_callback)
 		get_space()->body_add_to_state_query_list(&direct_state_query_list);
 
+	//apply axis lock linear
+	for (int i = 0; i < 3; i++) {
+		if (is_axis_locked((PhysicsServer::BodyAxis)(1 << i))) {
+			linear_velocity[i] = 0;
+			biased_linear_velocity[i] = 0;
+			new_transform.origin[i] = get_transform().origin[i];
+		}
+	}
+	//apply axis lock angular
+	for (int i = 0; i < 3; i++) {
+		if (is_axis_locked((PhysicsServer::BodyAxis)(1 << (i + 3)))) {
+			angular_velocity[i] = 0;
+			biased_angular_velocity[i] = 0;
+		}
+	}
+
 	if (mode == PhysicsServer::BODY_MODE_KINEMATIC) {
 
 		_set_transform(new_transform, false);
@@ -566,22 +595,6 @@ void BodySW::integrate_velocities(real_t p_step) {
 			set_active(false); //stopped moving, deactivate
 
 		return;
-	}
-
-	//apply axis lock
-	if (axis_lock != PhysicsServer::BODY_AXIS_LOCK_DISABLED) {
-
-		int axis = axis_lock - 1;
-		for (int i = 0; i < 3; i++) {
-			if (i == axis) {
-				linear_velocity[i] = 0;
-				biased_linear_velocity[i] = 0;
-			} else {
-
-				angular_velocity[i] = 0;
-				biased_angular_velocity[i] = 0;
-			}
-		}
 	}
 
 	Vector3 total_angular_velocity = angular_velocity + biased_angular_velocity;
@@ -706,7 +719,7 @@ bool BodySW::sleep_test(real_t p_step) {
 	else if (!can_sleep)
 		return false;
 
-	if (Math::abs(angular_velocity.length()) < get_space()->get_body_angular_velocity_sleep_treshold() && Math::abs(linear_velocity.length_squared()) < get_space()->get_body_linear_velocity_sleep_treshold() * get_space()->get_body_linear_velocity_sleep_treshold()) {
+	if (Math::abs(angular_velocity.length()) < get_space()->get_body_angular_velocity_sleep_threshold() && Math::abs(linear_velocity.length_squared()) < get_space()->get_body_linear_velocity_sleep_threshold() * get_space()->get_body_linear_velocity_sleep_threshold()) {
 
 		still_time += p_step;
 
@@ -735,13 +748,22 @@ void BodySW::set_force_integration_callback(ObjectID p_id, const StringName &p_m
 	}
 }
 
-BodySW::BodySW()
-	: CollisionObjectSW(TYPE_BODY), active_list(this), inertia_update_list(this), direct_state_query_list(this) {
+void BodySW::set_kinematic_margin(real_t p_margin) {
+	kinematic_safe_margin = p_margin;
+}
+
+BodySW::BodySW() :
+		CollisionObjectSW(TYPE_BODY),
+		active_list(this),
+		inertia_update_list(this),
+		direct_state_query_list(this),
+		locked_axis(0) {
 
 	mode = PhysicsServer::BODY_MODE_RIGID;
 	active = true;
 
 	mass = 1;
+	kinematic_safe_margin = 0.01;
 	//_inv_inertia=Transform();
 	_inv_mass = 1;
 	bounce = 0;
@@ -757,7 +779,8 @@ BodySW::BodySW()
 
 	contact_count = 0;
 	gravity_scale = 1.0;
-
+	linear_damp = -1;
+	angular_damp = -1;
 	area_angular_damp = 0;
 	area_linear_damp = 0;
 
@@ -765,7 +788,6 @@ BodySW::BodySW()
 	continuous_cd = false;
 	can_sleep = false;
 	fi_callback = NULL;
-	axis_lock = PhysicsServer::BODY_AXIS_LOCK_DISABLED;
 }
 
 BodySW::~BodySW() {

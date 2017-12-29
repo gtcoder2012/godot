@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,10 +28,10 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "world.h"
+
 #include "camera_matrix.h"
 #include "octree.h"
 #include "scene/3d/camera.h"
-#include "scene/3d/spatial_indexer.h"
 #include "scene/3d/visibility_notifier.h"
 #include "scene/scene_string_names.h"
 
@@ -41,7 +41,7 @@ struct SpatialIndexer {
 
 	struct NotifierData {
 
-		Rect3 aabb;
+		AABB aabb;
 		OctreeElementID id;
 	};
 
@@ -63,7 +63,7 @@ struct SpatialIndexer {
 	uint64_t pass;
 	uint64_t last_frame;
 
-	void _notifier_add(VisibilityNotifier *p_notifier, const Rect3 &p_rect) {
+	void _notifier_add(VisibilityNotifier *p_notifier, const AABB &p_rect) {
 
 		ERR_FAIL_COND(notifiers.has(p_notifier));
 		notifiers[p_notifier].aabb = p_rect;
@@ -71,7 +71,7 @@ struct SpatialIndexer {
 		changed = true;
 	}
 
-	void _notifier_update(VisibilityNotifier *p_notifier, const Rect3 &p_rect) {
+	void _notifier_update(VisibilityNotifier *p_notifier, const AABB &p_rect) {
 
 		Map<VisibilityNotifier *, NotifierData>::Element *E = notifiers.find(p_notifier);
 		ERR_FAIL_COND(!E);
@@ -159,9 +159,9 @@ struct SpatialIndexer {
 
 			Vector<Plane> planes = c->get_frustum();
 
-			int culled = octree.cull_convex(planes, cull.ptr(), cull.size());
+			int culled = octree.cull_convex(planes, cull.ptrw(), cull.size());
 
-			VisibilityNotifier **ptr = cull.ptr();
+			VisibilityNotifier **ptr = cull.ptrw();
 
 			List<VisibilityNotifier *> added;
 			List<VisibilityNotifier *> removed;
@@ -229,14 +229,14 @@ void World::_remove_camera(Camera *p_camera) {
 #endif
 }
 
-void World::_register_notifier(VisibilityNotifier *p_notifier, const Rect3 &p_rect) {
+void World::_register_notifier(VisibilityNotifier *p_notifier, const AABB &p_rect) {
 
 #ifndef _3D_DISABLED
 	indexer->_notifier_add(p_notifier, p_rect);
 #endif
 }
 
-void World::_update_notifier(VisibilityNotifier *p_notifier, const Rect3 &p_rect) {
+void World::_update_notifier(VisibilityNotifier *p_notifier, const AABB &p_rect) {
 
 #ifndef _3D_DISABLED
 	indexer->_notifier_update(p_notifier, p_rect);
@@ -280,19 +280,43 @@ Ref<Environment> World::get_environment() const {
 	return environment;
 }
 
+void World::set_fallback_environment(const Ref<Environment> &p_environment) {
+
+	fallback_environment = p_environment;
+	if (fallback_environment.is_valid())
+		VS::get_singleton()->scenario_set_fallback_environment(scenario, p_environment->get_rid());
+	else
+		VS::get_singleton()->scenario_set_fallback_environment(scenario, RID());
+}
+
+Ref<Environment> World::get_fallback_environment() const {
+
+	return fallback_environment;
+}
+
 PhysicsDirectSpaceState *World::get_direct_space_state() {
 
 	return PhysicsServer::get_singleton()->space_get_direct_state(space);
+}
+
+void World::get_camera_list(List<Camera *> *r_cameras) {
+
+	for (Map<Camera *, SpatialIndexer::CameraData>::Element *E = indexer->cameras.front(); E; E = E->next()) {
+		r_cameras->push_back(E->key());
+	}
 }
 
 void World::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_space"), &World::get_space);
 	ClassDB::bind_method(D_METHOD("get_scenario"), &World::get_scenario);
-	ClassDB::bind_method(D_METHOD("set_environment", "env:Environment"), &World::set_environment);
-	ClassDB::bind_method(D_METHOD("get_environment:Environment"), &World::get_environment);
-	ClassDB::bind_method(D_METHOD("get_direct_space_state:PhysicsDirectSpaceState"), &World::get_direct_space_state);
+	ClassDB::bind_method(D_METHOD("set_environment", "env"), &World::set_environment);
+	ClassDB::bind_method(D_METHOD("get_environment"), &World::get_environment);
+	ClassDB::bind_method(D_METHOD("set_fallback_environment", "env"), &World::set_fallback_environment);
+	ClassDB::bind_method(D_METHOD("get_fallback_environment"), &World::get_fallback_environment);
+	ClassDB::bind_method(D_METHOD("get_direct_space_state"), &World::get_direct_space_state);
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "environment", PROPERTY_HINT_RESOURCE_TYPE, "Environment"), "set_environment", "get_environment");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "fallback_environment", PROPERTY_HINT_RESOURCE_TYPE, "Environment"), "set_fallback_environment", "get_fallback_environment");
 }
 
 World::World() {

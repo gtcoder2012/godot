@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,16 +29,27 @@
 /*************************************************************************/
 #include "packet_peer.h"
 
-#include "global_config.h"
 #include "io/marshalls.h"
+#include "project_settings.h"
 /* helpers / binders */
 
 PacketPeer::PacketPeer() {
 
+	allow_object_decoding = false;
 	last_get_error = OK;
 }
 
-Error PacketPeer::get_packet_buffer(PoolVector<uint8_t> &r_buffer) const {
+void PacketPeer::set_allow_object_decoding(bool p_enable) {
+
+	allow_object_decoding = p_enable;
+}
+
+bool PacketPeer::is_object_decoding_allowed() const {
+
+	return allow_object_decoding;
+}
+
+Error PacketPeer::get_packet_buffer(PoolVector<uint8_t> &r_buffer) {
 
 	const uint8_t *buffer;
 	int buffer_size;
@@ -67,7 +78,7 @@ Error PacketPeer::put_packet_buffer(const PoolVector<uint8_t> &p_buffer) {
 	return put_packet(&r[0], len);
 }
 
-Error PacketPeer::get_var(Variant &r_variant) const {
+Error PacketPeer::get_var(Variant &r_variant) {
 
 	const uint8_t *buffer;
 	int buffer_size;
@@ -75,13 +86,13 @@ Error PacketPeer::get_var(Variant &r_variant) const {
 	if (err)
 		return err;
 
-	return decode_variant(r_variant, buffer, buffer_size);
+	return decode_variant(r_variant, buffer, buffer_size, NULL, allow_object_decoding);
 }
 
 Error PacketPeer::put_var(const Variant &p_packet) {
 
 	int len;
-	Error err = encode_variant(p_packet, NULL, len); // compute len first
+	Error err = encode_variant(p_packet, NULL, len, !allow_object_decoding); // compute len first
 	if (err)
 		return err;
 
@@ -90,13 +101,13 @@ Error PacketPeer::put_var(const Variant &p_packet) {
 
 	uint8_t *buf = (uint8_t *)alloca(len);
 	ERR_FAIL_COND_V(!buf, ERR_OUT_OF_MEMORY);
-	err = encode_variant(p_packet, buf, len);
+	err = encode_variant(p_packet, buf, len, !allow_object_decoding);
 	ERR_FAIL_COND_V(err, err);
 
 	return put_packet(buf, len);
 }
 
-Variant PacketPeer::_bnd_get_var() const {
+Variant PacketPeer::_bnd_get_var() {
 	Variant var;
 	get_var(var);
 
@@ -106,7 +117,7 @@ Variant PacketPeer::_bnd_get_var() const {
 Error PacketPeer::_put_packet(const PoolVector<uint8_t> &p_buffer) {
 	return put_packet_buffer(p_buffer);
 }
-PoolVector<uint8_t> PacketPeer::_get_packet() const {
+PoolVector<uint8_t> PacketPeer::_get_packet() {
 
 	PoolVector<uint8_t> raw;
 	last_get_error = get_packet_buffer(raw);
@@ -120,12 +131,15 @@ Error PacketPeer::_get_packet_error() const {
 
 void PacketPeer::_bind_methods() {
 
-	ClassDB::bind_method(D_METHOD("get_var:Variant"), &PacketPeer::_bnd_get_var);
-	ClassDB::bind_method(D_METHOD("put_var", "var:Variant"), &PacketPeer::put_var);
+	ClassDB::bind_method(D_METHOD("get_var"), &PacketPeer::_bnd_get_var);
+	ClassDB::bind_method(D_METHOD("put_var", "var"), &PacketPeer::put_var);
 	ClassDB::bind_method(D_METHOD("get_packet"), &PacketPeer::_get_packet);
-	ClassDB::bind_method(D_METHOD("put_packet:Error", "buffer"), &PacketPeer::_put_packet);
-	ClassDB::bind_method(D_METHOD("get_packet_error:Error"), &PacketPeer::_get_packet_error);
+	ClassDB::bind_method(D_METHOD("put_packet", "buffer"), &PacketPeer::_put_packet);
+	ClassDB::bind_method(D_METHOD("get_packet_error"), &PacketPeer::_get_packet_error);
 	ClassDB::bind_method(D_METHOD("get_available_packet_count"), &PacketPeer::get_available_packet_count);
+
+	ClassDB::bind_method(D_METHOD("set_allow_object_decoding", "enable"), &PacketPeer::set_allow_object_decoding);
+	ClassDB::bind_method(D_METHOD("is_object_decoding_allowed"), &PacketPeer::is_object_decoding_allowed);
 };
 
 /***************/
@@ -138,7 +152,11 @@ void PacketPeerStream::_set_stream_peer(REF p_peer) {
 
 void PacketPeerStream::_bind_methods() {
 
-	ClassDB::bind_method(D_METHOD("set_stream_peer", "peer:StreamPeer"), &PacketPeerStream::_set_stream_peer);
+	ClassDB::bind_method(D_METHOD("set_stream_peer", "peer"), &PacketPeerStream::_set_stream_peer);
+	ClassDB::bind_method(D_METHOD("set_input_buffer_max_size", "max_size_bytes"), &PacketPeerStream::set_input_buffer_max_size);
+	ClassDB::bind_method(D_METHOD("set_output_buffer_max_size", "max_size_bytes"), &PacketPeerStream::set_output_buffer_max_size);
+	ClassDB::bind_method(D_METHOD("get_input_buffer_max_size"), &PacketPeerStream::get_input_buffer_max_size);
+	ClassDB::bind_method(D_METHOD("get_output_buffer_max_size"), &PacketPeerStream::get_output_buffer_max_size);
 }
 
 Error PacketPeerStream::_poll_buffer() const {
@@ -146,13 +164,13 @@ Error PacketPeerStream::_poll_buffer() const {
 	ERR_FAIL_COND_V(peer.is_null(), ERR_UNCONFIGURED);
 
 	int read = 0;
-	Error err = peer->get_partial_data(&temp_buffer[0], ring_buffer.space_left(), read);
+	Error err = peer->get_partial_data(&input_buffer[0], ring_buffer.space_left(), read);
 	if (err)
 		return err;
 	if (read == 0)
 		return OK;
 
-	int w = ring_buffer.write(&temp_buffer[0], read);
+	int w = ring_buffer.write(&input_buffer[0], read);
 	ERR_FAIL_COND_V(w != read, ERR_BUG);
 
 	return OK;
@@ -184,7 +202,7 @@ int PacketPeerStream::get_available_packet_count() const {
 	return count;
 }
 
-Error PacketPeerStream::get_packet(const uint8_t **r_buffer, int &r_buffer_size) const {
+Error PacketPeerStream::get_packet(const uint8_t **r_buffer, int &r_buffer_size) {
 
 	ERR_FAIL_COND_V(peer.is_null(), ERR_UNCONFIGURED);
 	_poll_buffer();
@@ -198,9 +216,9 @@ Error PacketPeerStream::get_packet(const uint8_t **r_buffer, int &r_buffer_size)
 	ERR_FAIL_COND_V(remaining < (int)len, ERR_UNAVAILABLE);
 
 	ring_buffer.read(lbuf, 4); //get rid of first 4 bytes
-	ring_buffer.read(&temp_buffer[0], len); // read packet
+	ring_buffer.read(&input_buffer[0], len); // read packet
 
-	*r_buffer = &temp_buffer[0];
+	*r_buffer = &input_buffer[0];
 	r_buffer_size = len;
 	return OK;
 }
@@ -217,19 +235,19 @@ Error PacketPeerStream::put_packet(const uint8_t *p_buffer, int p_buffer_size) {
 		return OK;
 
 	ERR_FAIL_COND_V(p_buffer_size < 0, ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V(p_buffer_size + 4 > temp_buffer.size(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(p_buffer_size + 4 > output_buffer.size(), ERR_INVALID_PARAMETER);
 
-	encode_uint32(p_buffer_size, &temp_buffer[0]);
-	uint8_t *dst = &temp_buffer[4];
+	encode_uint32(p_buffer_size, &output_buffer[0]);
+	uint8_t *dst = &output_buffer[4];
 	for (int i = 0; i < p_buffer_size; i++)
 		dst[i] = p_buffer[i];
 
-	return peer->put_data(&temp_buffer[0], p_buffer_size + 4);
+	return peer->put_data(&output_buffer[0], p_buffer_size + 4);
 }
 
 int PacketPeerStream::get_max_packet_size() const {
 
-	return temp_buffer.size();
+	return output_buffer.size();
 }
 
 void PacketPeerStream::set_stream_peer(const Ref<StreamPeer> &p_peer) {
@@ -249,13 +267,29 @@ void PacketPeerStream::set_input_buffer_max_size(int p_max_size) {
 	ERR_EXPLAIN("Buffer in use, resizing would cause loss of data");
 	ERR_FAIL_COND(ring_buffer.data_left());
 	ring_buffer.resize(nearest_shift(p_max_size + 4));
-	temp_buffer.resize(nearest_power_of_2(p_max_size + 4));
+	input_buffer.resize(next_power_of_2(p_max_size + 4));
+}
+
+int PacketPeerStream::get_input_buffer_max_size() const {
+
+	return input_buffer.size() - 4;
+}
+
+void PacketPeerStream::set_output_buffer_max_size(int p_max_size) {
+
+	output_buffer.resize(next_power_of_2(p_max_size + 4));
+}
+
+int PacketPeerStream::get_output_buffer_max_size() const {
+
+	return output_buffer.size() - 4;
 }
 
 PacketPeerStream::PacketPeerStream() {
 
-	int rbsize = GLOBAL_GET("network/packets/packet_stream_peer_max_buffer_po2");
+	int rbsize = GLOBAL_GET("network/limits/packet_peer_stream/max_buffer_po2");
 
 	ring_buffer.resize(rbsize);
-	temp_buffer.resize(1 << rbsize);
+	input_buffer.resize(1 << rbsize);
+	output_buffer.resize(1 << rbsize);
 }

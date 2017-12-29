@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -42,7 +42,6 @@ class HTTPRequest : public Node {
 public:
 	enum Result {
 		RESULT_SUCCESS,
-		//RESULT_NO_BODY,
 		RESULT_CHUNKED_BODY_SIZE_MISMATCH,
 		RESULT_CANT_CONNECT,
 		RESULT_CANT_RESOLVE,
@@ -136,5 +135,7 @@ public:
 	HTTPRequest();
 	~HTTPRequest();
 };
+
+VARIANT_ENUM_CAST(HTTPRequest::Result);
 
 #endif // HTTPREQUEST_H

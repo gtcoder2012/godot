@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,8 +29,8 @@
 /*************************************************************************/
 #include "animation_tree_editor_plugin.h"
 
-#include "core/global_config.h"
 #include "core/io/resource_loader.h"
+#include "core/project_settings.h"
 #include "os/input.h"
 #include "os/keyboard.h"
 #include "scene/gui/menu_button.h"
@@ -63,7 +63,7 @@ Size2 AnimationTreeEditor::_get_maximum_size() {
 
 	for (List<StringName>::Element *E = order.front(); E; E = E->next()) {
 
-		Point2 pos = anim_tree->node_get_pos(E->get());
+		Point2 pos = anim_tree->node_get_position(E->get());
 
 		if (click_type == CLICK_NODE && click_node == E->get()) {
 
@@ -212,7 +212,7 @@ void AnimationTreeEditor::_edit_dialog_animation_changed() {
 
 void AnimationTreeEditor::_edit_dialog_edit_animation() {
 
-	if (get_tree()->is_editor_hint()) {
+	if (Engine::get_singleton()->is_editor_hint()) {
 		get_tree()->get_root()->get_child(0)->call("_resource_selected", property_editor->get_variant().operator RefPtr());
 	};
 };
@@ -257,7 +257,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 	filter_button->hide();
 	edit_check->hide();
 
-	Point2 pos = anim_tree->node_get_pos(edited_node) - Point2(h_scroll->get_value(), v_scroll->get_value());
+	Point2 pos = anim_tree->node_get_position(edited_node) - Point2(h_scroll->get_value(), v_scroll->get_value());
 	Ref<StyleBox> style = get_stylebox("panel", "PopupMenu");
 	Size2 size = get_node_size(edited_node);
 	Point2 popup_pos(pos.x + style->get_margin(MARGIN_LEFT), pos.y + size.y - style->get_margin(MARGIN_BOTTOM));
@@ -281,11 +281,11 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 
 			case AnimationTreePlayer::NODE_ANIMATION:
 
-				if (anim_tree->get_master_player() != NodePath() && anim_tree->has_node(anim_tree->get_master_player()) && anim_tree->get_node(anim_tree->get_master_player())->cast_to<AnimationPlayer>()) {
+				if (anim_tree->get_master_player() != NodePath() && anim_tree->has_node(anim_tree->get_master_player()) && Object::cast_to<AnimationPlayer>(anim_tree->get_node(anim_tree->get_master_player()))) {
 
-					AnimationPlayer *ap = anim_tree->get_node(anim_tree->get_master_player())->cast_to<AnimationPlayer>();
+					AnimationPlayer *ap = Object::cast_to<AnimationPlayer>(anim_tree->get_node(anim_tree->get_master_player()));
 					master_anim_popup->clear();
-					master_anim_popup->add_item("Edit Filters");
+					master_anim_popup->add_item(TTR("Edit Filters"));
 					master_anim_popup->add_separator();
 					List<StringName> sn;
 					ap->get_animation_list(&sn);
@@ -371,6 +371,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 				edit_label[0]->show();
 				edit_scroll[0]->set_min(0);
 				edit_scroll[0]->set_max(1);
+				edit_scroll[0]->set_step(0.01);
 				edit_scroll[0]->set_value(anim_tree->mix_node_get_amount(edited_node));
 				edit_scroll[0]->set_begin(Point2(15, 25));
 				edit_scroll[0]->show();
@@ -383,6 +384,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 				edit_label[0]->show();
 				edit_scroll[0]->set_min(0);
 				edit_scroll[0]->set_max(1);
+				edit_scroll[0]->set_step(0.01);
 				edit_scroll[0]->set_value(anim_tree->blend2_node_get_amount(edited_node));
 				edit_scroll[0]->set_begin(Point2(15, 25));
 				edit_scroll[0]->show();
@@ -398,6 +400,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 				edit_label[0]->show();
 				edit_scroll[0]->set_min(-1);
 				edit_scroll[0]->set_max(1);
+				edit_scroll[0]->set_step(0.01);
 				edit_scroll[0]->set_value(anim_tree->blend3_node_get_amount(edited_node));
 				edit_scroll[0]->set_begin(Point2(15, 25));
 				edit_scroll[0]->show();
@@ -411,6 +414,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 				edit_label[0]->show();
 				edit_scroll[0]->set_min(0);
 				edit_scroll[0]->set_max(1);
+				edit_scroll[0]->set_step(0.01);
 				edit_scroll[0]->set_value(anim_tree->blend4_node_get_amount(edited_node).x);
 				edit_scroll[0]->set_begin(Point2(15, 25));
 				edit_scroll[0]->show();
@@ -419,6 +423,7 @@ void AnimationTreeEditor::_popup_edit_dialog() {
 				edit_label[1]->show();
 				edit_scroll[1]->set_min(0);
 				edit_scroll[1]->set_max(1);
+				edit_scroll[1]->set_step(0.01);
 				edit_scroll[1]->set_value(anim_tree->blend4_node_get_amount(edited_node).y);
 				edit_scroll[1]->set_begin(Point2(15, 75));
 				edit_scroll[1]->show();
@@ -471,10 +476,10 @@ void AnimationTreeEditor::_draw_node(const StringName &p_node) {
 	Color font_color = get_color("font_color", "PopupMenu");
 	Color font_color_title = get_color("font_color_hover", "PopupMenu");
 	font_color_title.a *= 0.8;
-	Ref<Texture> slot_icon = get_icon("NodeRealSlot", "EditorIcons");
+	Ref<Texture> slot_icon = get_icon("VisualShaderPort", "EditorIcons");
 
 	Size2 size = get_node_size(p_node);
-	Point2 pos = anim_tree->node_get_pos(p_node);
+	Point2 pos = anim_tree->node_get_position(p_node);
 	if (click_type == CLICK_NODE && click_node == p_node) {
 
 		pos += click_motion - click_pos;
@@ -594,20 +599,11 @@ void AnimationTreeEditor::_draw_node(const StringName &p_node) {
 
 	if (editable) {
 
-		Ref<Texture> arrow = get_icon("arrow", "Tree");
+		Ref<Texture> arrow = get_icon("GuiDropdown", "EditorIcons");
 		Point2 arrow_ofs(w - arrow->get_width(), Math::floor((h - arrow->get_height()) / 2));
 		arrow->draw(ci, ofs + arrow_ofs);
 	}
 }
-
-#if 0
-void AnimationTreeEditor::_node_param_changed() {
-
-	//anim_tree->node_set_param( click_node,property_editor->get_variant() );
-	//update();
-	//_write_anim_tree_graph();
-}
-#endif
 
 AnimationTreeEditor::ClickType AnimationTreeEditor::_locate_click(const Point2 &p_click, StringName *p_node_id, int *p_slot_index) const {
 
@@ -622,7 +618,7 @@ AnimationTreeEditor::ClickType AnimationTreeEditor::_locate_click(const Point2 &
 
 		AnimationTreePlayer::NodeType type = anim_tree->node_get_type(node);
 
-		Point2 pos = anim_tree->node_get_pos(node);
+		Point2 pos = anim_tree->node_get_position(node);
 		Size2 size = get_node_size(node);
 
 		pos -= Point2(h_scroll->get_value(), v_scroll->get_value());
@@ -671,16 +667,16 @@ AnimationTreeEditor::ClickType AnimationTreeEditor::_locate_click(const Point2 &
 	return CLICK_NONE;
 }
 
-Point2 AnimationTreeEditor::_get_slot_pos(const StringName &p_node, bool p_input, int p_slot) {
+Point2 AnimationTreeEditor::_get_slot_pos(const StringName &p_node_id, bool p_input, int p_slot) {
 
 	Ref<StyleBox> style = get_stylebox("panel", "PopupMenu");
 	Ref<Font> font = get_font("font", "PopupMenu");
-	Ref<Texture> slot_icon = get_icon("NodeRealSlot", "EditorIcons");
+	Ref<Texture> slot_icon = get_icon("VisualShaderPort", "EditorIcons");
 
-	Size2 size = get_node_size(p_node);
-	Point2 pos = anim_tree->node_get_pos(p_node);
+	Size2 size = get_node_size(p_node_id);
+	Point2 pos = anim_tree->node_get_position(p_node_id);
 
-	if (click_type == CLICK_NODE && click_node == p_node) {
+	if (click_type == CLICK_NODE && click_node == p_node_id) {
 
 		pos += click_motion - click_pos;
 		if (pos.x < 5)
@@ -709,32 +705,6 @@ Point2 AnimationTreeEditor::_get_slot_pos(const StringName &p_node, bool p_input
 	return pos;
 }
 
-#if 0
-void AnimationTreeEditor::_node_edit_property(const StringName& p_node) {
-
-	Ref<StyleBox> style = get_stylebox("panel","PopupMenu");
-	Size2 size = get_node_size(p_node);
-	Point2 pos = Point2( anim_tree->node_get_pos_x(p_node), anim_tree->node_get_pos_y(p_node) )-offset;
-
-	VisualServer::AnimationTreeNodeType type=anim_tree->node_get_type(p_node);
-
-	PropertyInfo ph = VisualServer::get_singleton()->anim_tree_node_get_type_info(type);
-	if (ph.type==Variant::NIL)
-		return;
-	if (ph.type==Variant::_RID)
-		ph.type=Variant::RESOURCE;
-
-	property_editor->edit(NULL,ph.name,ph.type,anim_tree->node_get_param(p_node),ph.hint,ph.hint_string);
-
-	Point2 popup_pos=Point2( pos.x+(size.width-property_editor->get_size().width)/2.0,pos.y+(size.y-style->get_margin(MARGIN_BOTTOM))).floor();
-	popup_pos+=get_global_position();
-	property_editor->set_position(popup_pos);
-
-	property_editor->popup();
-
-}
-#endif
-
 void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 
 	Ref<InputEventMouseButton> mb = p_event;
@@ -744,7 +714,7 @@ void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 		if (mb->is_pressed()) {
 
 			if (mb->get_button_index() == 1) {
-				click_pos = Point2(mb->get_pos().x, mb->get_pos().y);
+				click_pos = Point2(mb->get_position().x, mb->get_position().y);
 				click_motion = click_pos;
 				click_type = _locate_click(click_pos, &click_node, &click_slot);
 				if (click_type != CLICK_NONE) {
@@ -780,7 +750,7 @@ void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 				} else {
 					// try to disconnect/remove
 
-					Point2 rclick_pos = Point2(mb->get_pos().x, mb->get_pos().y);
+					Point2 rclick_pos = Point2(mb->get_position().x, mb->get_position().y);
 					rclick_type = _locate_click(rclick_pos, &rclick_node, &rclick_slot);
 					if (rclick_type == CLICK_INPUT_SLOT || rclick_type == CLICK_OUTPUT_SLOT) {
 
@@ -820,7 +790,7 @@ void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 					case CLICK_INPUT_SLOT:
 					case CLICK_OUTPUT_SLOT: {
 
-						Point2 dst_click_pos = Point2(mb->get_pos().x, mb->get_pos().y);
+						Point2 dst_click_pos = Point2(mb->get_position().x, mb->get_position().y);
 						StringName id;
 						int slot;
 						ClickType dst_click_type = _locate_click(dst_click_pos, &id, &slot);
@@ -836,12 +806,12 @@ void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 
 					} break;
 					case CLICK_NODE: {
-						Point2 new_pos = anim_tree->node_get_pos(click_node) + (click_motion - click_pos);
+						Point2 new_pos = anim_tree->node_get_position(click_node) + (click_motion - click_pos);
 						if (new_pos.x < 5)
 							new_pos.x = 5;
 						if (new_pos.y < 5)
 							new_pos.y = 5;
-						anim_tree->node_set_pos(click_node, new_pos);
+						anim_tree->node_set_position(click_node, new_pos);
 
 					} break;
 					default: {}
@@ -859,7 +829,7 @@ void AnimationTreeEditor::_gui_input(Ref<InputEvent> p_event) {
 
 		if (mm->get_button_mask() & 1 && click_type != CLICK_NONE) {
 
-			click_motion = Point2(mm->get_pos().x, mm->get_pos().y);
+			click_motion = Point2(mm->get_position().x, mm->get_position().y);
 			update();
 		}
 		if ((mm->get_button_mask() & 4 || Input::get_singleton()->is_key_pressed(KEY_SPACE))) {
@@ -876,7 +846,7 @@ void AnimationTreeEditor::_draw_cos_line(const Vector2 &p_from, const Vector2 &p
 	static const int steps = 20;
 
 	Rect2 r;
-	r.pos = p_from;
+	r.position = p_from;
 	r.expand_to(p_to);
 	Vector2 sign = Vector2((p_from.x < p_to.x) ? 1 : -1, (p_from.y < p_to.y) ? 1 : -1);
 	bool flip = sign.x * sign.y < 0;
@@ -888,7 +858,7 @@ void AnimationTreeEditor::_draw_cos_line(const Vector2 &p_from, const Vector2 &p
 		float c = -Math::cos(d * Math_PI) * 0.5 + 0.5;
 		if (flip)
 			c = 1.0 - c;
-		Vector2 p = r.pos + Vector2(d * r.size.width, c * r.size.height);
+		Vector2 p = r.position + Vector2(d * r.size.width, c * r.size.height);
 
 		if (i > 0) {
 
@@ -1111,7 +1081,7 @@ StringName AnimationTreeEditor::_add_node(int p_item) {
 	}
 
 	anim_tree->add_node((AnimationTreePlayer::NodeType)p_item, name);
-	anim_tree->node_set_pos(name, Point2(last_x, last_y));
+	anim_tree->node_set_position(name, Point2(last_x, last_y));
 	order.push_back(name);
 	last_x += 10;
 	last_y += 10;
@@ -1226,14 +1196,14 @@ void AnimationTreeEditor::_edit_filters() {
 		if (base) {
 			NodePath np = E->get();
 
-			if (np.get_property() != StringName()) {
+			if (np.get_subname_count() == 1) {
 				Node *n = base->get_node(np);
-				Skeleton *s = n->cast_to<Skeleton>();
+				Skeleton *s = Object::cast_to<Skeleton>(n);
 				if (s) {
 
 					String skelbase = E->get().substr(0, E->get().find(":"));
 
-					int bidx = s->find_bone(np.get_property());
+					int bidx = s->find_bone(np.get_subname(0));
 
 					if (bidx != -1) {
 						int bparent = s->get_bone_parent(bidx);
@@ -1243,7 +1213,7 @@ void AnimationTreeEditor::_edit_filters() {
 							String bpn = skelbase + ":" + s->get_bone_name(bparent);
 							if (pm.has(bpn)) {
 								parent = pm[bpn];
-								descr = np.get_property();
+								descr = np.get_subname(0);
 							}
 						} else {
 
@@ -1366,7 +1336,7 @@ AnimationTreeEditor::AnimationTreeEditor() {
 
 	edit_option = memnew(OptionButton);
 	edit_option->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-	edit_option->set_margin(MARGIN_RIGHT, 10);
+	edit_option->set_margin(MARGIN_RIGHT, -10);
 	edit_dialog->add_child(edit_option);
 	edit_option->connect("item_selected", this, "_edit_dialog_changedf");
 	edit_option->hide();
@@ -1374,7 +1344,7 @@ AnimationTreeEditor::AnimationTreeEditor() {
 	for (int i = 0; i < 2; i++) {
 		edit_scroll[i] = memnew(HSlider);
 		edit_scroll[i]->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-		edit_scroll[i]->set_margin(MARGIN_RIGHT, 10);
+		edit_scroll[i]->set_margin(MARGIN_RIGHT, -10);
 		edit_dialog->add_child(edit_scroll[i]);
 		edit_scroll[i]->hide();
 		edit_scroll[i]->connect("value_changed", this, "_edit_dialog_changedf");
@@ -1382,7 +1352,7 @@ AnimationTreeEditor::AnimationTreeEditor() {
 	for (int i = 0; i < 4; i++) {
 		edit_line[i] = memnew(LineEdit);
 		edit_line[i]->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-		edit_line[i]->set_margin(MARGIN_RIGHT, 10);
+		edit_line[i]->set_margin(MARGIN_RIGHT, -10);
 		edit_dialog->add_child(edit_line[i]);
 		edit_line[i]->hide();
 		edit_line[i]->connect("text_changed", this, "_edit_dialog_changeds");
@@ -1394,21 +1364,21 @@ AnimationTreeEditor::AnimationTreeEditor() {
 
 	edit_button = memnew(Button);
 	edit_button->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-	edit_button->set_margin(MARGIN_RIGHT, 10);
+	edit_button->set_margin(MARGIN_RIGHT, -10);
 	edit_dialog->add_child(edit_button);
 	edit_button->hide();
 	edit_button->connect("pressed", this, "_edit_oneshot_start");
 
 	edit_check = memnew(CheckButton);
 	edit_check->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-	edit_check->set_margin(MARGIN_RIGHT, 10);
+	edit_check->set_margin(MARGIN_RIGHT, -10);
 	edit_dialog->add_child(edit_check);
 	edit_check->hide();
 	edit_check->connect("pressed", this, "_edit_dialog_changed");
 
 	file_dialog = memnew(EditorFileDialog);
 	file_dialog->set_enable_multiple_selection(true);
-	file_dialog->set_current_dir(GlobalConfig::get_singleton()->get_resource_path());
+	file_dialog->set_current_dir(ProjectSettings::get_singleton()->get_resource_path());
 	add_child(file_dialog);
 	file_dialog->connect("file_selected", this, "_file_dialog_selected");
 
@@ -1423,7 +1393,7 @@ AnimationTreeEditor::AnimationTreeEditor() {
 
 	filter_button = memnew(Button);
 	filter_button->set_anchor(MARGIN_RIGHT, ANCHOR_END);
-	filter_button->set_margin(MARGIN_RIGHT, 10);
+	filter_button->set_margin(MARGIN_RIGHT, -10);
 	edit_dialog->add_child(filter_button);
 	filter_button->hide();
 	filter_button->set_text(TTR("Filters.."));
@@ -1434,7 +1404,7 @@ AnimationTreeEditor::AnimationTreeEditor() {
 
 void AnimationTreeEditorPlugin::edit(Object *p_object) {
 
-	anim_tree_editor->edit(p_object->cast_to<AnimationTreePlayer>());
+	anim_tree_editor->edit(Object::cast_to<AnimationTreePlayer>(p_object));
 }
 
 bool AnimationTreeEditorPlugin::handles(Object *p_object) const {
@@ -1449,13 +1419,13 @@ void AnimationTreeEditorPlugin::make_visible(bool p_visible) {
 		//editor->animation_panel_make_visible(true);
 		button->show();
 		editor->make_bottom_panel_item_visible(anim_tree_editor);
-		anim_tree_editor->set_fixed_process(true);
+		anim_tree_editor->set_physics_process(true);
 	} else {
 
 		if (anim_tree_editor->is_visible_in_tree())
 			editor->hide_bottom_panel();
 		button->hide();
-		anim_tree_editor->set_fixed_process(false);
+		anim_tree_editor->set_physics_process(false);
 	}
 }
 
@@ -1465,7 +1435,7 @@ AnimationTreeEditorPlugin::AnimationTreeEditorPlugin(EditorNode *p_node) {
 	anim_tree_editor = memnew(AnimationTreeEditor);
 	anim_tree_editor->set_custom_minimum_size(Size2(0, 300));
 
-	button = editor->add_bottom_panel_item("AnimationTree", anim_tree_editor);
+	button = editor->add_bottom_panel_item(TTR("AnimationTree"), anim_tree_editor);
 	button->hide();
 }
 

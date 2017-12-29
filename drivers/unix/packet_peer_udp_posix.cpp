@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -65,7 +65,7 @@ int PacketPeerUDPPosix::get_available_packet_count() const {
 	return queue_count;
 }
 
-Error PacketPeerUDPPosix::get_packet(const uint8_t **r_buffer, int &r_buffer_size) const {
+Error PacketPeerUDPPosix::get_packet(const uint8_t **r_buffer, int &r_buffer_size) {
 
 	Error err = const_cast<PacketPeerUDPPosix *>(this)->_poll(false);
 	if (err != OK)
@@ -73,8 +73,8 @@ Error PacketPeerUDPPosix::get_packet(const uint8_t **r_buffer, int &r_buffer_siz
 	if (queue_count == 0)
 		return ERR_UNAVAILABLE;
 
-	uint32_t size;
-	uint8_t type;
+	uint32_t size = 0;
+	uint8_t type = IP::TYPE_NONE;
 	rb.read(&type, 1, true);
 	if (type == IP::TYPE_IPV4) {
 		uint8_t ip[4];
@@ -127,7 +127,7 @@ int PacketPeerUDPPosix::get_max_packet_size() const {
 	return 512; // uhm maybe not
 }
 
-Error PacketPeerUDPPosix::listen(int p_port, IP_Address p_bind_address, int p_recv_buffer_size) {
+Error PacketPeerUDPPosix::listen(int p_port, const IP_Address &p_bind_address, int p_recv_buffer_size) {
 
 	ERR_FAIL_COND_V(sockfd != -1, ERR_ALREADY_IN_USE);
 	ERR_FAIL_COND_V(!p_bind_address.is_valid() && !p_bind_address.is_wildcard(), ERR_INVALID_PARAMETER);
@@ -172,13 +172,13 @@ Error PacketPeerUDPPosix::wait() {
 	return _poll(true);
 }
 
-Error PacketPeerUDPPosix::_poll(bool p_wait) {
+Error PacketPeerUDPPosix::_poll(bool p_block) {
 
 	if (sockfd == -1) {
 		return FAILED;
 	}
 
-	_set_sock_blocking(p_wait);
+	_set_sock_blocking(p_block);
 
 	struct sockaddr_storage from = { 0 };
 	socklen_t len = sizeof(struct sockaddr_storage);
@@ -216,7 +216,7 @@ Error PacketPeerUDPPosix::_poll(bool p_wait) {
 
 		len = sizeof(struct sockaddr_storage);
 		++queue_count;
-		if (p_wait)
+		if (p_block)
 			break;
 	};
 

@@ -38,7 +38,8 @@ uniform mat4 projection;
 uniform int num_steps;
 uniform float depth_tolerance;
 uniform float distance_fade;
-uniform float acceleration;
+uniform float curve_fade_in;
+
 
 layout(location = 0) out vec4 frag_color;
 
@@ -54,7 +55,6 @@ vec2 view_to_screen(vec3 view_pos,out float w) {
 
 
 #define M_PI 3.14159265359
-
 
 void main() {
 
@@ -148,8 +148,6 @@ void main() {
 
 	bool found=false;
 
-	//if acceleration > 0, distance between pixels gets larger each step. This allows covering a larger area
-	float accel=1.0+acceleration;
 	float steps_taken=0.0;
 
 	for(int i=0;i<num_steps;i++) {
@@ -159,8 +157,13 @@ void main() {
 		w+=w_advance;
 
 		//convert to linear depth
+
 		depth = texture(source_depth, pos*pixel_size).r * 2.0 - 1.0;
+#ifdef USE_ORTHOGONAL_PROJECTION
+		depth = ((depth + (camera_z_far + camera_z_near)/(camera_z_far - camera_z_near)) * (camera_z_far - camera_z_near))/2.0;
+#else
 		depth = 2.0 * camera_z_near * camera_z_far / (camera_z_far + camera_z_near - depth * (camera_z_far - camera_z_near));
+#endif
 		depth=-depth;
 
 		z_from = z_to;
@@ -177,9 +180,6 @@ void main() {
 
 		steps_taken+=1.0;
 		prev_pos=pos;
-		z_advance*=accel;
-		w_advance*=accel;
-		line_advance*=accel;
 	}
 
 
@@ -207,41 +207,14 @@ void main() {
 
 		vec2 final_pos;
 		float grad;
+		grad=steps_taken/float(num_steps);
+		float initial_fade = curve_fade_in==0.0 ? 1.0 : pow(clamp(grad,0.0,1.0),curve_fade_in);
+		float fade = pow(clamp(1.0-grad,0.0,1.0),distance_fade)*initial_fade;
+		final_pos=pos;
 
-#ifdef SMOOTH_ACCEL
-		//if the distance between point and prev point is >1, then take some samples in the middle for smoothing out the image
-		vec2 blend_dir = pos - prev_pos;
-		float steps = min(8.0,length(blend_dir));
-		if (steps>2.0) {
-			vec2 blend_step = blend_dir/steps;
-			float blend_z = (z_to-z_from)/steps;
-			vec2 new_pos;
-			float subgrad=0.0;
-			for(float i=0.0;i<steps;i++) {
 
-				new_pos = (prev_pos+blend_step*i);
-				float z = z_from+blend_z*i;
 
-				depth = texture(source_depth, new_pos*pixel_size).r * 2.0 - 1.0;
-				depth = 2.0 * camera_z_near * camera_z_far / (camera_z_far + camera_z_near - depth * (camera_z_far - camera_z_near));
-				depth=-depth;
 
-				subgrad=i/steps;
-				if (depth>z)
-					break;
-			}
-
-			final_pos = new_pos;
-			grad=(steps_taken+subgrad)/float(num_steps);
-
-		} else {
-#endif
-			grad=steps_taken/float(num_steps);
-			final_pos=pos;
-#ifdef SMOOTH_ACCEL
-		}
-
-#endif
 
 
 
@@ -327,10 +300,10 @@ void main() {
 			final_color = textureLod(source_diffuse,final_pos*pixel_size,0.0);
 		}
 
-		frag_color = vec4(final_color.rgb,pow(clamp(1.0-grad,0.0,1.0),distance_fade)*margin_blend);
+		frag_color = vec4(final_color.rgb,fade*margin_blend);
 
 #else
-		frag_color = vec4(textureLod(source_diffuse,final_pos*pixel_size,0.0).rgb,pow(clamp(1.0-grad,0.0,1.0),distance_fade)*margin_blend);
+		frag_color = vec4(textureLod(source_diffuse,final_pos*pixel_size,0.0).rgb,fade*margin_blend);
 #endif
 
 

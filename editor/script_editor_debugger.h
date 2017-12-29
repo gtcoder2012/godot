@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -56,6 +56,12 @@ class ScriptEditorDebugger : public Control {
 
 	GDCLASS(ScriptEditorDebugger, Control);
 
+	enum MessageType {
+		MESSAGE_ERROR,
+		MESSAGE_WARNING,
+		MESSAGE_SUCCESS,
+	};
+
 	AcceptDialog *msgdialog;
 
 	Button *debugger_button;
@@ -66,29 +72,30 @@ class ScriptEditorDebugger : public Control {
 	Button *le_set;
 	Button *le_clear;
 
-	Tree *inspect_scene_tree;
-	HSplitContainer *inspect_info;
-	PropertyEditor *inspect_properties;
+	bool updating_scene_tree;
 	float inspect_scene_tree_timeout;
 	float inspect_edited_object_timeout;
+	bool auto_switch_remote_scene_tree;
 	ObjectID inspected_object_id;
-	ScriptEditorDebuggerInspectedObject *inspected_object;
-	bool updating_scene_tree;
+	ScriptEditorDebuggerVariables *variables;
+	Map<ObjectID, ScriptEditorDebuggerInspectedObject *> remote_objects;
 	Set<ObjectID> unfold_cache;
 
 	HSplitContainer *error_split;
 	ItemList *error_list;
 	ItemList *error_stack;
+	Tree *inspect_scene_tree;
 
 	int error_count;
 	int last_error_count;
 
 	bool hide_on_stop;
+	bool enable_external_editor;
+	Ref<Script> stack_script;
 
 	TabContainer *tabs;
 
-	LineEdit *reason;
-	ScriptEditorDebuggerVariables *variables;
+	Label *reason;
 
 	Button *step;
 	Button *next;
@@ -134,7 +141,7 @@ class ScriptEditorDebugger : public Control {
 	bool live_debug;
 
 	void _performance_draw();
-	void _performance_select(Object *, int, bool);
+	void _performance_select();
 	void _stack_dump_frame_selected();
 	void _output_clear();
 
@@ -142,6 +149,7 @@ class ScriptEditorDebugger : public Control {
 	void _scene_tree_selected();
 	void _scene_tree_request();
 	void _parse_message(const String &p_msg, const Array &p_data);
+	void _set_reason_text(const String &p_reason, MessageType p_type);
 	void _scene_tree_property_select_object(ObjectID p_object);
 	void _scene_tree_property_value_edited(const String &p_prop, const Variant &p_value);
 
@@ -157,9 +165,6 @@ class ScriptEditorDebugger : public Control {
 	void _method_changed(Object *p_base, const StringName &p_name, VARIANT_ARG_DECLARE);
 	void _property_changed(Object *p_base, const StringName &p_property, const Variant &p_value);
 
-	static void _method_changeds(void *p_ud, Object *p_base, const StringName &p_name, VARIANT_ARG_DECLARE);
-	static void _property_changeds(void *p_ud, Object *p_base, const StringName &p_property, const Variant &p_value);
-
 	void _error_selected(int p_idx);
 	void _error_stack_selected(int p_idx);
 
@@ -167,6 +172,9 @@ class ScriptEditorDebugger : public Control {
 	void _profiler_seeked();
 
 	void _paused();
+
+	void _set_remote_object(ObjectID p_id, ScriptEditorDebuggerInspectedObject *p_obj);
+	void _clear_remote_objects();
 
 protected:
 	void _notification(int p_what);
@@ -187,6 +195,9 @@ public:
 
 	void set_live_debugging(bool p_enable);
 
+	static void _method_changeds(void *p_ud, Object *p_base, const StringName &p_name, VARIANT_ARG_DECLARE);
+	static void _property_changeds(void *p_ud, Object *p_base, const StringName &p_property, const Variant &p_value);
+
 	void live_debug_create_node(const NodePath &p_parent, const String &p_type, const String &p_name);
 	void live_debug_instance_node(const NodePath &p_parent, const String &p_path, const String &p_name);
 	void live_debug_remove_node(const NodePath &p_at);
@@ -200,6 +211,11 @@ public:
 	void update_live_edit_root();
 
 	void set_hide_on_stop(bool p_hide);
+
+	bool get_debug_with_external_editor() const;
+	void set_debug_with_external_editor(bool p_enabled);
+
+	Ref<Script> get_dump_stack_script() const;
 
 	void set_tool_button(Button *p_tb) { debugger_button = p_tb; }
 

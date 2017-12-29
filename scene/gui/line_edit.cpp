@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -48,8 +48,8 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 	if (b.is_valid()) {
 
-		if (b->is_pressed() && b->get_button_index() == BUTTON_RIGHT) {
-			menu->set_position(get_global_transform().xform(get_local_mouse_pos()));
+		if (b->is_pressed() && b->get_button_index() == BUTTON_RIGHT && context_menu_enabled) {
+			menu->set_position(get_global_transform().xform(get_local_mouse_position()));
 			menu->set_size(Vector2(1, 1));
 			menu->popup();
 			grab_focus();
@@ -64,7 +64,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 			shift_selection_check_pre(b->get_shift());
 
-			set_cursor_at_pixel_pos(b->get_pos().x);
+			set_cursor_at_pixel_pos(b->get_position().x);
 
 			if (b->get_shift()) {
 
@@ -85,7 +85,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 				if ((cursor_pos < selection.begin) || (cursor_pos > selection.end) || !selection.enabled) {
 
-					selection_clear();
+					deselect();
 					selection.cursor_start = cursor_pos;
 					selection.creating = true;
 				} else if (selection.enabled) {
@@ -99,7 +99,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 		} else {
 
 			if ((!selection.creating) && (!selection.doubleclick)) {
-				selection_clear();
+				deselect();
 			}
 			selection.creating = false;
 			selection.doubleclick = false;
@@ -118,7 +118,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 		if (m->get_button_mask() & BUTTON_LEFT) {
 
 			if (selection.creating) {
-				set_cursor_at_pixel_pos(m->get_pos().x);
+				set_cursor_at_pixel_pos(m->get_position().x);
 				selection_fill_at_cursor();
 			}
 		}
@@ -161,21 +161,21 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 				} break;
 
-				case (KEY_Z): { // Simple One level undo
-
+				case (KEY_Z): { // undo / redo
 					if (editable) {
-
-						undo();
+						if (k->get_shift()) {
+							redo();
+						} else {
+							undo();
+						}
 					}
-
 				} break;
 
 				case (KEY_U): { // Delete from start to cursor
 
 					if (editable) {
 
-						selection_clear();
-						undo_text = text;
+						deselect();
 						text = text.substr(cursor_pos, text.length() - cursor_pos);
 
 						Ref<Font> font = get_font("font");
@@ -186,7 +186,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 								cached_width += font->get_char_size(text[i]).width;
 						}
 
-						set_cursor_pos(0);
+						set_cursor_position(0);
 						_text_changed();
 					}
 
@@ -204,8 +204,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 					if (editable) {
 
-						selection_clear();
-						undo_text = text;
+						deselect();
 						text = text.substr(0, cursor_pos);
 						_text_changed();
 					}
@@ -229,8 +228,8 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 			bool handled = true;
 			switch (code) {
 
-				case KEY_ENTER:
-				case KEY_RETURN: {
+				case KEY_KP_ENTER:
+				case KEY_ENTER: {
 
 					emit_signal("text_entered", text);
 					if (OS::get_singleton()->has_virtual_keyboard())
@@ -245,7 +244,6 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 						break;
 
 					if (selection.enabled) {
-						undo_text = text;
 						selection_delete();
 						break;
 					}
@@ -273,10 +271,9 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 						delete_text(cc, cursor_pos);
 
-						set_cursor_pos(cc);
+						set_cursor_position(cc);
 
 					} else {
-						undo_text = text;
 						delete_char();
 					}
 
@@ -297,7 +294,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 #ifdef APPLE_STYLE_KEYS
 					if (k->get_command()) {
-						set_cursor_pos(0);
+						set_cursor_position(0);
 					} else if (k->get_alt()) {
 
 #else
@@ -319,10 +316,10 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 							cc--;
 						}
 
-						set_cursor_pos(cc);
+						set_cursor_position(cc);
 
 					} else {
-						set_cursor_pos(get_cursor_pos() - 1);
+						set_cursor_position(get_cursor_position() - 1);
 					}
 
 					shift_selection_check_post(k->get_shift());
@@ -341,7 +338,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 
 #ifdef APPLE_STYLE_KEYS
 					if (k->get_command()) {
-						set_cursor_pos(text.length());
+						set_cursor_position(text.length());
 					} else if (k->get_alt()) {
 #else
 					if (k->get_alt()) {
@@ -362,10 +359,10 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 							cc++;
 						}
 
-						set_cursor_pos(cc);
+						set_cursor_position(cc);
 
 					} else {
-						set_cursor_pos(get_cursor_pos() + 1);
+						set_cursor_position(get_cursor_position() + 1);
 					}
 
 					shift_selection_check_post(k->get_shift());
@@ -382,7 +379,6 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 					}
 
 					if (selection.enabled) {
-						undo_text = text;
 						selection_delete();
 						break;
 					}
@@ -417,8 +413,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 						delete_text(cursor_pos, cc);
 
 					} else {
-						undo_text = text;
-						set_cursor_pos(cursor_pos + 1);
+						set_cursor_position(cursor_pos + 1);
 						delete_char();
 					}
 
@@ -433,7 +428,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 				case KEY_HOME: {
 
 					shift_selection_check_pre(k->get_shift());
-					set_cursor_pos(0);
+					set_cursor_position(0);
 					shift_selection_check_post(k->get_shift());
 				} break;
 				case KEY_KP_1: {
@@ -446,7 +441,7 @@ void LineEdit::_gui_input(Ref<InputEvent> p_event) {
 				case KEY_END: {
 
 					shift_selection_check_pre(k->get_shift());
-					set_cursor_pos(text.length());
+					set_cursor_position(text.length());
 					shift_selection_check_post(k->get_shift());
 				} break;
 
@@ -534,7 +529,7 @@ void LineEdit::_notification(int p_what) {
 	switch (p_what) {
 #ifdef TOOLS_ENABLED
 		case NOTIFICATION_ENTER_TREE: {
-			if (get_tree()->is_editor_hint()) {
+			if (Engine::get_singleton()->is_editor_hint() && !get_tree()->is_node_being_edited(this)) {
 				cursor_set_blink_enabled(EDITOR_DEF("text_editor/cursor/caret_blink", false));
 				cursor_set_blink_speed(EDITOR_DEF("text_editor/cursor/caret_blink_speed", 0.65));
 
@@ -546,7 +541,7 @@ void LineEdit::_notification(int p_what) {
 #endif
 		case NOTIFICATION_RESIZED: {
 
-			set_cursor_pos(get_cursor_pos());
+			set_cursor_position(get_cursor_position());
 
 		} break;
 		case MainLoop::NOTIFICATION_WM_FOCUS_IN: {
@@ -574,8 +569,12 @@ void LineEdit::_notification(int p_what) {
 			RID ci = get_canvas_item();
 
 			Ref<StyleBox> style = get_stylebox("normal");
-			if (!is_editable())
+			float disabled_alpha = 1.0; // used to set the disabled input text color
+			if (!is_editable()) {
 				style = get_stylebox("read_only");
+				disabled_alpha = .5;
+				draw_caret = false;
+			}
 
 			Ref<Font> font = get_font("font");
 
@@ -597,7 +596,10 @@ void LineEdit::_notification(int p_what) {
 				} break;
 				case ALIGN_CENTER: {
 
-					x_ofs = int(size.width - (cached_width)) / 2;
+					if (window_pos != 0)
+						x_ofs = style->get_offset().x;
+					else
+						x_ofs = int(size.width - (cached_width)) / 2;
 				} break;
 				case ALIGN_RIGHT: {
 
@@ -622,6 +624,13 @@ void LineEdit::_notification(int p_what) {
 			// draw placeholder color
 			if (text.empty())
 				font_color.a *= placeholder_alpha;
+			font_color.a *= disabled_alpha;
+
+			if (has_icon("right_icon")) {
+				Ref<Texture> r_icon = Control::get_icon("right_icon");
+				ofs_max -= r_icon->get_width();
+				r_icon->draw(ci, Point2(width - r_icon->get_width() - x_ofs, height / 2 - r_icon->get_height() / 2), Color(1, 1, 1, disabled_alpha * .9));
+			}
 
 			int caret_height = font->get_height() > y_area ? y_area : font->get_height();
 			while (true) {
@@ -629,6 +638,35 @@ void LineEdit::_notification(int p_what) {
 				//end of string, break!
 				if (char_ofs >= t.length())
 					break;
+
+				if (char_ofs == cursor_pos) {
+					if (ime_text.length() > 0) {
+						int ofs = 0;
+						while (true) {
+							if (ofs >= ime_text.length())
+								break;
+
+							CharType cchar = (pass && !text.empty()) ? '*' : ime_text[ofs];
+							CharType next = (pass && !text.empty()) ? '*' : ime_text[ofs + 1];
+							int im_char_width = font->get_char_size(cchar, next).width;
+
+							if ((x_ofs + im_char_width) > ofs_max)
+								break;
+
+							bool selected = ofs >= ime_selection.x && ofs < ime_selection.x + ime_selection.y;
+							if (selected) {
+								VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs + caret_height), Size2(im_char_width, 3)), font_color);
+							} else {
+								VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs + caret_height), Size2(im_char_width, 1)), font_color);
+							}
+
+							font->draw_char(ci, Point2(x_ofs, y_ofs + font_ascent), cchar, next, font_color);
+
+							x_ofs += im_char_width;
+							ofs++;
+						}
+					}
+				}
 
 				CharType cchar = (pass && !text.empty()) ? '*' : t[char_ofs];
 				CharType next = (pass && !text.empty()) ? '*' : t[char_ofs + 1];
@@ -646,19 +684,54 @@ void LineEdit::_notification(int p_what) {
 				font->draw_char(ci, Point2(x_ofs, y_ofs + font_ascent), cchar, next, selected ? font_color_selected : font_color);
 
 				if (char_ofs == cursor_pos && draw_caret) {
-					VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(
-																					Point2(x_ofs, y_ofs), Size2(1, caret_height)),
-							cursor_color);
+					if (ime_text.length() == 0) {
+						VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs), Size2(1, caret_height)), cursor_color);
+					}
 				}
 
 				x_ofs += char_width;
 				char_ofs++;
 			}
 
+			if (char_ofs == cursor_pos) {
+				if (ime_text.length() > 0) {
+					int ofs = 0;
+					while (true) {
+						if (ofs >= ime_text.length())
+							break;
+
+						CharType cchar = (pass && !text.empty()) ? '*' : ime_text[ofs];
+						CharType next = (pass && !text.empty()) ? '*' : ime_text[ofs + 1];
+						int im_char_width = font->get_char_size(cchar, next).width;
+
+						if ((x_ofs + im_char_width) > ofs_max)
+							break;
+
+						bool selected = ofs >= ime_selection.x && ofs < ime_selection.x + ime_selection.y;
+						if (selected) {
+							VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs + caret_height), Size2(im_char_width, 3)), font_color);
+						} else {
+							VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs + caret_height), Size2(im_char_width, 1)), font_color);
+						}
+
+						font->draw_char(ci, Point2(x_ofs, y_ofs + font_ascent), cchar, next, font_color);
+
+						x_ofs += im_char_width;
+						ofs++;
+					}
+				}
+			}
+
 			if (char_ofs == cursor_pos && draw_caret) { //may be at the end
-				VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(
-																				Point2(x_ofs, y_ofs), Size2(1, caret_height)),
-						cursor_color);
+				if (ime_text.length() == 0) {
+					VisualServer::get_singleton()->canvas_item_add_rect(ci, Rect2(Point2(x_ofs, y_ofs), Size2(1, caret_height)), cursor_color);
+				}
+			}
+
+			if (has_focus()) {
+
+				OS::get_singleton()->set_ime_position(get_global_position() + Point2(x_ofs, y_ofs + caret_height));
+				OS::get_singleton()->set_ime_intermediate_text_callback(_ime_text_callback, this);
 			}
 		} break;
 		case NOTIFICATION_FOCUS_ENTER: {
@@ -667,11 +740,20 @@ void LineEdit::_notification(int p_what) {
 				draw_caret = true;
 			}
 
+			Point2 cursor_pos = Point2(get_cursor_position(), 1) * get_minimum_size().height;
+			OS::get_singleton()->set_ime_position(get_global_position() + cursor_pos);
+			OS::get_singleton()->set_ime_intermediate_text_callback(_ime_text_callback, this);
+
 			if (OS::get_singleton()->has_virtual_keyboard())
 				OS::get_singleton()->show_virtual_keyboard(text, get_global_rect());
 
 		} break;
 		case NOTIFICATION_FOCUS_EXIT: {
+
+			OS::get_singleton()->set_ime_position(Point2());
+			OS::get_singleton()->set_ime_intermediate_text_callback(NULL, NULL);
+			ime_text = "";
+			ime_selection = Point2();
 
 			if (OS::get_singleton()->has_virtual_keyboard())
 				OS::get_singleton()->hide_virtual_keyboard();
@@ -691,7 +773,6 @@ void LineEdit::copy_text() {
 void LineEdit::cut_text() {
 
 	if (selection.enabled) {
-		undo_text = text;
 		OS::get_singleton()->set_clipboard(text.substr(selection.begin, selection.end - selection.begin));
 		selection_delete();
 	}
@@ -711,23 +792,33 @@ void LineEdit::paste_text() {
 }
 
 void LineEdit::undo() {
-
-	int old_cursor_pos = cursor_pos;
-	text = undo_text;
-
-	Ref<Font> font = get_font("font");
-
-	cached_width = 0;
-	for (int i = 0; i < text.length(); i++)
-		cached_width += font->get_char_size(text[i]).width;
-
-	if (old_cursor_pos > text.length()) {
-		set_cursor_pos(text.length());
-	} else {
-		set_cursor_pos(old_cursor_pos);
+	if (undo_stack_pos == NULL) {
+		if (undo_stack.size() <= 1) {
+			return;
+		}
+		undo_stack_pos = undo_stack.back();
+	} else if (undo_stack_pos == undo_stack.front()) {
+		return;
 	}
+	undo_stack_pos = undo_stack_pos->prev();
+	TextOperation op = undo_stack_pos->get();
+	text = op.text;
+	set_cursor_position(op.cursor_pos);
+	_emit_text_change();
+}
 
-	_text_changed();
+void LineEdit::redo() {
+	if (undo_stack_pos == NULL) {
+		return;
+	}
+	if (undo_stack_pos == undo_stack.back()) {
+		return;
+	}
+	undo_stack_pos = undo_stack_pos->next();
+	TextOperation op = undo_stack_pos->get();
+	text = op.text;
+	set_cursor_position(op.cursor_pos);
+	_emit_text_change();
 }
 
 void LineEdit::shift_selection_check_pre(bool p_shift) {
@@ -736,7 +827,7 @@ void LineEdit::shift_selection_check_pre(bool p_shift) {
 		selection.cursor_start = cursor_pos;
 	}
 	if (!p_shift)
-		selection_clear();
+		deselect();
 }
 
 void LineEdit::shift_selection_check_post(bool p_shift) {
@@ -762,7 +853,10 @@ void LineEdit::set_cursor_at_pixel_pos(int p_x) {
 		} break;
 		case ALIGN_CENTER: {
 
-			pixel_ofs = int(size.width - (cached_width)) / 2;
+			if (window_pos != 0)
+				pixel_ofs = int(style->get_offset().x);
+			else
+				pixel_ofs = int(size.width - (cached_width)) / 2;
 		} break;
 		case ALIGN_RIGHT: {
 
@@ -785,14 +879,7 @@ void LineEdit::set_cursor_at_pixel_pos(int p_x) {
 		ofs++;
 	}
 
-	set_cursor_pos(ofs);
-
-	/*
-	int new_cursor_pos=p_x;
-	int charwidth=draw_area->get_font_char_width(' ',0);
-	new_cursor_pos=( ( (new_cursor_pos-2)+ (charwidth/2) ) /charwidth );
-	if (new_cursor_pos>(int)text.length()) new_cursor_pos=text.length();
-	set_cursor_pos(window_pos+new_cursor_pos); */
+	set_cursor_position(ofs);
 }
 
 bool LineEdit::cursor_get_blink_enabled() const {
@@ -845,19 +932,12 @@ void LineEdit::delete_char() {
 
 	text.erase(cursor_pos - 1, 1);
 
-	set_cursor_pos(get_cursor_pos() - 1);
-
-	if (cursor_pos == window_pos) {
-
-		//set_window_pos(cursor_pos-get_window_length());
-	}
+	set_cursor_position(get_cursor_position() - 1);
 
 	_text_changed();
 }
 
 void LineEdit::delete_text(int p_from_column, int p_to_column) {
-
-	undo_text = text;
 
 	if (text.size() > 0) {
 		Ref<Font> font = get_font("font");
@@ -907,7 +987,7 @@ String LineEdit::get_text() const {
 
 void LineEdit::set_placeholder(String p_text) {
 
-	placeholder = XL_MESSAGE(p_text);
+	placeholder = tr(p_text);
 	update();
 }
 
@@ -927,7 +1007,7 @@ float LineEdit::get_placeholder_alpha() const {
 	return placeholder_alpha;
 }
 
-void LineEdit::set_cursor_pos(int p_pos) {
+void LineEdit::set_cursor_position(int p_pos) {
 
 	if (p_pos > (int)text.length())
 		p_pos = text.length();
@@ -946,12 +1026,18 @@ void LineEdit::set_cursor_pos(int p_pos) {
 	Ref<StyleBox> style = get_stylebox("normal");
 	Ref<Font> font = get_font("font");
 
-	if (cursor_pos < window_pos) {
+	if (cursor_pos <= window_pos) {
 		/* Adjust window if cursor goes too much to the left */
-		set_window_pos(cursor_pos);
+		if (window_pos > 0)
+			set_window_pos(window_pos - 1);
+
 	} else if (cursor_pos > window_pos) {
 		/* Adjust window if cursor goes too much to the right */
 		int window_width = get_size().width - style->get_minimum_size().width;
+		if (has_icon("right_icon")) {
+			Ref<Texture> r_icon = Control::get_icon("right_icon");
+			window_width -= r_icon->get_width();
+		}
 
 		if (window_width < 0)
 			return;
@@ -981,7 +1067,7 @@ void LineEdit::set_cursor_pos(int p_pos) {
 	update();
 }
 
-int LineEdit::get_cursor_pos() const {
+int LineEdit::get_cursor_position() const {
 
 	return cursor_pos;
 }
@@ -996,8 +1082,6 @@ void LineEdit::append_at_cursor(String p_text) {
 
 	if ((max_length <= 0) || (text.length() + p_text.length() <= max_length)) {
 
-		undo_text = text;
-
 		Ref<Font> font = get_font("font");
 		if (font != NULL) {
 			for (int i = 0; i < p_text.length(); i++)
@@ -1009,12 +1093,13 @@ void LineEdit::append_at_cursor(String p_text) {
 		String pre = text.substr(0, cursor_pos);
 		String post = text.substr(cursor_pos, text.length() - cursor_pos);
 		text = pre + p_text + post;
-		set_cursor_pos(cursor_pos + p_text.length());
+		set_cursor_position(cursor_pos + p_text.length());
 	}
 }
 
 void LineEdit::clear_internal() {
 
+	_clear_undo_stack();
 	cached_width = 0;
 	cursor_pos = 0;
 	window_pos = 0;
@@ -1046,7 +1131,7 @@ Size2 LineEdit::get_minimum_size() const {
 
 /* selection */
 
-void LineEdit::selection_clear() {
+void LineEdit::deselect() {
 
 	selection.begin = 0;
 	selection.end = 0;
@@ -1062,7 +1147,7 @@ void LineEdit::selection_delete() {
 	if (selection.enabled)
 		delete_text(selection.begin, selection.end);
 
-	selection_clear();
+	deselect();
 }
 
 void LineEdit::set_max_length(int p_max_length) {
@@ -1127,7 +1212,7 @@ bool LineEdit::is_secret() const {
 void LineEdit::select(int p_from, int p_to) {
 
 	if (p_from == 0 && p_to == 0) {
-		selection_clear();
+		deselect();
 		return;
 	}
 
@@ -1181,9 +1266,24 @@ void LineEdit::menu_option(int p_option) {
 			select_all();
 		} break;
 		case MENU_UNDO: {
-			undo();
+			if (editable) {
+				undo();
+			}
 		} break;
+		case MENU_REDO: {
+			if (editable) {
+				redo();
+			}
+		}
 	}
+}
+
+void LineEdit::set_context_menu_enabled(bool p_enable) {
+	context_menu_enabled = p_enable;
+}
+
+bool LineEdit::is_context_menu_enabled() {
+	return context_menu_enabled;
 }
 
 PopupMenu *LineEdit::get_menu() const {
@@ -1201,6 +1301,7 @@ void LineEdit::set_expand_to_text_length(bool p_enabled) {
 
 	expand_to_text_length = p_enabled;
 	minimum_size_changed();
+	set_window_pos(0);
 }
 
 bool LineEdit::get_expand_to_text_length() const {
@@ -1208,13 +1309,53 @@ bool LineEdit::get_expand_to_text_length() const {
 	return expand_to_text_length;
 }
 
+void LineEdit::_ime_text_callback(void *p_self, String p_text, Point2 p_selection) {
+	LineEdit *self = (LineEdit *)p_self;
+	self->ime_text = p_text;
+	self->ime_selection = p_selection;
+	self->update();
+}
+
 void LineEdit::_text_changed() {
 
 	if (expand_to_text_length)
 		minimum_size_changed();
 
+	_emit_text_change();
+	_clear_redo();
+}
+
+void LineEdit::_emit_text_change() {
 	emit_signal("text_changed", text);
 	_change_notify("text");
+}
+
+void LineEdit::_clear_redo() {
+	_create_undo_state();
+	if (undo_stack_pos == NULL) {
+		return;
+	}
+
+	undo_stack_pos = undo_stack_pos->next();
+	while (undo_stack_pos) {
+		List<TextOperation>::Element *elem = undo_stack_pos;
+		undo_stack_pos = undo_stack_pos->next();
+		undo_stack.erase(elem);
+	}
+	_create_undo_state();
+}
+
+void LineEdit::_clear_undo_stack() {
+	undo_stack.clear();
+	undo_stack_pos = NULL;
+	_create_undo_state();
+}
+
+void LineEdit::_create_undo_state() {
+	TextOperation op;
+	op.text = text;
+	op.cursor_pos = cursor_pos;
+	undo_stack.push_back(op);
 }
 
 void LineEdit::_bind_methods() {
@@ -1230,15 +1371,17 @@ void LineEdit::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("_gui_input"), &LineEdit::_gui_input);
 	ClassDB::bind_method(D_METHOD("clear"), &LineEdit::clear);
+	ClassDB::bind_method(D_METHOD("select", "from", "to"), &LineEdit::select, DEFVAL(0), DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("select_all"), &LineEdit::select_all);
+	ClassDB::bind_method(D_METHOD("deselect"), &LineEdit::deselect);
 	ClassDB::bind_method(D_METHOD("set_text", "text"), &LineEdit::set_text);
 	ClassDB::bind_method(D_METHOD("get_text"), &LineEdit::get_text);
 	ClassDB::bind_method(D_METHOD("set_placeholder", "text"), &LineEdit::set_placeholder);
 	ClassDB::bind_method(D_METHOD("get_placeholder"), &LineEdit::get_placeholder);
 	ClassDB::bind_method(D_METHOD("set_placeholder_alpha", "alpha"), &LineEdit::set_placeholder_alpha);
 	ClassDB::bind_method(D_METHOD("get_placeholder_alpha"), &LineEdit::get_placeholder_alpha);
-	ClassDB::bind_method(D_METHOD("set_cursor_pos", "pos"), &LineEdit::set_cursor_pos);
-	ClassDB::bind_method(D_METHOD("get_cursor_pos"), &LineEdit::get_cursor_pos);
+	ClassDB::bind_method(D_METHOD("set_cursor_position", "position"), &LineEdit::set_cursor_position);
+	ClassDB::bind_method(D_METHOD("get_cursor_position"), &LineEdit::get_cursor_position);
 	ClassDB::bind_method(D_METHOD("set_expand_to_text_length", "enabled"), &LineEdit::set_expand_to_text_length);
 	ClassDB::bind_method(D_METHOD("get_expand_to_text_length"), &LineEdit::get_expand_to_text_length);
 	ClassDB::bind_method(D_METHOD("cursor_set_blink_enabled", "enabled"), &LineEdit::cursor_set_blink_enabled);
@@ -1252,32 +1395,34 @@ void LineEdit::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_editable"), &LineEdit::is_editable);
 	ClassDB::bind_method(D_METHOD("set_secret", "enabled"), &LineEdit::set_secret);
 	ClassDB::bind_method(D_METHOD("is_secret"), &LineEdit::is_secret);
-	ClassDB::bind_method(D_METHOD("select", "from", "to"), &LineEdit::select, DEFVAL(0), DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("menu_option", "option"), &LineEdit::menu_option);
-	ClassDB::bind_method(D_METHOD("get_menu:PopupMenu"), &LineEdit::get_menu);
+	ClassDB::bind_method(D_METHOD("get_menu"), &LineEdit::get_menu);
+	ClassDB::bind_method(D_METHOD("set_context_menu_enabled", "enable"), &LineEdit::set_context_menu_enabled);
+	ClassDB::bind_method(D_METHOD("is_context_menu_enabled"), &LineEdit::is_context_menu_enabled);
 
 	ADD_SIGNAL(MethodInfo("text_changed", PropertyInfo(Variant::STRING, "text")));
 	ADD_SIGNAL(MethodInfo("text_entered", PropertyInfo(Variant::STRING, "text")));
 
-	BIND_CONSTANT(ALIGN_LEFT);
-	BIND_CONSTANT(ALIGN_CENTER);
-	BIND_CONSTANT(ALIGN_RIGHT);
-	BIND_CONSTANT(ALIGN_FILL);
+	BIND_ENUM_CONSTANT(ALIGN_LEFT);
+	BIND_ENUM_CONSTANT(ALIGN_CENTER);
+	BIND_ENUM_CONSTANT(ALIGN_RIGHT);
+	BIND_ENUM_CONSTANT(ALIGN_FILL);
 
-	BIND_CONSTANT(MENU_CUT);
-	BIND_CONSTANT(MENU_COPY);
-	BIND_CONSTANT(MENU_PASTE);
-	BIND_CONSTANT(MENU_CLEAR);
-	BIND_CONSTANT(MENU_SELECT_ALL);
-	BIND_CONSTANT(MENU_UNDO);
-	BIND_CONSTANT(MENU_MAX);
+	BIND_ENUM_CONSTANT(MENU_CUT);
+	BIND_ENUM_CONSTANT(MENU_COPY);
+	BIND_ENUM_CONSTANT(MENU_PASTE);
+	BIND_ENUM_CONSTANT(MENU_CLEAR);
+	BIND_ENUM_CONSTANT(MENU_SELECT_ALL);
+	BIND_ENUM_CONSTANT(MENU_UNDO);
+	BIND_ENUM_CONSTANT(MENU_REDO);
+	BIND_ENUM_CONSTANT(MENU_MAX);
 
 	ADD_PROPERTYNZ(PropertyInfo(Variant::STRING, "text"), "set_text", "get_text");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::INT, "align", PROPERTY_HINT_ENUM, "Left,Center,Right,Fill"), "set_align", "get_align");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::INT, "max_length"), "set_max_length", "get_max_length");
 	ADD_PROPERTYNO(PropertyInfo(Variant::BOOL, "editable"), "set_editable", "is_editable");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::BOOL, "secret"), "set_secret", "is_secret");
-	ADD_PROPERTYNO(PropertyInfo(Variant::BOOL, "expand_to_len"), "set_expand_to_text_length", "get_expand_to_text_length");
+	ADD_PROPERTYNZ(PropertyInfo(Variant::BOOL, "expand_to_text_length"), "set_expand_to_text_length", "get_expand_to_text_length");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "focus_mode", PROPERTY_HINT_ENUM, "None,Click,All"), "set_focus_mode", "get_focus_mode");
 	ADD_GROUP("Placeholder", "placeholder_");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::STRING, "placeholder_text"), "set_placeholder", "get_placeholder");
@@ -1285,10 +1430,13 @@ void LineEdit::_bind_methods() {
 	ADD_GROUP("Caret", "caret_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "caret_blink"), "cursor_set_blink_enabled", "cursor_get_blink_enabled");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::REAL, "caret_blink_speed", PROPERTY_HINT_RANGE, "0.1,10,0.1"), "cursor_set_blink_speed", "cursor_get_blink_speed");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "context_menu_enabled"), "set_context_menu_enabled", "is_context_menu_enabled");
 }
 
 LineEdit::LineEdit() {
 
+	undo_stack_pos = NULL;
+	_create_undo_state();
 	align = ALIGN_LEFT;
 	cached_width = 0;
 	cursor_pos = 0;
@@ -1298,7 +1446,7 @@ LineEdit::LineEdit() {
 	pass = false;
 	placeholder_alpha = 0.6;
 
-	selection_clear();
+	deselect();
 	set_focus_mode(FOCUS_ALL);
 	editable = true;
 	set_default_cursor_shape(CURSOR_IBEAM);
@@ -1312,6 +1460,7 @@ LineEdit::LineEdit() {
 	caret_blink_timer->connect("timeout", this, "_toggle_draw_caret");
 	cursor_set_blink_enabled(false);
 
+	context_menu_enabled = true;
 	menu = memnew(PopupMenu);
 	add_child(menu);
 	menu->add_item(TTR("Cut"), MENU_CUT, KEY_MASK_CMD | KEY_X);
@@ -1322,6 +1471,7 @@ LineEdit::LineEdit() {
 	menu->add_item(TTR("Clear"), MENU_CLEAR);
 	menu->add_separator();
 	menu->add_item(TTR("Undo"), MENU_UNDO, KEY_MASK_CMD | KEY_Z);
+	menu->add_item(TTR("Redo"), MENU_REDO, KEY_MASK_CMD | KEY_MASK_SHIFT | KEY_Z);
 	menu->connect("id_pressed", this, "menu_option");
 	expand_to_text_length = false;
 }

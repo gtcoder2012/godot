@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,7 +31,7 @@
 
 #include "message_queue.h"
 
-#include "core/global_config.h"
+#include "core/project_settings.h"
 #include "scene/resources/surface_tool.h"
 
 bool Skeleton::_set(const StringName &p_path, const Variant &p_value) {
@@ -82,9 +82,9 @@ bool Skeleton::_set(const StringName &p_path, const Variant &p_value) {
 	return true;
 }
 
-bool Skeleton::_get(const StringName &p_name, Variant &r_ret) const {
+bool Skeleton::_get(const StringName &p_path, Variant &r_ret) const {
 
-	String path = p_name;
+	String path = p_path;
 
 	if (!path.begins_with("bones/"))
 		return false;
@@ -111,7 +111,7 @@ bool Skeleton::_get(const StringName &p_name, Variant &r_ret) const {
 
 			Object *obj = ObjectDB::get_instance(E->get());
 			ERR_CONTINUE(!obj);
-			Node *node = obj->cast_to<Node>();
+			Node *node = Object::cast_to<Node>(obj);
 			ERR_CONTINUE(!node);
 			NodePath path = get_path_to(node);
 			children.push_back(path);
@@ -180,6 +180,9 @@ void Skeleton::_notification(int p_what) {
 				rest_global_inverse_dirty = false;
 			}
 
+			Transform global_transform = get_global_transform();
+			Transform global_transform_inverse = global_transform.affine_inverse();
+
 			for (int i = 0; i < len; i++) {
 
 				Bone &b = bonesptr[i];
@@ -239,13 +242,14 @@ void Skeleton::_notification(int p_what) {
 					}
 				}
 
-				vs->skeleton_bone_set_transform(skeleton, i, b.pose_global * b.rest_global_inverse);
+				Transform transform = b.pose_global * b.rest_global_inverse;
+				vs->skeleton_bone_set_transform(skeleton, i, global_transform * (transform * global_transform_inverse));
 
 				for (List<uint32_t>::Element *E = b.nodes_bound.front(); E; E = E->next()) {
 
 					Object *obj = ObjectDB::get_instance(E->get());
 					ERR_CONTINUE(!obj);
-					Spatial *sp = obj->cast_to<Spatial>();
+					Spatial *sp = Object::cast_to<Spatial>(obj);
 					ERR_CONTINUE(!sp);
 					sp->set_transform(b.pose_global);
 				}
@@ -407,7 +411,7 @@ void Skeleton::bind_child_node_to_bone(int p_bone, Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	ERR_FAIL_INDEX(p_bone, bones.size());
 
-	uint32_t id = p_node->get_instance_ID();
+	uint32_t id = p_node->get_instance_id();
 
 	for (List<uint32_t>::Element *E = bones[p_bone].nodes_bound.front(); E; E = E->next()) {
 
@@ -422,7 +426,7 @@ void Skeleton::unbind_child_node_from_bone(int p_bone, Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	ERR_FAIL_INDEX(p_bone, bones.size());
 
-	uint32_t id = p_node->get_instance_ID();
+	uint32_t id = p_node->get_instance_id();
 	bones[p_bone].nodes_bound.erase(id);
 }
 void Skeleton::get_bound_child_nodes_to_bone(int p_bone, List<Node *> *p_bound) const {
@@ -433,7 +437,7 @@ void Skeleton::get_bound_child_nodes_to_bone(int p_bone, List<Node *> *p_bound) 
 
 		Object *obj = ObjectDB::get_instance(E->get());
 		ERR_CONTINUE(!obj);
-		p_bound->push_back(obj->cast_to<Node>());
+		p_bound->push_back(Object::cast_to<Node>(obj));
 	}
 }
 
@@ -518,8 +522,8 @@ void Skeleton::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_bone_disable_rest", "bone_idx", "disable"), &Skeleton::set_bone_disable_rest);
 	ClassDB::bind_method(D_METHOD("is_bone_rest_disabled", "bone_idx"), &Skeleton::is_bone_rest_disabled);
 
-	ClassDB::bind_method(D_METHOD("bind_child_node_to_bone", "bone_idx", "node:Node"), &Skeleton::bind_child_node_to_bone);
-	ClassDB::bind_method(D_METHOD("unbind_child_node_from_bone", "bone_idx", "node:Node"), &Skeleton::unbind_child_node_from_bone);
+	ClassDB::bind_method(D_METHOD("bind_child_node_to_bone", "bone_idx", "node"), &Skeleton::bind_child_node_to_bone);
+	ClassDB::bind_method(D_METHOD("unbind_child_node_from_bone", "bone_idx", "node"), &Skeleton::unbind_child_node_from_bone);
 	ClassDB::bind_method(D_METHOD("get_bound_child_nodes_to_bone", "bone_idx"), &Skeleton::_get_bound_child_nodes_to_bone);
 
 	ClassDB::bind_method(D_METHOD("clear_bones"), &Skeleton::clear_bones);

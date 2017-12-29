@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -59,11 +59,12 @@ void image_decompress_squish(Image *p_image) {
 		squish_flags = squish::kDxt3;
 	} else if (p_image->get_format() == Image::FORMAT_DXT5) {
 		squish_flags = squish::kDxt5;
-	} else if (p_image->get_format() == Image::FORMAT_LATC_L || p_image->get_format() == Image::FORMAT_RGTC_R) {
+	} else if (p_image->get_format() == Image::FORMAT_RGTC_R) {
 		squish_flags = squish::kBc4;
-	} else if (p_image->get_format() == Image::FORMAT_LATC_LA || p_image->get_format() == Image::FORMAT_RGTC_RG) {
+	} else if (p_image->get_format() == Image::FORMAT_RGTC_RG) {
 		squish_flags = squish::kBc5;
 	} else {
+		print_line("Can't decompress unknown format: " + itos(p_image->get_format()));
 		ERR_FAIL_COND(true);
 		return;
 	}
@@ -79,7 +80,7 @@ void image_decompress_squish(Image *p_image) {
 	p_image->create(p_image->get_width(), p_image->get_height(), p_image->has_mipmaps(), target_format, data);
 }
 
-void image_compress_squish(Image *p_image) {
+void image_compress_squish(Image *p_image, Image::CompressSource p_source) {
 
 	if (p_image->get_format() >= Image::FORMAT_DXT1)
 		return; //do not compress, already compressed
@@ -90,22 +91,32 @@ void image_compress_squish(Image *p_image) {
 	if (p_image->get_format() <= Image::FORMAT_RGBA8) {
 
 		int squish_comp = squish::kColourRangeFit;
-		Image::Format target_format;
+		Image::Format target_format = Image::FORMAT_RGBA8;
 
 		Image::DetectChannels dc = p_image->get_detected_channels();
 
 		p_image->convert(Image::FORMAT_RGBA8); //still uses RGBA to convert
 
+		if (p_source == Image::COMPRESS_SOURCE_SRGB && (dc == Image::DETECTED_R || dc == Image::DETECTED_RG)) {
+			//R and RG do not support SRGB
+			dc = Image::DETECTED_RGB;
+		}
+
+		if (p_source == Image::COMPRESS_SOURCE_NORMAL) {
+			//R and RG do not support SRGB
+			dc = Image::DETECTED_RG;
+		}
+
 		switch (dc) {
 			case Image::DETECTED_L: {
 
-				target_format = Image::FORMAT_LATC_L;
-				squish_comp |= squish::kBc4;
+				target_format = Image::FORMAT_DXT1;
+				squish_comp |= squish::kDxt1;
 			} break;
 			case Image::DETECTED_LA: {
 
-				target_format = Image::FORMAT_LATC_LA;
-				squish_comp |= squish::kBc5;
+				target_format = Image::FORMAT_DXT5;
+				squish_comp |= squish::kDxt5;
 			} break;
 			case Image::DETECTED_R: {
 
@@ -129,6 +140,10 @@ void image_compress_squish(Image *p_image) {
 				squish_comp |= squish::kDxt5;
 
 			} break;
+			default: {
+				ERR_PRINT("Unknown image format, defaulting to RGBA8");
+				break;
+			}
 		}
 
 		PoolVector<uint8_t> data;
@@ -148,8 +163,8 @@ void image_compress_squish(Image *p_image) {
 			int bh = h % 4 != 0 ? h + (4 - h % 4) : h;
 
 			int src_ofs = p_image->get_mipmap_offset(i);
-			squish::CompressImage(&rb[src_ofs], bw, bh, &wb[dst_ofs], squish_comp);
-			dst_ofs += (MAX(4, w) * MAX(4, h)) >> shift;
+			squish::CompressImage(&rb[src_ofs], w, h, &wb[dst_ofs], squish_comp);
+			dst_ofs += (MAX(4, bw) * MAX(4, bh)) >> shift;
 			w >>= 1;
 			h >>= 1;
 		}

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,7 +29,7 @@
 /*************************************************************************/
 #include "message_queue.h"
 
-#include "global_config.h"
+#include "project_settings.h"
 #include "script_language.h"
 
 MessageQueue *MessageQueue::singleton = NULL;
@@ -153,16 +153,16 @@ Error MessageQueue::push_notification(ObjectID p_id, int p_notification) {
 
 Error MessageQueue::push_call(Object *p_object, const StringName &p_method, VARIANT_ARG_DECLARE) {
 
-	return push_call(p_object->get_instance_ID(), p_method, VARIANT_ARG_PASS);
+	return push_call(p_object->get_instance_id(), p_method, VARIANT_ARG_PASS);
 }
 
 Error MessageQueue::push_notification(Object *p_object, int p_notification) {
 
-	return push_notification(p_object->get_instance_ID(), p_notification);
+	return push_notification(p_object->get_instance_id(), p_notification);
 }
 Error MessageQueue::push_set(Object *p_object, const StringName &p_prop, const Variant &p_value) {
 
-	return push_set(p_object->get_instance_ID(), p_prop, p_value);
+	return push_set(p_object->get_instance_id(), p_prop, p_value);
 }
 
 void MessageQueue::statistics() {
@@ -238,47 +238,6 @@ void MessageQueue::statistics() {
 
 		print_line("NOTIFY " + itos(E->key()) + ": " + itos(E->get()));
 	}
-}
-
-bool MessageQueue::print() {
-#if 0
-	uint32_t read_pos=0;
-	while (read_pos < buffer_end ) {
-		Message *message = (Message*)&buffer[ read_pos ];
-
-		Object *target = ObjectDB::get_instance(message->instance_ID);
-		String cname;
-		String cfunc;
-
-		if (target==NULL) {
-			//object was deleted
-			//WARN_PRINT("Object was deleted while awaiting a callback")
-			//should it print a warning?
-		} else if (message->notification>=0) {
-
-			// messages don't expect a return value
-			cfunc="notification # "+itos(message->notification);
-			cname=target->get_type();
-
-		} else if (!message->target.empty()) {
-
-			cfunc="property:  "+message->target;
-			cname=target->get_type();
-
-
-		} else if (message->target) {
-
-			cfunc=String(message->target)+"()";
-			cname=target->get_type();
-		}
-
-
-		read_pos+=sizeof(Message);
-		if (message->type!=TYPE_NOTIFICATION)
-			read_pos+=sizeof(Variant)*message->args;
-	}
-#endif
-	return false;
 }
 
 int MessageQueue::get_max_buffer_usage() const {
@@ -382,7 +341,7 @@ MessageQueue::MessageQueue() {
 
 	buffer_end = 0;
 	buffer_max_used = 0;
-	buffer_size = GLOBAL_DEF("memory/buffers/message_queue_max_size_kb", DEFAULT_QUEUE_SIZE_KB);
+	buffer_size = GLOBAL_DEF("memory/limits/message_queue/max_size_kb", DEFAULT_QUEUE_SIZE_KB);
 	buffer_size *= 1024;
 	buffer = memnew_arr(uint8_t, buffer_size);
 }

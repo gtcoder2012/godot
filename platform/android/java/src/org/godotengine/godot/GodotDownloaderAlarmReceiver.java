@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -46,14 +46,14 @@ import android.util.Log;
  */
 public class GodotDownloaderAlarmReceiver extends BroadcastReceiver {
 
-    @Override
-    public void onReceive(Context context, Intent intent) {
-    	Log.d("GODOT", "Alarma recivida");
-	try {
-	    DownloaderClientMarshaller.startDownloadServiceIfRequired(context, intent, GodotDownloaderService.class);
-	} catch (NameNotFoundException e) {
-	    e.printStackTrace();
-	    Log.d("GODOT", "Exception: " + e.getClass().getName() + ":" + e.getMessage());
+	@Override
+	public void onReceive(Context context, Intent intent) {
+		Log.d("GODOT", "Alarma recivida");
+		try {
+			DownloaderClientMarshaller.startDownloadServiceIfRequired(context, intent, GodotDownloaderService.class);
+		} catch (NameNotFoundException e) {
+			e.printStackTrace();
+			Log.d("GODOT", "Exception: " + e.getClass().getName() + ":" + e.getMessage());
+		}
 	}
-    }
 }

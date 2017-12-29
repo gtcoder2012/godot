@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -42,8 +42,8 @@ void EditorNameDialog::_line_gui_input(const Ref<InputEvent> &p_event) {
 			return;
 
 		switch (k->get_scancode()) {
-			case KEY_ENTER:
-			case KEY_RETURN: {
+			case KEY_KP_ENTER:
+			case KEY_ENTER: {
 
 				if (get_hide_on_ok())
 					hide();
@@ -85,9 +85,8 @@ EditorNameDialog::EditorNameDialog() {
 	add_child(makevb);
 	name = memnew(LineEdit);
 	makevb->add_child(name);
-	makevb->move_child(name, get_label()->get_index() + 1);
 	name->set_margin(MARGIN_TOP, 5);
 	name->set_anchor_and_margin(MARGIN_LEFT, ANCHOR_BEGIN, 5);
-	name->set_anchor_and_margin(MARGIN_RIGHT, ANCHOR_END, 5);
+	name->set_anchor_and_margin(MARGIN_RIGHT, ANCHOR_END, -5);
 	name->connect("gui_input", this, "_line_gui_input");
 }

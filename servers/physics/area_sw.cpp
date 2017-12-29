@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -237,8 +237,10 @@ void AreaSW::call_queries() {
 	//get_space()->area_remove_from_monitor_query_list(&monitor_query_list);
 }
 
-AreaSW::AreaSW()
-	: CollisionObjectSW(TYPE_AREA), monitor_query_list(this), moved_list(this) {
+AreaSW::AreaSW() :
+		CollisionObjectSW(TYPE_AREA),
+		monitor_query_list(this),
+		moved_list(this) {
 
 	_set_static(true); //areas are never active
 	space_override_mode = PhysicsServer::AREA_SPACE_OVERRIDE_DISABLED;

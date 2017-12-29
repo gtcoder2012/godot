@@ -41,15 +41,17 @@ Upstream-Contact: Rémi Verschelde <contact@godotengine.org>
 Source: https://github.com/godotengine/godot
 
 Files: *
+Comment: Godot Engine
 Copyright: 2007-2017, Juan Linietsky, Ariel Manzur.
-  2014-2017, Godot Engine contributors (cf. AUTHORS.md)
+  2014-2017, Godot Engine contributors.
 License: Expat
 
 Files: ./icon.png
  ./icon.svg
  ./logo.png
  ./logo.svg
-Copyright: Andrea Calabró
+Comment: Godot Engine logo
+Copyright: 2017, Andrea Calabró
 License: CC-BY-3.0
 
 Files: ./platform/android/android_native_app_glue.c
@@ -61,21 +63,25 @@ Files: ./platform/android/android_native_app_glue.c
  ./platform/android/java/src/org/godotengine/godot/input/InputManagerCompat.java
  ./platform/android/java/src/org/godotengine/godot/input/InputManagerV16.java
  ./platform/android/java/src/org/godotengine/godot/input/InputManagerV9.java
+Comment: The Android Open Source Project
 Copyright: 2008-2013, The Android Open Source Project
 License: Apache-2.0
 
 Files: ./platform/android/cpu-features.c
  ./platform/android/cpu-features.h
+Comment: The Android Open Source Project
 Copyright: 2010, The Android Open Source Project
 License: BSD-2-clause
 
 Files: ./platform/android/ifaddrs_android.cpp
  ./platform/android/ifaddrs_android.h
+Comment: The Android Open Source Project
 Copyright: 2012-2013, Google Inc.
 License: BSD-3-clause
 
 Files: ./platform/android/java/src/com/android/vending/licensing/util/Base64.java
  ./platform/android/java/src/com/android/vending/licensing/util/Base64DecoderException.java
+Comment: The Android Open Source Project
 Copyright: 2002, Google Inc.
 License: Apache-2.0
 
@@ -83,16 +89,11 @@ Files: ./platform/android/power_android.cpp
  ./platform/osx/power_osx.cpp
  ./platform/windows/power_windows.cpp
  ./platform/x11/power_x11.cpp
+Comment: Simple DirectMedia Layer
 Copyright: 1997-2017, Sam Lantinga
   2007-2017, Juan Linietsky, Ariel Manzur.
-  2014-2017, Godot Engine contributors (cf. AUTHORS.md)
+  2014-2017, Godot Engine contributors.
 License: Expat and Zlib
-
-Files: ./platform/uwp/export/export.cpp
-Copyright: 2016, Facebook, Inc. All rights reserved.
-  2007-2017, Juan Linietsky, Ariel Manzur.
-  2014-2017, Godot Engine contributors (cf. AUTHORS.md)
-License: BSD-3-clause and Expat
 
 Files: ./servers/physics/gjk_epa.cpp
  ./servers/physics/joints/generic_6dof_joint_sw.cpp
@@ -104,86 +105,115 @@ Files: ./servers/physics/gjk_epa.cpp
  ./servers/physics/joints/pin_joint_sw.h
  ./servers/physics/joints/slider_joint_sw.cpp
  ./servers/physics/joints/slider_joint_sw.h
+Comment: Bullet Continuous Collision Detection and Physics Library
 Copyright: 2003-2008, Erwin Coumans
   2007-2017, Juan Linietsky, Ariel Manzur.
-  2014-2017, Godot Engine contributors (cf. AUTHORS.md)
+  2014-2017, Godot Engine contributors.
 License: Expat and Zlib
 
 Files: ./servers/physics/joints/cone_twist_joint_sw.cpp
  ./servers/physics/joints/cone_twist_joint_sw.h
+Comment: Bullet Continuous Collision Detection and Physics Library
 Copyright: 2007, Starbreeze Studios
   2007-2017, Juan Linietsky, Ariel Manzur.
-  2014-2017, Godot Engine contributors (cf. AUTHORS.md)
+  2014-2017, Godot Engine contributors.
 License: Expat and Zlib
 
 Files: ./thirdparty/b2d_convexdecomp/
+Comment: Box2D (ConvexDecomp)
 Copyright: 2007, Eric Jordan
 Copyright: 2006-2009, Erin Catto
 License: Zlib
 
 Files: ./thirdparty/certs/ca-certificates.crt
+Comment: FIXME
 Copyright: FIXME
 License: FIXME
 
 Files: ./thirdparty/enet/
+Comment: ENet
 Copyright: 2002-2016, Lee Salzman
 License: Expat
 
+Files: ./thirdparty/etc2comp/
+Comment: Etc2Comp
+Copyright: 2015, Etc2Comp Authors
+License: Apache-2.0
+
 Files: ./thirdparty/fonts/DroidSans*.ttf
+Comment: DroidSans font
 Copyright: 2008, The Android Open Source Project
 License: Apache-2.0
 
-Files: ./thirdparty/fonts/source_code_pro.otf
-Copyright: 2010, 2012, Adobe Systems Incorporated
+Files: ./thirdparty/fonts/NotoSans*.ttf
+Comment: Noto Sans font
+Copyright: 2012, Google Inc.
 License: OFL-1.1
 
+Files: ./thirdparty/fonts/Hack_Regular.ttf
+Comment: Hack font
+Copyright: 2015-2017, Christopher Simpkins (with Reserved Font Name Hack).
+License: Hack Open Font License v2.0
+
 Files: ./thirdparty/freetype/
-Copyright: 1996-2016, David Turner, Robert Wilhelm, and Werner Lemberg.
+Comment: The FreeType Project
+Copyright: 1996-2017, David Turner, Robert Wilhelm, and Werner Lemberg.
 License: FTL
 
 Files: ./thirdparty/glad/
+Comment: glad
 Copyright: 2013, David Herberth
 License: Expat
 
 Files: ./thirdparty/jpeg_compressor/
+Comment: jpeg-compressor
 Copyright: 2012, Rich Geldreich
 License: public-domain
 
 Files: ./thirdparty/libogg/
+Comment: OggVorbis
 Copyright: 2002, Xiph.org Foundation
 License: BSD-3-clause
 
 Files: ./thirdparty/libpng/
+Comment: libpng
 Copyright: 1995-1996, Guy Eric Schalnat, Group 42, Inc.
  1996-1997, Andreas Dilger
  1998-2016, Glenn Randers-Pehrson
 License: Zlib
 
 Files: ./thirdparty/libsimplewebm/
+Comment: libsimplewebm
 Copyright: 2016, Błażej Szczygieł
 License: Expat
 
 Files: ./thirdparty/libsimplewebm/libwebm/
+Comment: The WebM Project
 Copyright: 2010, Google Inc.
 License: BSD-3-clause
 
 Files: ./thirdparty/libtheora/
+Comment: OggTheora
 Copyright: 2002-2009, Xiph.org Foundation
 License: BSD-3-clause
 
 Files: ./thirdparty/libvorbis/
+Comment: OggVorbis
 Copyright: 2002-2015, Xiph.org Foundation
 License: BSD-3-clause
 
 Files: ./thirdparty/libvpx/
+Comment: The WebM Project
 Copyright: 2010, The WebM Project authors.
 License: BSD-3-clause
 
-Files: ./thirdparty/libwebp/COPYING
+Files: ./thirdparty/libwebp/
+Comment: WebP codec
 Copyright: 2010, Google Inc.
 License: BSD-3-clause
 
 Files: ./thirdparty/minizip/
+Comment: MiniZip
 Copyright: 1998-2010, Gilles Vollant
   2007-2008, Even Rouault
   2009-2010, Mathias Svensson
@@ -193,98 +223,128 @@ Files: ./thirdparty/misc/aes256.cpp
  ./thirdparty/misc/aes256.h
  ./thirdparty/misc/sha256.c
  ./thirdparty/misc/sha256.h
+Comment: AES-256 and SHA-256 implementation
 Copyright: 2007-2011, Ilya O. Levin
 License: ISC
 
 Files: ./thirdparty/misc/base64.c
  ./thirdparty/misc/base64.h
+Comment: BASE64 conversion methods
 Copyright: Ari Edelkind
 License: public-domain
 
 Files: ./thirdparty/misc/curl_hostcheck.c
  ./thirdparty/misc/curl_hostcheck.h
+Comment: curl
 Copyright: 1998-2012, Daniel Stenberg et al.
 License: curl
 
 Files: ./thirdparty/misc/fastlz.c
  ./thirdparty/misc/fastlz.h
+Comment: FastLZ
 Copyright: 2005-2007, Ariya Hidayat
 License: Expat
 
 Files: ./thirdparty/misc/hq2x.cpp
  ./thirdparty/misc/hq2x.h
+Comment: hq2x implementation
 Copyright: 2016, Bruno Ribeiro
 License: Apache-2.0
 
 Files: ./thirdparty/misc/md5.cpp
  ./thirdparty/misc/md5.h
+Comment: MD5 Message Digest Algorithm
 Copyright: 1990, RSA Data Security, Inc.
 License: RSA-MD
 
 Files: ./thirdparty/misc/mikktspace.c
  ./thirdparty/misc/mikktspace.h
+Comment: Tangent Space Normal Maps implementation
 Copyright: 2011, Morten S. Mikkelsen
 License: Zlib
 
 Files: ./thirdparty/misc/pcg.cpp
  ./thirdparty/misc/pcg.h
+Comment: Minimal PCG32 implementation
 Copyright: 2014, M.E. O'Neill
 License: Apache-2.0
 
 Files: ./thirdparty/misc/smaz.c
  ./thirdparty/misc/smaz.h
+Comment: SMAZ
 Copyright: 2006-2009, Salvatore Sanfilippo
 License: BSD-3-clause
 
 Files: ./thirdparty/misc/stb_truetype.h
  ./thirdparty/misc/stb_vorbis.c
-Copyright: 2007-2015, Sean Barrett
+Comment: stb libraries
+Copyright: 2007-2017, Sean Barrett
 License: public-domain
 
 Files: ./thirdparty/misc/triangulator.cpp
  ./thirdparty/misc/triangulator.h
+Comment: PolyPartition
 Copyright: 2011, Ivan Fratric
 License: Expat
 
 Files: ./thirdparty/misc/yuv2rgb.h
+Comment: YUV2RGB
 Copyright: 2008-2011, Robin Watts
 License: BSD-2-clause
 
 Files: ./thirdparty/openssl/
+Comment: The OpenSSL Project
 Copyright: 1998-2016, The OpenSSL Project.
 License: OpenSSL
 
 Files: ./thirdparty/opus/
+Comment: Opus
 Copyright: 2001-2011, Xiph.Org, Skype Limited, Octasic,
  Jean-Marc Valin, Timothy B. Terriberry,
  CSIRO, Gregory Maxwell, Mark Borgerding,
  Erik de Castro Lopo
 License: BSD-3-clause
 
+Files: ./thirdparty/nanosvg/
+Comment: NanoSVG
+Copyright: 2013-2014, Mikko Mononen
+License: Zlib
+
 Files: ./thirdparty/pvrtccompressor/
+Comment: PvrTcCompressor
 Copyright: 2014, Jeffrey Lim.
 License: BSD-3-clause
 
-Files: ./thirdparty/rg-etc1/
-Copyright: 2012, Rich Geldreich
+Files: ./thirdparty/recastnavigation/
+Comment: Recast
+Copyright: 2009, Mikko Mononen
 License: Zlib
 
 Files: ./thirdparty/rtaudio/
+Comment: RtAudio
 Copyright: 2001-2016, Gary P. Scavone
 License: Expat
 
 Files: ./thirdparty/squish/
+Comment: libSquish
 Copyright: 2006, Simon Brown
 License: Expat
 
 Files: ./thirdparty/tinyexr/
+Comment: TinyEXR
 Copyright: 2014-2017, Syoyo Fujita
   2002, Industrial Light & Magic, a division of Lucas Digital Ltd. LLC
 License: BSD-3-Clause
 
 Files: ./thirdparty/zlib/
+Comment: zlib
 Copyright: 1995-2017, Jean-loup Gailly and Mark Adler
 License: Zlib
+
+Files: ./thirdparty/zstd/
+Comment: Zstandard
+Copyright: 2016-2017, Facebook, Inc.
+License: BSD-3-Clause
 
 
 
@@ -337,9 +397,9 @@ License: BSD-3-clause
     notice, this list of conditions and the following disclaimer in the
     documentation and/or other materials provided with the distribution.
  .
- 3. Neither the name of the University nor the names of its contributors
-    may be used to endorse or promote products derived from this software
-    without specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
  .
  THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE

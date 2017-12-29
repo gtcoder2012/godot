@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -72,7 +72,7 @@ void SpinBox::_range_click_timeout() {
 
 	if (!drag.enabled && Input::get_singleton()->is_mouse_button_pressed(BUTTON_LEFT)) {
 
-		bool up = get_local_mouse_pos().y < (get_size().height / 2);
+		bool up = get_local_mouse_position().y < (get_size().height / 2);
 		set_value(get_value() + (up ? get_step() : -get_step()));
 
 		if (range_click_timer->is_one_shot()) {
@@ -96,7 +96,7 @@ void SpinBox::_gui_input(const Ref<InputEvent> &p_event) {
 
 	if (mb.is_valid() && mb->is_pressed()) {
 
-		bool up = mb->get_pos().y < (get_size().height / 2);
+		bool up = mb->get_position().y < (get_size().height / 2);
 
 		switch (mb->get_button_index()) {
 
@@ -135,7 +135,7 @@ void SpinBox::_gui_input(const Ref<InputEvent> &p_event) {
 	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == 1) {
 
 		//set_default_cursor_shape(CURSOR_VSIZE);
-		Vector2 cpos = Vector2(mb->get_pos().x, mb->get_pos().y);
+		Vector2 cpos = Vector2(mb->get_position().x, mb->get_position().y);
 		drag.mouse_pos = cpos;
 	}
 
@@ -155,7 +155,7 @@ void SpinBox::_gui_input(const Ref<InputEvent> &p_event) {
 
 	if (mm.is_valid() && mm->get_button_mask() & 1) {
 
-		Vector2 cpos = mm->get_pos();
+		Vector2 cpos = mm->get_position();
 
 		if (drag.enabled) {
 
@@ -192,7 +192,7 @@ void SpinBox::_notification(int p_what) {
 
 		int w = updown->get_width();
 		if (w != last_w) {
-			line_edit->set_margin(MARGIN_RIGHT, w);
+			line_edit->set_margin(MARGIN_RIGHT, -w);
 			last_w = w;
 		}
 
@@ -268,7 +268,7 @@ SpinBox::SpinBox() {
 	line_edit = memnew(LineEdit);
 	add_child(line_edit);
 
-	line_edit->set_area_as_parent_rect();
+	line_edit->set_anchors_and_margins_preset(Control::PRESET_WIDE);
 	//connect("value_changed",this,"_value_changed");
 	line_edit->connect("text_entered", this, "_text_entered", Vector<Variant>(), CONNECT_DEFERRED);
 	line_edit->connect("focus_exited", this, "_line_edit_focus_exit", Vector<Variant>(), CONNECT_DEFERRED);

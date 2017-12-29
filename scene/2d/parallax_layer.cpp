@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,17 +28,19 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "parallax_layer.h"
+
+#include "engine.h"
 #include "parallax_background.h"
 
 void ParallaxLayer::set_motion_scale(const Size2 &p_scale) {
 
 	motion_scale = p_scale;
 
-	ParallaxBackground *pb = get_parent()->cast_to<ParallaxBackground>();
-	if (is_inside_tree() && pb) {
+	ParallaxBackground *pb = Object::cast_to<ParallaxBackground>(get_parent());
+	if (pb && is_inside_tree()) {
 		Vector2 ofs = pb->get_final_offset();
 		float scale = pb->get_scroll_scale();
-		set_base_offset_and_scale(ofs, scale);
+		set_base_offset_and_scale(ofs, scale, screen_offset);
 	}
 }
 
@@ -51,11 +53,11 @@ void ParallaxLayer::set_motion_offset(const Size2 &p_offset) {
 
 	motion_offset = p_offset;
 
-	ParallaxBackground *pb = get_parent()->cast_to<ParallaxBackground>();
-	if (is_inside_tree() && pb) {
+	ParallaxBackground *pb = Object::cast_to<ParallaxBackground>(get_parent());
+	if (pb && is_inside_tree()) {
 		Vector2 ofs = pb->get_final_offset();
 		float scale = pb->get_scroll_scale();
-		set_base_offset_and_scale(ofs, scale);
+		set_base_offset_and_scale(ofs, scale, screen_offset);
 	}
 }
 
@@ -66,15 +68,13 @@ Size2 ParallaxLayer::get_motion_offset() const {
 
 void ParallaxLayer::_update_mirroring() {
 
-	if (!get_parent())
-		return;
-
-	ParallaxBackground *pb = get_parent()->cast_to<ParallaxBackground>();
+	ParallaxBackground *pb = Object::cast_to<ParallaxBackground>(get_parent());
 	if (pb) {
 
 		RID c = pb->get_world_2d()->get_canvas();
 		RID ci = get_canvas_item();
-		VisualServer::get_singleton()->canvas_set_item_mirroring(c, ci, mirroring);
+		Point2 mirrorScale = mirroring * get_scale();
+		VisualServer::get_singleton()->canvas_set_item_mirroring(c, ci, mirrorScale);
 	}
 }
 
@@ -107,16 +107,19 @@ void ParallaxLayer::_notification(int p_what) {
 	}
 }
 
-void ParallaxLayer::set_base_offset_and_scale(const Point2 &p_offset, float p_scale) {
+void ParallaxLayer::set_base_offset_and_scale(const Point2 &p_offset, float p_scale, const Point2 &p_screen_offset) {
+	screen_offset = p_screen_offset;
 
 	if (!is_inside_tree())
 		return;
-	if (get_tree()->is_editor_hint())
+	if (Engine::get_singleton()->is_editor_hint())
 		return;
-	Point2 new_ofs = ((orig_offset + p_offset) * motion_scale) * p_scale + motion_offset;
+
+	Point2 new_ofs = (screen_offset + (p_offset - screen_offset) * motion_scale) + motion_offset * p_scale + orig_offset * p_scale;
 
 	if (mirroring.x) {
 		double den = mirroring.x * p_scale;
+		double before = new_ofs.x;
 		new_ofs.x -= den * ceil(new_ofs.x / den);
 	}
 
@@ -126,12 +129,14 @@ void ParallaxLayer::set_base_offset_and_scale(const Point2 &p_offset, float p_sc
 	}
 
 	set_position(new_ofs);
-	set_scale(Vector2(1, 1) * p_scale);
+	set_scale(Vector2(1, 1) * p_scale * orig_scale);
+
+	_update_mirroring();
 }
 
 String ParallaxLayer::get_configuration_warning() const {
 
-	if (!get_parent() || !get_parent()->cast_to<ParallaxBackground>()) {
+	if (!Object::cast_to<ParallaxBackground>(get_parent())) {
 		return TTR("ParallaxLayer node only works when set as child of a ParallaxBackground node.");
 	}
 

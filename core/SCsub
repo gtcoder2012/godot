@@ -14,11 +14,11 @@ for x in env.global_defaults:
     gd_inc += '#include "platform/' + x + '/globals/global_defaults.h"\n'
     gd_call += "\tregister_" + x + "_global_defaults();\n"
 
-gd_cpp = '#include "global_config.h"\n'
+gd_cpp = '#include "project_settings.h"\n'
 gd_cpp += gd_inc
-gd_cpp += "void GlobalConfig::register_global_defaults() {\n" + gd_call + "\n}\n"
+gd_cpp += "void ProjectSettings::register_global_defaults() {\n" + gd_call + "\n}\n"
 
-f = open("global_defaults.cpp", "wb")
+f = open("global_defaults.gen.cpp", "w")
 f.write(gd_cpp)
 f.close()
 
@@ -47,8 +47,8 @@ if ("SCRIPT_AES256_ENCRYPTION_KEY" in os.environ):
         txt = "0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0"
         print("Invalid AES256 encryption key, not 64 bits hex: " + e)
 
-f = open("script_encryption_key.cpp", "wb")
-f.write("#include \"global_config.h\"\nuint8_t script_encryption_key[32]={" + txt + "};\n")
+f = open("script_encryption_key.gen.cpp", "w")
+f.write("#include \"project_settings.h\"\nuint8_t script_encryption_key[32]={" + txt + "};\n")
 f.close()
 
 
@@ -83,6 +83,9 @@ thirdparty_minizip_sources = [
 thirdparty_minizip_sources = [thirdparty_minizip_dir + file for file in thirdparty_minizip_sources]
 env.add_source_files(env.core_sources, thirdparty_minizip_sources)
 
+if 'builtin_zstd' in env and env['builtin_zstd']:
+    SConscript("#thirdparty/zstd/SCsub")
+
 
 # Godot's own sources
 env.add_source_files(env.core_sources, "*.cpp")
@@ -90,7 +93,7 @@ env.add_source_files(env.core_sources, "*.cpp")
 
 # Make binders
 import make_binders
-env.Command(['method_bind.inc', 'method_bind_ext.inc'], 'make_binders.py', make_binders.run)
+env.Command(['method_bind.gen.inc', 'method_bind_ext.gen.inc'], 'make_binders.py', make_binders.run)
 
 
 # Chain load SCsubs
@@ -102,7 +105,6 @@ SConscript('helper/SCsub')
 
 
 # Build it all as a library
-lib = env.Library("core", env.core_sources)
+lib = env.add_library("core", env.core_sources)
 env.Prepend(LIBS=[lib])
-
 Export('env')

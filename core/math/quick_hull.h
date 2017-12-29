@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,9 +30,9 @@
 #ifndef QUICK_HULL_H
 #define QUICK_HULL_H
 
+#include "aabb.h"
 #include "geometry.h"
 #include "list.h"
-#include "rect3.h"
 #include "set.h"
 
 class QuickHull {

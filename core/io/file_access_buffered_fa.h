@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -55,10 +55,10 @@ class FileAccessBufferedFA : public FileAccessBuffered {
 
 			// on dvector
 			//PoolVector<uint8_t>::Write write = cache.buffer.write();
-			//f.get_buffer(write.ptr(), p_size);
+			//f.get_buffer(write.ptrw(), p_size);
 
 			// on vector
-			f.get_buffer(cache.buffer.ptr(), p_size);
+			f.get_buffer(cache.buffer.ptrw(), p_size);
 
 			return p_size;
 		};
@@ -76,6 +76,11 @@ protected:
 	};
 
 public:
+	void flush() {
+
+		f.flush();
+	};
+
 	void store_8(uint8_t p_dest) {
 
 		f.store_8(p_dest);

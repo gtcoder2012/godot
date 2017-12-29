@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,7 +29,7 @@
 /*************************************************************************/
 #include "polygon_2d.h"
 
-Rect2 Polygon2D::get_item_rect() const {
+Rect2 Polygon2D::_edit_get_rect() const {
 
 	if (rect_cache_dirty) {
 		int l = polygon.size();
@@ -38,7 +38,7 @@ Rect2 Polygon2D::get_item_rect() const {
 		for (int i = 0; i < l; i++) {
 			Vector2 pos = r[i] + offset;
 			if (i == 0)
-				item_rect.pos = pos;
+				item_rect.position = pos;
 			else
 				item_rect.expand_to(pos);
 		}
@@ -49,16 +49,16 @@ Rect2 Polygon2D::get_item_rect() const {
 	return item_rect;
 }
 
-void Polygon2D::edit_set_pivot(const Point2 &p_pivot) {
+void Polygon2D::_edit_set_pivot(const Point2 &p_pivot) {
 
 	set_offset(p_pivot);
 }
 
-Point2 Polygon2D::edit_get_pivot() const {
+Point2 Polygon2D::_edit_get_pivot() const {
 
 	return get_offset();
 }
-bool Polygon2D::edit_has_pivot() const {
+bool Polygon2D::_edit_use_pivot() const {
 
 	return true;
 }
@@ -95,7 +95,7 @@ void Polygon2D::_notification(int p_what) {
 
 				for (int i = 0; i < len; i++) {
 					if (i == 0)
-						bounds.pos = points[i];
+						bounds.position = points[i];
 					else
 						bounds.expand_to(points[i]);
 					if (points[i].y > highest_y) {
@@ -110,10 +110,10 @@ void Polygon2D::_notification(int p_what) {
 
 				Vector2 ep[7] = {
 					Vector2(points[highest_idx].x, points[highest_idx].y + invert_border),
-					Vector2(bounds.pos + bounds.size),
-					Vector2(bounds.pos + Vector2(bounds.size.x, 0)),
-					Vector2(bounds.pos),
-					Vector2(bounds.pos + Vector2(0, bounds.size.y)),
+					Vector2(bounds.position + bounds.size),
+					Vector2(bounds.position + Vector2(bounds.size.x, 0)),
+					Vector2(bounds.position),
+					Vector2(bounds.position + Vector2(0, bounds.size.y)),
 					Vector2(points[highest_idx].x - CMP_EPSILON, points[highest_idx].y + invert_border),
 					Vector2(points[highest_idx].x - CMP_EPSILON, points[highest_idx].y),
 				};
@@ -143,9 +143,7 @@ void Polygon2D::_notification(int p_what) {
 
 				Transform2D texmat(tex_rot, tex_ofs);
 				texmat.scale(tex_scale);
-				Size2 tex_size = Vector2(1, 1);
-
-				tex_size = texture->get_size();
+				Size2 tex_size = texture->get_size();
 				uvs.resize(points.size());
 
 				if (points.size() == uv.size()) {
@@ -176,9 +174,10 @@ void Polygon2D::_notification(int p_what) {
 				}
 			}
 
-			Vector<int> indices = Geometry::triangulate_polygon(points);
+			//			Vector<int> indices = Geometry::triangulate_polygon(points);
+			//			VS::get_singleton()->canvas_item_add_triangle_array(get_canvas_item(), indices, points, colors, uvs, texture.is_valid() ? texture->get_rid() : RID());
 
-			VS::get_singleton()->canvas_item_add_triangle_array(get_canvas_item(), indices, points, colors, uvs, texture.is_valid() ? texture->get_rid() : RID());
+			VS::get_singleton()->canvas_item_add_polygon(get_canvas_item(), points, colors, uvs, texture.is_valid() ? texture->get_rid() : RID(), RID(), antialiased);
 
 		} break;
 	}
@@ -265,11 +264,11 @@ float Polygon2D::get_texture_rotation() const {
 	return tex_rot;
 }
 
-void Polygon2D::_set_texture_rotationd(float p_rot) {
+void Polygon2D::set_texture_rotation_degrees(float p_rot) {
 
 	set_texture_rotation(Math::deg2rad(p_rot));
 }
-float Polygon2D::_get_texture_rotationd() const {
+float Polygon2D::get_texture_rotation_degrees() const {
 
 	return Math::rad2deg(get_texture_rotation());
 }
@@ -292,6 +291,16 @@ void Polygon2D::set_invert(bool p_invert) {
 bool Polygon2D::get_invert() const {
 
 	return invert;
+}
+
+void Polygon2D::set_antialiased(bool p_antialiased) {
+
+	antialiased = p_antialiased;
+	update();
+}
+bool Polygon2D::get_antialiased() const {
+
+	return antialiased;
 }
 
 void Polygon2D::set_invert_border(float p_invert_border) {
@@ -339,14 +348,17 @@ void Polygon2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_texture_rotation", "texture_rotation"), &Polygon2D::set_texture_rotation);
 	ClassDB::bind_method(D_METHOD("get_texture_rotation"), &Polygon2D::get_texture_rotation);
 
-	ClassDB::bind_method(D_METHOD("_set_texture_rotationd", "texture_rotation"), &Polygon2D::_set_texture_rotationd);
-	ClassDB::bind_method(D_METHOD("_get_texture_rotationd"), &Polygon2D::_get_texture_rotationd);
+	ClassDB::bind_method(D_METHOD("set_texture_rotation_degrees", "texture_rotation"), &Polygon2D::set_texture_rotation_degrees);
+	ClassDB::bind_method(D_METHOD("get_texture_rotation_degrees"), &Polygon2D::get_texture_rotation_degrees);
 
 	ClassDB::bind_method(D_METHOD("set_texture_scale", "texture_scale"), &Polygon2D::set_texture_scale);
 	ClassDB::bind_method(D_METHOD("get_texture_scale"), &Polygon2D::get_texture_scale);
 
 	ClassDB::bind_method(D_METHOD("set_invert", "invert"), &Polygon2D::set_invert);
 	ClassDB::bind_method(D_METHOD("get_invert"), &Polygon2D::get_invert);
+
+	ClassDB::bind_method(D_METHOD("set_antialiased", "antialiased"), &Polygon2D::set_antialiased);
+	ClassDB::bind_method(D_METHOD("get_antialiased"), &Polygon2D::get_antialiased);
 
 	ClassDB::bind_method(D_METHOD("set_invert_border", "invert_border"), &Polygon2D::set_invert_border);
 	ClassDB::bind_method(D_METHOD("get_invert_border"), &Polygon2D::get_invert_border);
@@ -359,12 +371,13 @@ void Polygon2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::COLOR, "color"), "set_color", "get_color");
 	ADD_PROPERTY(PropertyInfo(Variant::POOL_COLOR_ARRAY, "vertex_colors"), "set_vertex_colors", "get_vertex_colors");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "offset"), "set_offset", "get_offset");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "antialiased"), "set_antialiased", "get_antialiased");
 	ADD_GROUP("Texture", "");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture"), "set_texture", "get_texture");
 	ADD_GROUP("Texture", "texture_");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "texture_offset"), "set_texture_offset", "get_texture_offset");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "texture_scale"), "set_texture_scale", "get_texture_scale");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "texture_rotation", PROPERTY_HINT_RANGE, "-1440,1440,0.1"), "_set_texture_rotationd", "_get_texture_rotationd");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "texture_rotation", PROPERTY_HINT_RANGE, "-1440,1440,0.1"), "set_texture_rotation_degrees", "get_texture_rotation_degrees");
 
 	ADD_GROUP("Invert", "invert_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "invert_enable"), "set_invert", "get_invert");
@@ -375,6 +388,7 @@ Polygon2D::Polygon2D() {
 
 	invert = 0;
 	invert_border = 100;
+	antialiased = false;
 	tex_rot = 0;
 	tex_tile = true;
 	tex_scale = Vector2(1, 1);

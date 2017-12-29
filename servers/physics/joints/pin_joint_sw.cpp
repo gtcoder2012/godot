@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -146,8 +146,8 @@ real_t PinJointSW::get_param(PhysicsServer::PinJointParam p_param) const {
 	return 0;
 }
 
-PinJointSW::PinJointSW(BodySW *p_body_a, const Vector3 &p_pos_a, BodySW *p_body_b, const Vector3 &p_pos_b)
-	: JointSW(_arr, 2) {
+PinJointSW::PinJointSW(BodySW *p_body_a, const Vector3 &p_pos_a, BodySW *p_body_b, const Vector3 &p_pos_b) :
+		JointSW(_arr, 2) {
 
 	A = p_body_a;
 	B = p_body_b;

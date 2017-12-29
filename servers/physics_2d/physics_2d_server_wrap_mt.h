@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,8 +31,8 @@
 #define PHYSICS2DSERVERWRAPMT_H
 
 #include "command_queue_mt.h"
-#include "global_config.h"
 #include "os/thread.h"
+#include "project_settings.h"
 #include "servers/physics_2d_server.h"
 
 #ifdef DEBUG_SYNC
@@ -64,21 +64,10 @@ class Physics2DServerWrapMT : public Physics2DServer {
 
 	void thread_exit();
 
-	Mutex *alloc_mutex;
 	bool first_frame;
 
-	int shape_pool_max_size;
-	List<RID> shape_id_pool;
-	int area_pool_max_size;
-	List<RID> area_id_pool;
-	int body_pool_max_size;
-	List<RID> body_id_pool;
-	int pin_joint_pool_max_size;
-	List<RID> pin_joint_id_pool;
-	int groove_joint_pool_max_size;
-	List<RID> groove_joint_id_pool;
-	int damped_spring_joint_pool_max_size;
-	List<RID> damped_spring_joint_id_pool;
+	Mutex *alloc_mutex;
+	int pool_max_size;
 
 public:
 #define ServerName Physics2DServer
@@ -87,7 +76,15 @@ public:
 #include "servers/server_wrap_mt_common.h"
 
 	//FUNC1RID(shape,ShapeType); todo fix
-	FUNC1R(RID, shape_create, ShapeType);
+	FUNCRID(line_shape)
+	FUNCRID(ray_shape)
+	FUNCRID(segment_shape)
+	FUNCRID(circle_shape)
+	FUNCRID(rectangle_shape)
+	FUNCRID(capsule_shape)
+	FUNCRID(convex_polygon_shape)
+	FUNCRID(concave_polygon_shape)
+
 	FUNC2(shape_set_data, RID, const Variant &);
 	FUNC2(shape_set_custom_solver_bias, RID, real_t);
 
@@ -98,43 +95,43 @@ public:
 	//these work well, but should be used from the main thread only
 	bool shape_collide(RID p_shape_A, const Transform2D &p_xform_A, const Vector2 &p_motion_A, RID p_shape_B, const Transform2D &p_xform_B, const Vector2 &p_motion_B, Vector2 *r_results, int p_result_max, int &r_result_count) {
 
-		ERR_FAIL_COND_V(main_thread != Thread::get_caller_ID(), false);
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), false);
 		return physics_2d_server->shape_collide(p_shape_A, p_xform_A, p_motion_A, p_shape_B, p_xform_B, p_motion_B, r_results, p_result_max, r_result_count);
 	}
 
 	/* SPACE API */
 
-	FUNC0R(RID, space_create);
+	FUNCRID(space);
 	FUNC2(space_set_active, RID, bool);
 	FUNC1RC(bool, space_is_active, RID);
 
 	FUNC3(space_set_param, RID, SpaceParameter, real_t);
 	FUNC2RC(real_t, space_get_param, RID, SpaceParameter);
 
-	// this function only works on fixed process, errors and returns null otherwise
+	// this function only works on physics process, errors and returns null otherwise
 	Physics2DDirectSpaceState *space_get_direct_state(RID p_space) {
 
-		ERR_FAIL_COND_V(main_thread != Thread::get_caller_ID(), NULL);
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), NULL);
 		return physics_2d_server->space_get_direct_state(p_space);
 	}
 
 	FUNC2(space_set_debug_contacts, RID, int);
 	virtual Vector<Vector2> space_get_contacts(RID p_space) const {
 
-		ERR_FAIL_COND_V(main_thread != Thread::get_caller_ID(), Vector<Vector2>());
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), Vector<Vector2>());
 		return physics_2d_server->space_get_contacts(p_space);
 	}
 
 	virtual int space_get_contact_count(RID p_space) const {
 
-		ERR_FAIL_COND_V(main_thread != Thread::get_caller_ID(), 0);
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), 0);
 		return physics_2d_server->space_get_contact_count(p_space);
 	}
 
 	/* AREA API */
 
 	//FUNC0RID(area);
-	FUNC0R(RID, area_create);
+	FUNCRID(area);
 
 	FUNC2(area_set_space, RID, RID);
 	FUNC1RC(RID, area_get_space, RID);
@@ -145,6 +142,7 @@ public:
 	FUNC3(area_add_shape, RID, RID, const Transform2D &);
 	FUNC3(area_set_shape, RID, int, RID);
 	FUNC3(area_set_shape_transform, RID, int, const Transform2D &);
+	FUNC3(area_set_shape_disabled, RID, int, bool);
 
 	FUNC1RC(int, area_get_shape_count, RID);
 	FUNC2RC(RID, area_get_shape, RID, int);
@@ -152,8 +150,8 @@ public:
 	FUNC2(area_remove_shape, RID, int);
 	FUNC1(area_clear_shapes, RID);
 
-	FUNC2(area_attach_object_instance_ID, RID, ObjectID);
-	FUNC1RC(ObjectID, area_get_object_instance_ID, RID);
+	FUNC2(area_attach_object_instance_id, RID, ObjectID);
+	FUNC1RC(ObjectID, area_get_object_instance_id, RID);
 
 	FUNC3(area_set_param, RID, AreaParameter, const Variant &);
 	FUNC2(area_set_transform, RID, const Transform2D &);
@@ -162,7 +160,7 @@ public:
 	FUNC1RC(Transform2D, area_get_transform, RID);
 
 	FUNC2(area_set_collision_mask, RID, uint32_t);
-	FUNC2(area_set_layer_mask, RID, uint32_t);
+	FUNC2(area_set_collision_layer, RID, uint32_t);
 
 	FUNC2(area_set_monitorable, RID, bool);
 	FUNC2(area_set_pickable, RID, bool);
@@ -173,7 +171,7 @@ public:
 	/* BODY API */
 
 	//FUNC2RID(body,BodyMode,bool);
-	FUNC2R(RID, body_create, BodyMode, bool)
+	FUNCRID(body)
 
 	FUNC2(body_set_space, RID, RID);
 	FUNC1RC(RID, body_get_space, RID);
@@ -191,20 +189,20 @@ public:
 	FUNC2RC(Variant, body_get_shape_metadata, RID, int);
 	FUNC2RC(RID, body_get_shape, RID, int);
 
-	FUNC3(body_set_shape_as_trigger, RID, int, bool);
-	FUNC2RC(bool, body_is_shape_set_as_trigger, RID, int);
+	FUNC3(body_set_shape_disabled, RID, int, bool);
+	FUNC3(body_set_shape_as_one_way_collision, RID, int, bool);
 
 	FUNC2(body_remove_shape, RID, int);
 	FUNC1(body_clear_shapes, RID);
 
-	FUNC2(body_attach_object_instance_ID, RID, uint32_t);
-	FUNC1RC(uint32_t, body_get_object_instance_ID, RID);
+	FUNC2(body_attach_object_instance_id, RID, uint32_t);
+	FUNC1RC(uint32_t, body_get_object_instance_id, RID);
 
 	FUNC2(body_set_continuous_collision_detection_mode, RID, CCDMode);
 	FUNC1RC(CCDMode, body_get_continuous_collision_detection_mode, RID);
 
-	FUNC2(body_set_layer_mask, RID, uint32_t);
-	FUNC1RC(uint32_t, body_get_layer_mask, RID);
+	FUNC2(body_set_collision_layer, RID, uint32_t);
+	FUNC1RC(uint32_t, body_get_collision_layer, RID);
 
 	FUNC2(body_set_collision_mask, RID, uint32_t);
 	FUNC1RC(uint32_t, body_get_collision_mask, RID);
@@ -232,14 +230,8 @@ public:
 	FUNC2(body_set_max_contacts_reported, RID, int);
 	FUNC1RC(int, body_get_max_contacts_reported, RID);
 
-	FUNC2(body_set_one_way_collision_direction, RID, const Vector2 &);
-	FUNC1RC(Vector2, body_get_one_way_collision_direction, RID);
-
-	FUNC2(body_set_one_way_collision_max_depth, RID, real_t);
-	FUNC1RC(real_t, body_get_one_way_collision_max_depth, RID);
-
-	FUNC2(body_set_contacts_reported_depth_treshold, RID, real_t);
-	FUNC1RC(real_t, body_get_contacts_reported_depth_treshold, RID);
+	FUNC2(body_set_contacts_reported_depth_threshold, RID, real_t);
+	FUNC1RC(real_t, body_get_contacts_reported_depth_threshold, RID);
 
 	FUNC2(body_set_omit_force_integration, RID, bool);
 	FUNC1RC(bool, body_is_omitting_force_integration, RID);
@@ -254,8 +246,15 @@ public:
 
 	bool body_test_motion(RID p_body, const Transform2D &p_from, const Vector2 &p_motion, real_t p_margin = 0.001, MotionResult *r_result = NULL) {
 
-		ERR_FAIL_COND_V(main_thread != Thread::get_caller_ID(), false);
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), false);
 		return physics_2d_server->body_test_motion(p_body, p_from, p_motion, p_margin, r_result);
+	}
+
+	// this function only works on physics process, errors and returns null otherwise
+	Physics2DDirectBodyState *body_get_direct_state(RID p_body) {
+
+		ERR_FAIL_COND_V(main_thread != Thread::get_caller_id(), NULL);
+		return physics_2d_server->body_get_direct_state(p_body);
 	}
 
 	/* JOINT API */
@@ -266,6 +265,8 @@ public:
 	///FUNC3RID(pin_joint,const Vector2&,RID,RID);
 	///FUNC5RID(groove_joint,const Vector2&,const Vector2&,const Vector2&,RID,RID);
 	///FUNC4RID(damped_spring_joint,const Vector2&,const Vector2&,RID,RID);
+
+	//TODO need to convert this to FUNCRID, but it's a hassle..
 
 	FUNC3R(RID, pin_joint_create, const Vector2 &, RID, RID);
 	FUNC5R(RID, groove_joint_create, const Vector2 &, const Vector2 &, const Vector2 &, RID, RID);

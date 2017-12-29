@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -59,6 +59,7 @@ class BodyPairSW : public ConstraintSW {
 		real_t acc_normal_impulse; // accumulated normal impulse (Pn)
 		Vector3 acc_tangent_impulse; // accumulated tangent impulse (Pt)
 		real_t acc_bias_impulse; // accumulated normal impulse for position bias (Pnb)
+		real_t acc_bias_impulse_center_of_mass; // accumulated normal impulse for position bias applied to com
 		real_t mass_normal;
 		real_t bias;
 		real_t bounce;

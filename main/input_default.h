@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -51,7 +51,7 @@ class InputDefault : public Input {
 	MainLoop *main_loop;
 
 	struct Action {
-		uint64_t fixed_frame;
+		uint64_t physics_frame;
 		uint64_t idle_frame;
 		bool pressed;
 	};
@@ -200,7 +200,7 @@ public:
 	virtual Point2 get_last_mouse_speed() const;
 	virtual int get_mouse_button_mask() const;
 
-	virtual void warp_mouse_pos(const Vector2 &p_to);
+	virtual void warp_mouse_position(const Vector2 &p_to);
 	virtual Point2i warp_mouse_motion(const Ref<InputEventMouseMotion> &p_motion, const Rect2 &p_rect);
 
 	virtual void parse_input_event(const Ref<InputEvent> &p_event);
@@ -214,7 +214,7 @@ public:
 	virtual void start_joy_vibration(int p_device, float p_weak_magnitude, float p_strong_magnitude, float p_duration = 0);
 	virtual void stop_joy_vibration(int p_device);
 
-	void set_main_loop(MainLoop *main_loop);
+	void set_main_loop(MainLoop *p_main_loop);
 	void set_mouse_position(const Point2 &p_posf);
 
 	void action_press(const StringName &p_action);

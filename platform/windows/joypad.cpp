@@ -1,9 +1,9 @@
 /*************************************************************************/
-/*  joypad.cpp                                                         */
+/*  joypad.cpp                                                           */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -235,13 +235,13 @@ void JoypadWindows::setup_joypad_object(const DIDEVICEOBJECTINSTANCE *ob, int p_
 	}
 }
 
-BOOL CALLBACK JoypadWindows::enumCallback(const DIDEVICEINSTANCE *instance, void *pContext) {
+BOOL CALLBACK JoypadWindows::enumCallback(const DIDEVICEINSTANCE *p_instance, void *p_context) {
 
-	JoypadWindows *self = (JoypadWindows *)pContext;
-	if (self->is_xinput_device(&instance->guidProduct)) {
+	JoypadWindows *self = (JoypadWindows *)p_context;
+	if (self->is_xinput_device(&p_instance->guidProduct)) {
 		return DIENUM_CONTINUE;
 	}
-	self->setup_dinput_joypad(instance);
+	self->setup_dinput_joypad(p_instance);
 	return DIENUM_CONTINUE;
 }
 
@@ -379,7 +379,9 @@ void JoypadWindows::process_joypads() {
 			IDirectInputDevice8_Acquire(joy->di_joy);
 			joy->di_joy->Poll();
 		}
-		if (FAILED(hr = joy->di_joy->GetDeviceState(sizeof(DIJOYSTATE2), &js))) {
+
+		hr = joy->di_joy->GetDeviceState(sizeof(DIJOYSTATE2), &js);
+		if (FAILED(hr)) {
 
 			//printf("failed to read joy #%d\n", i);
 			continue;

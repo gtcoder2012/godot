@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -78,7 +78,7 @@ Rect2 ConvexPolygonShape2D::get_rect() const {
 	Rect2 rect;
 	for (int i = 0; i < points.size(); i++) {
 		if (i == 0)
-			rect.pos = points[i];
+			rect.position = points[i];
 		else
 			rect.expand_to(points[i]);
 	}
@@ -86,8 +86,8 @@ Rect2 ConvexPolygonShape2D::get_rect() const {
 	return rect;
 }
 
-ConvexPolygonShape2D::ConvexPolygonShape2D()
-	: Shape2D(Physics2DServer::get_singleton()->shape_create(Physics2DServer::SHAPE_CONVEX_POLYGON)) {
+ConvexPolygonShape2D::ConvexPolygonShape2D() :
+		Shape2D(Physics2DServer::get_singleton()->convex_polygon_shape_create()) {
 
 	int pcount = 3;
 	for (int i = 0; i < pcount; i++)

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -34,7 +34,7 @@
 
 class SplitContainer : public Container {
 
-	GDCLASS(SplitContainer, Container);
+	GDCLASS(SplitContainer, Container)
 
 public:
 	enum DraggerVisibility {
@@ -87,8 +87,8 @@ class HSplitContainer : public SplitContainer {
 	GDCLASS(HSplitContainer, SplitContainer);
 
 public:
-	HSplitContainer()
-		: SplitContainer(false) { set_default_cursor_shape(CURSOR_HSPLIT); }
+	HSplitContainer() :
+			SplitContainer(false) {}
 };
 
 class VSplitContainer : public SplitContainer {
@@ -96,8 +96,8 @@ class VSplitContainer : public SplitContainer {
 	GDCLASS(VSplitContainer, SplitContainer);
 
 public:
-	VSplitContainer()
-		: SplitContainer(true) { set_default_cursor_shape(CURSOR_VSPLIT); }
+	VSplitContainer() :
+			SplitContainer(true) {}
 };
 
 #endif // SPLIT_CONTAINER_H

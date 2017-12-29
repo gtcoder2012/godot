@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -62,7 +62,13 @@ class PhysicsServerSW : public PhysicsServer {
 	mutable RID_Owner<JointSW> joint_owner;
 
 	//void _clear_query(QuerySW *p_query);
+	friend class CollisionObjectSW;
+	SelfList<CollisionObjectSW>::List pending_shape_update_list;
+	void _update_shapes();
+
 public:
+	static PhysicsServerSW *singleton;
+
 	struct CollCbkData {
 
 		int max;
@@ -89,7 +95,7 @@ public:
 	virtual void space_set_param(RID p_space, SpaceParameter p_param, real_t p_value);
 	virtual real_t space_get_param(RID p_space, SpaceParameter p_param) const;
 
-	// this function only works on fixed process, errors and returns null otherwise
+	// this function only works on physics process, errors and returns null otherwise
 	virtual PhysicsDirectSpaceState *space_get_direct_state(RID p_space);
 
 	virtual void space_set_debug_contacts(RID p_space, int p_max_contacts);
@@ -117,20 +123,22 @@ public:
 	virtual void area_remove_shape(RID p_area, int p_shape_idx);
 	virtual void area_clear_shapes(RID p_area);
 
-	virtual void area_attach_object_instance_ID(RID p_area, ObjectID p_ID);
-	virtual ObjectID area_get_object_instance_ID(RID p_area) const;
+	virtual void area_set_shape_disabled(RID p_area, int p_shape_idx, bool p_disabled);
+
+	virtual void area_attach_object_instance_id(RID p_area, ObjectID p_ID);
+	virtual ObjectID area_get_object_instance_id(RID p_area) const;
 
 	virtual void area_set_param(RID p_area, AreaParameter p_param, const Variant &p_value);
 	virtual void area_set_transform(RID p_area, const Transform &p_transform);
 
-	virtual Variant area_get_param(RID p_parea, AreaParameter p_param) const;
+	virtual Variant area_get_param(RID p_area, AreaParameter p_param) const;
 	virtual Transform area_get_transform(RID p_area) const;
 
 	virtual void area_set_ray_pickable(RID p_area, bool p_enable);
 	virtual bool area_is_ray_pickable(RID p_area) const;
 
 	virtual void area_set_collision_mask(RID p_area, uint32_t p_mask);
-	virtual void area_set_layer_mask(RID p_area, uint32_t p_mask);
+	virtual void area_set_collision_layer(RID p_area, uint32_t p_layer);
 
 	virtual void area_set_monitorable(RID p_area, bool p_monitorable);
 
@@ -156,29 +164,31 @@ public:
 	virtual RID body_get_shape(RID p_body, int p_shape_idx) const;
 	virtual Transform body_get_shape_transform(RID p_body, int p_shape_idx) const;
 
-	virtual void body_set_shape_as_trigger(RID p_body, int p_shape_idx, bool p_enable);
-	virtual bool body_is_shape_set_as_trigger(RID p_body, int p_shape_idx) const;
+	virtual void body_set_shape_disabled(RID p_body, int p_shape_idx, bool p_disabled);
 
 	virtual void body_remove_shape(RID p_body, int p_shape_idx);
 	virtual void body_clear_shapes(RID p_body);
 
-	virtual void body_attach_object_instance_ID(RID p_body, uint32_t p_ID);
-	virtual uint32_t body_get_object_instance_ID(RID p_body) const;
+	virtual void body_attach_object_instance_id(RID p_body, uint32_t p_ID);
+	virtual uint32_t body_get_object_instance_id(RID p_body) const;
 
 	virtual void body_set_enable_continuous_collision_detection(RID p_body, bool p_enable);
 	virtual bool body_is_continuous_collision_detection_enabled(RID p_body) const;
 
-	virtual void body_set_layer_mask(RID p_body, uint32_t p_mask);
-	virtual uint32_t body_get_layer_mask(RID p_body, uint32_t p_mask) const;
+	virtual void body_set_collision_layer(RID p_body, uint32_t p_layer);
+	virtual uint32_t body_get_collision_layer(RID p_body) const;
 
 	virtual void body_set_collision_mask(RID p_body, uint32_t p_mask);
-	virtual uint32_t body_get_collision_mask(RID p_body, uint32_t p_mask) const;
+	virtual uint32_t body_get_collision_mask(RID p_body) const;
 
 	virtual void body_set_user_flags(RID p_body, uint32_t p_flags);
-	virtual uint32_t body_get_user_flags(RID p_body, uint32_t p_flags) const;
+	virtual uint32_t body_get_user_flags(RID p_body) const;
 
 	virtual void body_set_param(RID p_body, BodyParameter p_param, real_t p_value);
 	virtual real_t body_get_param(RID p_body, BodyParameter p_param) const;
+
+	virtual void body_set_kinematic_safe_margin(RID p_body, real_t p_margin);
+	virtual real_t body_get_kinematic_safe_margin(RID p_body) const;
 
 	virtual void body_set_state(RID p_body, BodyState p_state, const Variant &p_variant);
 	virtual Variant body_get_state(RID p_body, BodyState p_state) const;
@@ -193,15 +203,15 @@ public:
 	virtual void body_apply_torque_impulse(RID p_body, const Vector3 &p_impulse);
 	virtual void body_set_axis_velocity(RID p_body, const Vector3 &p_axis_velocity);
 
-	virtual void body_set_axis_lock(RID p_body, BodyAxisLock p_lock);
-	virtual BodyAxisLock body_get_axis_lock(RID p_body) const;
+	virtual void body_set_axis_lock(RID p_body, BodyAxis p_axis, bool p_lock);
+	virtual bool body_is_axis_locked(RID p_body, BodyAxis p_axis) const;
 
 	virtual void body_add_collision_exception(RID p_body, RID p_body_b);
 	virtual void body_remove_collision_exception(RID p_body, RID p_body_b);
 	virtual void body_get_collision_exceptions(RID p_body, List<RID> *p_exceptions);
 
-	virtual void body_set_contacts_reported_depth_treshold(RID p_body, real_t p_treshold);
-	virtual real_t body_get_contacts_reported_depth_treshold(RID p_body) const;
+	virtual void body_set_contacts_reported_depth_threshold(RID p_body, real_t p_threshold);
+	virtual real_t body_get_contacts_reported_depth_threshold(RID p_body) const;
 
 	virtual void body_set_omit_force_integration(RID p_body, bool p_omit);
 	virtual bool body_is_omitting_force_integration(RID p_body) const;
@@ -214,6 +224,11 @@ public:
 	virtual void body_set_ray_pickable(RID p_body, bool p_enable);
 	virtual bool body_is_ray_pickable(RID p_body) const;
 
+	virtual bool body_test_motion(RID p_body, const Transform &p_from, const Vector3 &p_motion, MotionResult *r_result = NULL);
+
+	// this function only works on physics process, errors and returns null otherwise
+	virtual PhysicsDirectBodyState *body_get_direct_state(RID p_body);
+
 	/* JOINT API */
 
 	virtual RID joint_create_pin(RID p_body_A, const Vector3 &p_local_A, RID p_body_B, const Vector3 &p_local_B);
@@ -221,11 +236,11 @@ public:
 	virtual void pin_joint_set_param(RID p_joint, PinJointParam p_param, real_t p_value);
 	virtual real_t pin_joint_get_param(RID p_joint, PinJointParam p_param) const;
 
-	virtual void pin_joint_set_local_A(RID p_joint, const Vector3 &p_A);
-	virtual Vector3 pin_joint_get_local_A(RID p_joint) const;
+	virtual void pin_joint_set_local_a(RID p_joint, const Vector3 &p_A);
+	virtual Vector3 pin_joint_get_local_a(RID p_joint) const;
 
-	virtual void pin_joint_set_local_B(RID p_joint, const Vector3 &p_B);
-	virtual Vector3 pin_joint_get_local_B(RID p_joint) const;
+	virtual void pin_joint_set_local_b(RID p_joint, const Vector3 &p_B);
+	virtual Vector3 pin_joint_get_local_b(RID p_joint) const;
 
 	virtual RID joint_create_hinge(RID p_body_A, const Transform &p_frame_A, RID p_body_B, const Transform &p_frame_B);
 	virtual RID joint_create_hinge_simple(RID p_body_A, const Vector3 &p_pivot_A, const Vector3 &p_axis_A, RID p_body_B, const Vector3 &p_pivot_B, const Vector3 &p_axis_B);
@@ -259,18 +274,6 @@ public:
 	virtual void joint_set_solver_priority(RID p_joint, int p_priority);
 	virtual int joint_get_solver_priority(RID p_joint) const;
 
-#if 0
-	virtual void joint_set_param(RID p_joint, JointParam p_param, real_t p_value);
-	virtual real_t joint_get_param(RID p_joint,JointParam p_param) const;
-
-	virtual RID pin_joint_create(const Vector3& p_pos,RID p_body_a,RID p_body_b=RID());
-	virtual RID groove_joint_create(const Vector3& p_a_groove1,const Vector3& p_a_groove2, const Vector3& p_b_anchor, RID p_body_a,RID p_body_b);
-	virtual RID damped_spring_joint_create(const Vector3& p_anchor_a,const Vector3& p_anchor_b,RID p_body_a,RID p_body_b=RID());
-	virtual void damped_string_joint_set_param(RID p_joint, DampedStringParam p_param, real_t p_value);
-	virtual real_t damped_string_joint_get_param(RID p_joint, DampedStringParam p_param) const;
-
-	virtual JointType joint_get_type(RID p_joint) const;
-#endif
 	/* MISC */
 
 	virtual void free(RID p_rid);

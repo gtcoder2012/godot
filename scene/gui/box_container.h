@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -70,8 +70,8 @@ class HBoxContainer : public BoxContainer {
 	GDCLASS(HBoxContainer, BoxContainer);
 
 public:
-	HBoxContainer()
-		: BoxContainer(false) {}
+	HBoxContainer() :
+			BoxContainer(false) {}
 };
 
 class MarginContainer;
@@ -82,8 +82,8 @@ class VBoxContainer : public BoxContainer {
 public:
 	MarginContainer *add_margin_child(const String &p_label, Control *p_control, bool p_expand = false);
 
-	VBoxContainer()
-		: BoxContainer(true) {}
+	VBoxContainer() :
+			BoxContainer(true) {}
 };
 
 VARIANT_ENUM_CAST(BoxContainer::AlignMode);

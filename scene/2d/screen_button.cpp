@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -112,7 +112,7 @@ void TouchScreenButton::_notification(int p_what) {
 
 			if (!is_inside_tree())
 				return;
-			if (!get_tree()->is_editor_hint() && !OS::get_singleton()->has_touchscreen_ui_hint() && visibility == VISIBILITY_TOUCHSCREEN_ONLY)
+			if (!Engine::get_singleton()->is_editor_hint() && !OS::get_singleton()->has_touchscreen_ui_hint() && visibility == VISIBILITY_TOUCHSCREEN_ONLY)
 				return;
 
 			if (finger_pressed != -1) {
@@ -129,11 +129,11 @@ void TouchScreenButton::_notification(int p_what) {
 
 			if (!shape_visible)
 				return;
-			if (!get_tree()->is_editor_hint() && !get_tree()->is_debugging_collisions_hint())
+			if (!Engine::get_singleton()->is_editor_hint() && !get_tree()->is_debugging_collisions_hint())
 				return;
 			if (shape.is_valid()) {
 				Color draw_col = get_tree()->get_debug_collisions_color();
-				Vector2 pos = shape_centered ? get_item_rect().size * 0.5f : Vector2();
+				Vector2 pos = shape_centered ? _edit_get_rect().size * 0.5f : Vector2();
 				draw_set_transform_matrix(get_canvas_transform().translated(pos));
 				shape->draw(get_canvas_item(), draw_col);
 			}
@@ -141,11 +141,11 @@ void TouchScreenButton::_notification(int p_what) {
 		} break;
 		case NOTIFICATION_ENTER_TREE: {
 
-			if (!get_tree()->is_editor_hint() && !OS::get_singleton()->has_touchscreen_ui_hint() && visibility == VISIBILITY_TOUCHSCREEN_ONLY)
+			if (!Engine::get_singleton()->is_editor_hint() && !OS::get_singleton()->has_touchscreen_ui_hint() && visibility == VISIBILITY_TOUCHSCREEN_ONLY)
 				return;
 			update();
 
-			if (!get_tree()->is_editor_hint())
+			if (!Engine::get_singleton()->is_editor_hint())
 				set_process_input(is_visible_in_tree());
 
 		} break;
@@ -154,7 +154,7 @@ void TouchScreenButton::_notification(int p_what) {
 				_release(true);
 		} break;
 		case NOTIFICATION_VISIBILITY_CHANGED: {
-			if (get_tree()->is_editor_hint())
+			if (Engine::get_singleton()->is_editor_hint())
 				break;
 			if (is_visible_in_tree()) {
 				set_process_input(true);
@@ -194,40 +194,27 @@ void TouchScreenButton::_input(const Ref<InputEvent> &p_event) {
 	if (p_event->get_device() != 0)
 		return;
 
+	ERR_FAIL_COND(!is_visible_in_tree());
+
+	const InputEventScreenTouch *st = Object::cast_to<InputEventScreenTouch>(*p_event);
+
 	if (passby_press) {
 
-		Ref<InputEventScreenTouch> st = p_event;
-		Ref<InputEventScreenTouch> sd = p_event;
+		const InputEventScreenDrag *sd = Object::cast_to<InputEventScreenDrag>(*p_event);
 
-		if (st.is_valid() && !st->is_pressed() && finger_pressed == st->get_index()) {
+		if (st && !st->is_pressed() && finger_pressed == st->get_index()) {
 
 			_release();
 		}
 
-		if ((st.is_valid() && st->is_pressed()) || sd.is_valid()) {
+		if ((st && st->is_pressed()) || sd) {
 
-			int index = st.is_valid() ? st->get_index() : sd->get_index();
-			Vector2 coord = st.is_valid() ? st->get_pos() : sd->get_pos();
+			int index = st ? st->get_index() : sd->get_index();
+			Point2 coord = st ? st->get_position() : sd->get_position();
 
 			if (finger_pressed == -1 || index == finger_pressed) {
 
-				coord = (get_global_transform_with_canvas()).affine_inverse().xform(coord);
-
-				bool touched = false;
-				if (bitmask.is_valid()) {
-
-					if (Rect2(Point2(), bitmask->get_size()).has_point(coord)) {
-
-						if (bitmask->get_bit(coord))
-							touched = true;
-					}
-				} else {
-
-					if (texture.is_valid())
-						touched = Rect2(Point2(), texture->get_size()).has_point(coord);
-				}
-
-				if (touched) {
+				if (_is_point_inside(coord)) {
 					if (finger_pressed == -1) {
 						_press(index);
 					}
@@ -241,47 +228,15 @@ void TouchScreenButton::_input(const Ref<InputEvent> &p_event) {
 
 	} else {
 
-		Ref<InputEventScreenTouch> st = p_event;
-
-		if (st.is_valid()) {
+		if (st) {
 
 			if (st->is_pressed()) {
-
-				if (!is_visible_in_tree())
-					return;
 
 				const bool can_press = finger_pressed == -1;
 				if (!can_press)
 					return; //already fingering
 
-				Point2 coord = (get_global_transform_with_canvas()).affine_inverse().xform(st->get_pos());
-				Rect2 item_rect = get_item_rect();
-
-				bool touched = false;
-				bool check_rect = true;
-				if (shape.is_valid()) {
-
-					check_rect = false;
-					Transform2D xform = shape_centered ? Transform2D().translated(get_item_rect().size * 0.5f) : Transform2D();
-					touched = shape->collide(xform, unit_rect, Transform2D(0, coord + Vector2(0.5, 0.5)));
-				}
-
-				if (bitmask.is_valid()) {
-
-					check_rect = false;
-					if (!touched && Rect2(Point2(), bitmask->get_size()).has_point(coord)) {
-
-						if (bitmask->get_bit(coord))
-							touched = true;
-					}
-				}
-
-				if (!touched && check_rect) {
-					if (!texture.is_null())
-						touched = item_rect.has_point(coord);
-				}
-
-				if (touched) {
+				if (_is_point_inside(st->get_position())) {
 					_press(st->get_index());
 				}
 			} else {
@@ -291,6 +246,39 @@ void TouchScreenButton::_input(const Ref<InputEvent> &p_event) {
 			}
 		}
 	}
+}
+
+bool TouchScreenButton::_is_point_inside(const Point2 &p_point) {
+
+	Point2 coord = (get_global_transform_with_canvas()).affine_inverse().xform(p_point);
+	Rect2 item_rect = _edit_get_rect();
+
+	bool touched = false;
+	bool check_rect = true;
+
+	if (shape.is_valid()) {
+
+		check_rect = false;
+		Transform2D xform = shape_centered ? Transform2D().translated(item_rect.size * 0.5f) : Transform2D();
+		touched = shape->collide(xform, unit_rect, Transform2D(0, coord + Vector2(0.5, 0.5)));
+	}
+
+	if (bitmask.is_valid()) {
+
+		check_rect = false;
+		if (!touched && Rect2(Point2(), bitmask->get_size()).has_point(coord)) {
+
+			if (bitmask->get_bit(coord))
+				touched = true;
+		}
+	}
+
+	if (!touched && check_rect) {
+		if (texture.is_valid())
+			touched = item_rect.has_point(coord);
+	}
+
+	return touched;
 }
 
 void TouchScreenButton::_press(int p_finger_pressed) {
@@ -334,13 +322,13 @@ void TouchScreenButton::_release(bool p_exiting_tree) {
 	}
 }
 
-Rect2 TouchScreenButton::get_item_rect() const {
+Rect2 TouchScreenButton::_edit_get_rect() const {
 
 	if (texture.is_null())
 		return Rect2(0, 0, 1, 1);
 	/*
 	if (texture.is_null())
-		return CanvasItem::get_item_rect();
+		return CanvasItem::_edit_get_rect();
 	*/
 
 	return Rect2(Size2(), texture->get_size());
@@ -411,6 +399,9 @@ void TouchScreenButton::_bind_methods() {
 
 	ADD_SIGNAL(MethodInfo("pressed"));
 	ADD_SIGNAL(MethodInfo("released"));
+
+	BIND_ENUM_CONSTANT(VISIBILITY_ALWAYS);
+	BIND_ENUM_CONSTANT(VISIBILITY_TOUCHSCREEN_ONLY);
 }
 
 TouchScreenButton::TouchScreenButton() {

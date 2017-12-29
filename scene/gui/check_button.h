@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -39,6 +39,8 @@ class CheckButton : public Button {
 	GDCLASS(CheckButton, Button);
 
 protected:
+	Size2 get_icon_size() const;
+	virtual Size2 get_minimum_size() const;
 	void _notification(int p_what);
 
 public:

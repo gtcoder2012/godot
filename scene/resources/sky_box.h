@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,13 +30,16 @@
 #ifndef Sky_H
 #define Sky_H
 
+#include "os/thread.h"
 #include "scene/resources/texture.h"
-
 class Sky : public Resource {
 	GDCLASS(Sky, Resource);
 
 public:
 	enum RadianceSize {
+		RADIANCE_SIZE_32,
+		RADIANCE_SIZE_64,
+		RADIANCE_SIZE_128,
 		RADIANCE_SIZE_256,
 		RADIANCE_SIZE_512,
 		RADIANCE_SIZE_1024,
@@ -62,17 +65,6 @@ VARIANT_ENUM_CAST(Sky::RadianceSize)
 class PanoramaSky : public Sky {
 	GDCLASS(PanoramaSky, Sky);
 
-public:
-	enum ImagePath {
-		IMAGE_PATH_NEGATIVE_X,
-		IMAGE_PATH_POSITIVE_X,
-		IMAGE_PATH_NEGATIVE_Y,
-		IMAGE_PATH_POSITIVE_Y,
-		IMAGE_PATH_NEGATIVE_Z,
-		IMAGE_PATH_POSITIVE_Z,
-		IMAGE_PATH_MAX
-	};
-
 private:
 	RID sky;
 	Ref<Texture> panorama;
@@ -91,6 +83,116 @@ public:
 	~PanoramaSky();
 };
 
-VARIANT_ENUM_CAST(PanoramaSky::ImagePath)
+class ProceduralSky : public Sky {
+	GDCLASS(ProceduralSky, Sky);
+
+public:
+	enum TextureSize {
+		TEXTURE_SIZE_256,
+		TEXTURE_SIZE_512,
+		TEXTURE_SIZE_1024,
+		TEXTURE_SIZE_2048,
+		TEXTURE_SIZE_4096,
+		TEXTURE_SIZE_MAX
+	};
+
+private:
+	Thread *sky_thread;
+	Color sky_top_color;
+	Color sky_horizon_color;
+	float sky_curve;
+	float sky_energy;
+
+	Color ground_bottom_color;
+	Color ground_horizon_color;
+	float ground_curve;
+	float ground_energy;
+
+	Color sun_color;
+	float sun_latitude;
+	float sun_longitude;
+	float sun_angle_min;
+	float sun_angle_max;
+	float sun_curve;
+	float sun_energy;
+
+	TextureSize texture_size;
+
+	RID sky;
+	RID texture;
+
+	bool update_queued;
+	bool regen_queued;
+
+	bool first_time;
+
+	void _thread_done(const Ref<Image> &p_image);
+	static void _thread_function(void *p_ud);
+
+protected:
+	static void _bind_methods();
+	virtual void _radiance_changed();
+
+	Ref<Image> _generate_sky();
+	void _update_sky();
+
+	void _queue_update();
+
+public:
+	void set_sky_top_color(const Color &p_sky_top);
+	Color get_sky_top_color() const;
+
+	void set_sky_horizon_color(const Color &p_sky_horizon);
+	Color get_sky_horizon_color() const;
+
+	void set_sky_curve(float p_curve);
+	float get_sky_curve() const;
+
+	void set_sky_energy(float p_energy);
+	float get_sky_energy() const;
+
+	void set_ground_bottom_color(const Color &p_ground_bottom);
+	Color get_ground_bottom_color() const;
+
+	void set_ground_horizon_color(const Color &p_ground_horizon);
+	Color get_ground_horizon_color() const;
+
+	void set_ground_curve(float p_curve);
+	float get_ground_curve() const;
+
+	void set_ground_energy(float p_energy);
+	float get_ground_energy() const;
+
+	void set_sun_color(const Color &p_sun);
+	Color get_sun_color() const;
+
+	void set_sun_latitude(float p_angle);
+	float get_sun_latitude() const;
+
+	void set_sun_longitude(float p_angle);
+	float get_sun_longitude() const;
+
+	void set_sun_angle_min(float p_angle);
+	float get_sun_angle_min() const;
+
+	void set_sun_angle_max(float p_angle);
+	float get_sun_angle_max() const;
+
+	void set_sun_curve(float p_curve);
+	float get_sun_curve() const;
+
+	void set_sun_energy(float p_energy);
+	float get_sun_energy() const;
+
+	void set_texture_size(TextureSize p_size);
+	TextureSize get_texture_size() const;
+
+	virtual RID get_rid() const;
+
+	ProceduralSky();
+	~ProceduralSky();
+};
+
+VARIANT_ENUM_CAST(ProceduralSky::TextureSize)
 
 #endif // Sky_H

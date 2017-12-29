@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -52,13 +52,13 @@ protected:
 	static void _bind_methods();
 
 public:
+	Rect2 _edit_get_rect() const;
+
 	void set_rect(const Rect2 &p_rect);
 	Rect2 get_rect() const;
 
 	void set_copy_mode(CopyMode p_mode);
 	CopyMode get_copy_mode() const;
-
-	Rect2 get_item_rect() const;
 
 	BackBufferCopy();
 	~BackBufferCopy();

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -57,7 +57,7 @@ StyleBoxEditor::StyleBoxEditor() {
 
 	panel = memnew(Panel);
 	add_child(panel);
-	panel->set_area_as_parent_rect();
+	panel->set_anchors_and_margins_preset(Control::PRESET_WIDE);
 
 	Label *l = memnew(Label);
 	l->set_text(TTR("StyleBox Preview:"));
@@ -72,8 +72,8 @@ StyleBoxEditor::StyleBoxEditor() {
 
 void StyleBoxEditorPlugin::edit(Object *p_node) {
 
-	if (p_node && p_node->cast_to<StyleBox>()) {
-		stylebox_editor->edit(p_node->cast_to<StyleBox>());
+	if (Object::cast_to<StyleBox>(p_node)) {
+		stylebox_editor->edit(Object::cast_to<StyleBox>(p_node));
 		stylebox_editor->show();
 	} else
 		stylebox_editor->hide();
@@ -103,6 +103,6 @@ StyleBoxEditorPlugin::StyleBoxEditorPlugin(EditorNode *p_node) {
 	stylebox_editor->set_custom_minimum_size(Size2(0, 250));
 
 	//p_node->get_viewport()->add_child(stylebox_editor);
-	button = p_node->add_bottom_panel_item("StyleBox", stylebox_editor);
+	button = p_node->add_bottom_panel_item(TTR("StyleBox"), stylebox_editor);
 	button->hide();
 }

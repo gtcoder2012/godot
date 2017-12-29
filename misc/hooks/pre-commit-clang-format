@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# git pre-commit hook that runs an clang-format stylecheck.
+# git pre-commit hook that runs a clang-format stylecheck.
 # Features:
 #  - abort commit when commit does not comply with the style guidelines
 #  - create a patch of the proposed style changes
@@ -31,7 +31,7 @@ PARSE_EXTS=true
 
 # File types to parse. Only effective when PARSE_EXTS is true.
 # FILE_EXTS=".c .h .cpp .hpp"
-FILE_EXTS=".c .h .cpp .hpp .cc .hh .cxx .m .mm .inc"
+FILE_EXTS=".c .h .cpp .hpp .cc .hh .cxx .m .mm .inc *.java"
 
 # Use pygmentize instead of cat to parse diff with highlighting.
 # Install it with `pip install pygments` (Linux) or `easy_install Pygments` (Mac)
@@ -97,7 +97,7 @@ do
     # The sed call is necessary to transform the patch from
     #    --- $file timestamp
     #    +++ - timestamp
-    # to both lines working on the same file and having a a/ and b/ prefix.
+    # to both lines working on the same file and having a/ and b/ prefix.
     # Else it can not be applied with 'git apply'.
     "$CLANG_FORMAT" -style=file "$file" | \
         diff -u "$file" - | \

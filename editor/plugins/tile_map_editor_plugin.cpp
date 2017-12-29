@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -39,6 +39,14 @@ void TileMapEditor::_notification(int p_what) {
 
 	switch (p_what) {
 
+		case NOTIFICATION_PROCESS: {
+
+			if (bucket_queue.size() && canvas_item_editor) {
+				canvas_item_editor->update();
+			}
+
+		} break;
+
 		case NOTIFICATION_ENTER_TREE: {
 
 			transp->set_icon(get_icon("Transpose", "EditorIcons"));
@@ -49,8 +57,17 @@ void TileMapEditor::_notification(int p_what) {
 			rotate_180->set_icon(get_icon("Rotate180", "EditorIcons"));
 			rotate_270->set_icon(get_icon("Rotate270", "EditorIcons"));
 
+			search_box->add_icon_override("right_icon", get_icon("Search", "EditorIcons"));
+
 		} break;
+
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
+
+			bool new_show_tile_info = EditorSettings::get_singleton()->get("editors/tile_map/show_tile_info_on_hover");
+			if (new_show_tile_info != show_tile_info) {
+				show_tile_info = new_show_tile_info;
+				tile_info->set_visible(show_tile_info);
+			}
 
 			if (is_visible_in_tree()) {
 				_update_palette();
@@ -63,6 +80,14 @@ void TileMapEditor::_menu_option(int p_option) {
 
 	switch (p_option) {
 
+		case OPTION_PAINTING: {
+			// NOTE: We do not set tool = TOOL_PAINTING as this begins painting
+			// immediately without pressing the left mouse button first
+			tool = TOOL_NONE;
+
+			canvas_item_editor->update();
+
+		} break;
 		case OPTION_BUCKET: {
 
 			tool = TOOL_BUCKET;
@@ -97,13 +122,15 @@ void TileMapEditor::_menu_option(int p_option) {
 			if (!selection_active)
 				return;
 
-			undo_redo->create_action("Erase Selection");
-			for (int i = rectangle.pos.y; i <= rectangle.pos.y + rectangle.size.y; i++) {
-				for (int j = rectangle.pos.x; j <= rectangle.pos.x + rectangle.size.x; j++) {
+			undo_redo->create_action(TTR("Erase Selection"));
+			undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
+			for (int i = rectangle.position.y; i <= rectangle.position.y + rectangle.size.y; i++) {
+				for (int j = rectangle.position.x; j <= rectangle.position.x + rectangle.size.x; j++) {
 
-					_set_cell(Point2i(j, i), TileMap::INVALID_CELL, false, false, false, true);
+					_set_cell(Point2i(j, i), TileMap::INVALID_CELL, false, false, false);
 				}
 			}
+			undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 			undo_redo->commit_action();
 
 			selection_active = false;
@@ -146,7 +173,7 @@ void TileMapEditor::set_selected_tile(int p_tile) {
 	}
 }
 
-void TileMapEditor::_set_cell(const Point2i &p_pos, int p_value, bool p_flip_h, bool p_flip_v, bool p_transpose, bool p_with_undo) {
+void TileMapEditor::_set_cell(const Point2i &p_pos, int p_value, bool p_flip_h, bool p_flip_v, bool p_transpose) {
 
 	ERR_FAIL_COND(!node);
 
@@ -159,14 +186,8 @@ void TileMapEditor::_set_cell(const Point2i &p_pos, int p_value, bool p_flip_h, 
 	if (p_value == prev_val && p_flip_h == prev_flip_h && p_flip_v == prev_flip_v && p_transpose == prev_transpose)
 		return; //check that it's actually different
 
-	if (p_with_undo) {
-
-		undo_redo->add_do_method(node, "set_cellv", Point2(p_pos), p_value, p_flip_h, p_flip_v, p_transpose);
-		undo_redo->add_undo_method(node, "set_cellv", Point2(p_pos), prev_val, prev_flip_h, prev_flip_v, prev_transpose);
-	} else {
-
-		node->set_cell(p_pos.x, p_pos.y, p_value, p_flip_h, p_flip_v, p_transpose);
-	}
+	node->set_cell(p_pos.x, p_pos.y, p_value, p_flip_h, p_flip_v, p_transpose);
+	node->update_bitmask_area(Point2(p_pos));
 }
 
 void TileMapEditor::_text_entered(const String &p_text) {
@@ -204,7 +225,7 @@ struct _PaletteEntry {
 		return name < p_rhs.name;
 	}
 };
-}
+} // namespace
 
 void TileMapEditor::_update_palette() {
 
@@ -281,6 +302,12 @@ void TileMapEditor::_update_palette() {
 		if (tex.is_valid()) {
 			Rect2 region = tileset->tile_get_region(entries[i].id);
 
+			if (tileset->tile_get_is_autotile(entries[i].id)) {
+				int spacing = tileset->autotile_get_spacing(entries[i].id);
+				region.size = tileset->autotile_get_size(entries[i].id);
+				region.position += (region.size + Vector2(spacing, spacing)) * tileset->autotile_get_icon_coordinate(entries[i].id);
+			}
+
 			if (!region.has_no_area())
 				palette->set_item_icon_region(palette->get_item_count() - 1, region);
 
@@ -330,10 +357,16 @@ PoolVector<Vector2> TileMapEditor::_bucket_fill(const Point2i &p_start, bool era
 
 		if (id == TileMap::INVALID_CELL)
 			return PoolVector<Vector2>();
+	} else if (prev_id == TileMap::INVALID_CELL) {
+		return PoolVector<Vector2>();
 	}
 
-	Rect2i r = node->get_item_rect();
-	r.pos = r.pos / node->get_cell_size();
+	if (id == prev_id) {
+		return PoolVector<Vector2>();
+	}
+
+	Rect2i r = node->_edit_get_rect();
+	r.position = r.position / node->get_cell_size();
 	r.size = r.size / node->get_cell_size();
 
 	int area = r.get_area();
@@ -349,7 +382,7 @@ PoolVector<Vector2> TileMapEditor::_bucket_fill(const Point2i &p_start, bool era
 			invalidate_cache = true;
 		}
 		// Tile ID changed or position wasn't visited by the previous fill
-		int loc = (p_start.x - r.get_pos().x) + (p_start.y - r.get_pos().y) * r.get_size().x;
+		int loc = (p_start.x - r.position.x) + (p_start.y - r.position.y) * r.get_size().x;
 		if (prev_id != bucket_cache_tile || !bucket_cache_visited[loc]) {
 			invalidate_cache = true;
 		}
@@ -359,20 +392,27 @@ PoolVector<Vector2> TileMapEditor::_bucket_fill(const Point2i &p_start, bool era
 			bucket_cache = PoolVector<Vector2>();
 			bucket_cache_tile = prev_id;
 			bucket_cache_rect = r;
-		} else {
-			return bucket_cache;
+			bucket_queue.clear();
 		}
 	}
 
 	PoolVector<Vector2> points;
+	Vector<Vector2> non_preview_cache;
+	int count = 0;
+	int limit = 0;
 
-	List<Point2i> queue;
-	queue.push_back(p_start);
+	if (preview) {
+		limit = 1024;
+	} else {
+		bucket_queue.clear();
+	}
 
-	while (queue.size()) {
+	bucket_queue.push_back(p_start);
 
-		Point2i n = queue.front()->get();
-		queue.pop_front();
+	while (bucket_queue.size()) {
+
+		Point2i n = bucket_queue.front()->get();
+		bucket_queue.pop_front();
 
 		if (!r.has_point(n))
 			continue;
@@ -380,20 +420,27 @@ PoolVector<Vector2> TileMapEditor::_bucket_fill(const Point2i &p_start, bool era
 		if (node->get_cell(n.x, n.y) == prev_id) {
 
 			if (preview) {
-				int loc = (n.x - r.get_pos().x) + (n.y - r.get_pos().y) * r.get_size().x;
+				int loc = (n.x - r.position.x) + (n.y - r.position.y) * r.get_size().x;
 				if (bucket_cache_visited[loc])
 					continue;
 				bucket_cache_visited[loc] = true;
 				bucket_cache.push_back(n);
 			} else {
-				node->set_cellv(n, id, flip_h, flip_v, transpose);
+				if (non_preview_cache.find(n) >= 0)
+					continue;
 				points.push_back(n);
+				non_preview_cache.push_back(n);
 			}
 
-			queue.push_back(n + Point2i(0, 1));
-			queue.push_back(n + Point2i(0, -1));
-			queue.push_back(n + Point2i(1, 0));
-			queue.push_back(n + Point2i(-1, 0));
+			bucket_queue.push_back(Point2i(n.x, n.y + 1));
+			bucket_queue.push_back(Point2i(n.x, n.y - 1));
+			bucket_queue.push_back(Point2i(n.x + 1, n.y));
+			bucket_queue.push_back(Point2i(n.x - 1, n.y));
+			count++;
+		}
+
+		if (limit > 0 && count >= limit) {
+			break;
 		}
 	}
 
@@ -411,9 +458,10 @@ void TileMapEditor::_fill_points(const PoolVector<Vector2> p_points, const Dicti
 	bool tr = p_op["transpose"];
 
 	for (int i = 0; i < len; i++) {
-
 		_set_cell(pr[i], id, xf, yf, tr);
+		node->make_bitmask_area_dirty(pr[i]);
 	}
+	node->update_dirty_bitmask();
 }
 
 void TileMapEditor::_erase_points(const PoolVector<Vector2> p_points) {
@@ -441,7 +489,7 @@ void TileMapEditor::_select(const Point2i &p_from, const Point2i &p_to) {
 		SWAP(begin.y, end.y);
 	}
 
-	rectangle.pos = begin;
+	rectangle.position = begin;
 	rectangle.size = end - begin;
 
 	canvas_item_editor->update();
@@ -457,10 +505,15 @@ void TileMapEditor::_draw_cell(int p_cell, const Point2i &p_point, bool p_flip_h
 	Vector2 tile_ofs = node->get_tileset()->tile_get_texture_offset(p_cell);
 
 	Rect2 r = node->get_tileset()->tile_get_region(p_cell);
+	if (node->get_tileset()->tile_get_is_autotile(p_cell)) {
+		int spacing = node->get_tileset()->autotile_get_spacing(p_cell);
+		r.size = node->get_tileset()->autotile_get_size(p_cell);
+		r.position += (r.size + Vector2(spacing, spacing)) * node->get_tileset()->autotile_get_icon_coordinate(p_cell);
+	}
 	Size2 sc = p_xform.get_scale();
 
 	Rect2 rect = Rect2();
-	rect.pos = node->map_to_world(p_point) + node->get_cell_draw_offset();
+	rect.position = node->map_to_world(p_point) + node->get_cell_draw_offset();
 
 	if (r.has_no_area()) {
 		rect.size = t->get_size();
@@ -490,42 +543,41 @@ void TileMapEditor::_draw_cell(int p_cell, const Point2i &p_point, bool p_flip_h
 
 	if (node->get_tile_origin() == TileMap::TILE_ORIGIN_TOP_LEFT) {
 
-		rect.pos += tile_ofs;
+		rect.position += tile_ofs;
 	} else if (node->get_tile_origin() == TileMap::TILE_ORIGIN_BOTTOM_LEFT) {
 		Size2 cell_size = node->get_cell_size();
 
-		rect.pos += tile_ofs;
+		rect.position += tile_ofs;
 
 		if (p_transpose) {
 			if (p_flip_h)
-				rect.pos.x -= cell_size.x;
+				rect.position.x -= cell_size.x;
 			else
-				rect.pos.x += cell_size.x;
+				rect.position.x += cell_size.x;
 		} else {
 			if (p_flip_v)
-				rect.pos.y -= cell_size.y;
+				rect.position.y -= cell_size.y;
 			else
-				rect.pos.y += cell_size.y;
+				rect.position.y += cell_size.y;
 		}
 
 	} else if (node->get_tile_origin() == TileMap::TILE_ORIGIN_CENTER) {
-		rect.pos += node->get_cell_size() / 2;
-		Vector2 s = r.size;
+		Size2 cell_size = node->get_cell_size();
 
-		Vector2 center = (s / 2) - tile_ofs;
+		rect.position += tile_ofs;
 
 		if (p_flip_h)
-			rect.pos.x -= s.x - center.x;
+			rect.position.x -= cell_size.x / 2;
 		else
-			rect.pos.x -= center.x;
+			rect.position.x += cell_size.x / 2;
 
 		if (p_flip_v)
-			rect.pos.y -= s.y - center.y;
+			rect.position.y -= cell_size.y / 2;
 		else
-			rect.pos.y -= center.y;
+			rect.position.y += cell_size.y / 2;
 	}
 
-	rect.pos = p_xform.xform(rect.pos);
+	rect.position = p_xform.xform(rect.position);
 	rect.size *= sc;
 
 	if (r.has_no_area())
@@ -539,7 +591,6 @@ void TileMapEditor::_draw_fill_preview(int p_cell, const Point2i &p_point, bool 
 	PoolVector<Vector2> points = _bucket_fill(p_point, false, true);
 	PoolVector<Vector2>::Read pr = points.read();
 	int len = points.size();
-	int time_after = OS::get_singleton()->get_ticks_msec();
 
 	for (int i = 0; i < len; ++i) {
 		_draw_cell(p_cell, pr[i], p_flip_h, p_flip_v, p_transpose, p_xform);
@@ -560,9 +611,9 @@ void TileMapEditor::_update_copydata() {
 	if (!selection_active)
 		return;
 
-	for (int i = rectangle.pos.y; i <= rectangle.pos.y + rectangle.size.y; i++) {
+	for (int i = rectangle.position.y; i <= rectangle.position.y + rectangle.size.y; i++) {
 
-		for (int j = rectangle.pos.x; j <= rectangle.pos.x + rectangle.size.x; j++) {
+		for (int j = rectangle.position.x; j <= rectangle.position.x + rectangle.size.x; j++) {
 
 			TileData tcd;
 
@@ -676,10 +727,8 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 						tool = TOOL_PAINTING;
 
-						paint_undo.clear();
-						paint_undo[over_tile] = _get_op_from_cell(over_tile);
-
-						_set_cell(over_tile, id, flip_h, flip_v, transpose);
+						undo_redo->create_action(TTR("Paint TileMap"));
+						undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
 					}
 				} else if (tool == TOOL_PICKING) {
 
@@ -693,22 +742,17 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 				return true;
 
 			} else {
-
+				// Mousebutton was released
 				if (tool != TOOL_NONE) {
 
 					if (tool == TOOL_PAINTING) {
 
 						int id = get_selected_tile();
 
-						if (id != TileMap::INVALID_CELL && paint_undo.size()) {
+						if (id != TileMap::INVALID_CELL) {
 
-							undo_redo->create_action(TTR("Paint TileMap"));
-							for (Map<Point2i, CellOp>::Element *E = paint_undo.front(); E; E = E->next()) {
-
-								Point2 p = E->key();
-								undo_redo->add_do_method(node, "set_cellv", p, id, flip_h, flip_v, transpose);
-								undo_redo->add_undo_method(node, "set_cellv", p, E->get().idx, E->get().xf, E->get().yf, E->get().tr);
-							}
+							_set_cell(over_tile, id, flip_h, flip_v, transpose);
+							undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 							undo_redo->commit_action();
 
 							paint_undo.clear();
@@ -719,11 +763,13 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 						if (id != TileMap::INVALID_CELL) {
 
-							undo_redo->create_action("Line Draw");
+							undo_redo->create_action(TTR("Line Draw"));
+							undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
 							for (Map<Point2i, CellOp>::Element *E = paint_undo.front(); E; E = E->next()) {
 
-								_set_cell(E->key(), id, flip_h, flip_v, transpose, true);
+								_set_cell(E->key(), id, flip_h, flip_v, transpose);
 							}
+							undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 							undo_redo->commit_action();
 
 							paint_undo.clear();
@@ -736,26 +782,30 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 						if (id != TileMap::INVALID_CELL) {
 
-							undo_redo->create_action("Rectangle Paint");
-							for (int i = rectangle.pos.y; i <= rectangle.pos.y + rectangle.size.y; i++) {
-								for (int j = rectangle.pos.x; j <= rectangle.pos.x + rectangle.size.x; j++) {
+							undo_redo->create_action(TTR("Rectangle Paint"));
+							undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
+							for (int i = rectangle.position.y; i <= rectangle.position.y + rectangle.size.y; i++) {
+								for (int j = rectangle.position.x; j <= rectangle.position.x + rectangle.size.x; j++) {
 
-									_set_cell(Point2i(j, i), id, flip_h, flip_v, transpose, true);
+									_set_cell(Point2i(j, i), id, flip_h, flip_v, transpose);
 								}
 							}
+							undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 							undo_redo->commit_action();
 
 							canvas_item_editor->update();
 						}
 					} else if (tool == TOOL_DUPLICATING) {
 
-						Point2 ofs = over_tile - rectangle.pos;
+						Point2 ofs = over_tile - rectangle.position;
 
 						undo_redo->create_action(TTR("Duplicate"));
+						undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
 						for (List<TileData>::Element *E = copydata.front(); E; E = E->next()) {
 
-							_set_cell(E->get().pos + ofs, E->get().cell, E->get().flip_h, E->get().flip_v, E->get().transpose, true);
+							_set_cell(E->get().pos + ofs, E->get().cell, E->get().flip_h, E->get().flip_v, E->get().transpose);
 						}
+						undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 						undo_redo->commit_action();
 
 						copydata.clear();
@@ -768,16 +818,13 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 					} else if (tool == TOOL_BUCKET) {
 
-						Dictionary pop;
-						pop["id"] = node->get_cell(over_tile.x, over_tile.y);
-						pop["flip_h"] = node->is_cell_x_flipped(over_tile.x, over_tile.y);
-						pop["flip_v"] = node->is_cell_y_flipped(over_tile.x, over_tile.y);
-						pop["transpose"] = node->is_cell_transposed(over_tile.x, over_tile.y);
-
 						PoolVector<Vector2> points = _bucket_fill(over_tile);
 
 						if (points.size() == 0)
 							return false;
+
+						undo_redo->create_action(TTR("Bucket Fill"));
+						undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
 
 						Dictionary op;
 						op["id"] = get_selected_tile();
@@ -785,12 +832,13 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 						op["flip_v"] = flip_v;
 						op["transpose"] = transpose;
 
-						undo_redo->create_action("Bucket Fill");
+						_fill_points(points, op);
 
-						undo_redo->add_do_method(this, "_fill_points", points, op);
-						undo_redo->add_undo_method(this, "_fill_points", points, pop);
-
+						undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
 						undo_redo->commit_action();
+
+						// We want to keep the bucket-tool active
+						return true;
 					}
 
 					tool = TOOL_NONE;
@@ -826,7 +874,10 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 					paint_undo.clear();
 
-					Point2 local = node->world_to_map(xform_inv.xform(mb->get_pos()));
+					Point2 local = node->world_to_map(xform_inv.xform(mb->get_position()));
+
+					undo_redo->create_action(TTR("Erase TileMap"));
+					undo_redo->add_undo_method(node, "set", "tile_data", node->get("tile_data"));
 
 					if (mb->get_shift()) {
 
@@ -841,7 +892,6 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 						tool = TOOL_ERASING;
 
-						paint_undo[local] = _get_op_from_cell(local);
 						_set_cell(local, TileMap::INVALID_CELL);
 					}
 
@@ -851,18 +901,8 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 			} else {
 				if (tool == TOOL_ERASING || tool == TOOL_RECTANGLE_ERASE || tool == TOOL_LINE_ERASE) {
 
-					if (paint_undo.size()) {
-						undo_redo->create_action(TTR("Erase TileMap"));
-						for (Map<Point2i, CellOp>::Element *E = paint_undo.front(); E; E = E->next()) {
-
-							Point2 p = E->key();
-							undo_redo->add_do_method(node, "set_cellv", p, TileMap::INVALID_CELL, false, false, false);
-							undo_redo->add_undo_method(node, "set_cellv", p, E->get().idx, E->get().xf, E->get().yf, E->get().tr);
-						}
-
-						undo_redo->commit_action();
-						paint_undo.clear();
-					}
+					undo_redo->add_do_method(node, "set", "tile_data", node->get("tile_data"));
+					undo_redo->commit_action();
 
 					if (tool == TOOL_RECTANGLE_ERASE || tool == TOOL_LINE_ERASE) {
 						canvas_item_editor->update();
@@ -900,7 +940,8 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 	if (mm.is_valid()) {
 
-		Point2i new_over_tile = node->world_to_map(xform_inv.xform(mm->get_pos()));
+		Point2i new_over_tile = node->world_to_map(xform_inv.xform(mm->get_position()));
+		Point2i old_over_tile = over_tile;
 
 		if (new_over_tile != over_tile) {
 
@@ -908,26 +949,50 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 			canvas_item_editor->update();
 		}
 
-		int tile_under = node->get_cell(over_tile.x, over_tile.y);
-		String tile_name = "none";
+		if (show_tile_info) {
+			int tile_under = node->get_cell(over_tile.x, over_tile.y);
+			String tile_name = "none";
 
-		if (node->get_tileset()->has_tile(tile_under))
-			tile_name = node->get_tileset()->tile_get_name(tile_under);
-		tile_info->set_text(String::num(over_tile.x) + ", " + String::num(over_tile.y) + " [" + tile_name + "]");
+			if (node->get_tileset()->has_tile(tile_under))
+				tile_name = node->get_tileset()->tile_get_name(tile_under);
+			tile_info->set_text(String::num(over_tile.x) + ", " + String::num(over_tile.y) + " [" + tile_name + "]");
+		}
 
 		if (tool == TOOL_PAINTING) {
 
-			int id = get_selected_tile();
-			if (id != TileMap::INVALID_CELL) {
+			// Paint using bresenham line to prevent holes in painting if the user moves fast
 
-				if (!paint_undo.has(over_tile)) {
-					paint_undo[over_tile] = _get_op_from_cell(over_tile);
+			Vector<Point2i> points = line(old_over_tile.x, over_tile.x, old_over_tile.y, over_tile.y);
+			int id = get_selected_tile();
+
+			for (int i = 0; i < points.size(); ++i) {
+
+				Point2i pos = points[i];
+
+				if (!paint_undo.has(pos)) {
+					paint_undo[pos] = _get_op_from_cell(pos);
 				}
 
-				_set_cell(over_tile, id, flip_h, flip_v, transpose);
-
-				return true;
+				_set_cell(pos, id, flip_h, flip_v, transpose);
 			}
+
+			return true;
+		}
+
+		if (tool == TOOL_ERASING) {
+
+			// erase using bresenham line to prevent holes in painting if the user moves fast
+
+			Vector<Point2i> points = line(old_over_tile.x, over_tile.x, old_over_tile.y, over_tile.y);
+
+			for (int i = 0; i < points.size(); ++i) {
+
+				Point2i pos = points[i];
+
+				_set_cell(pos, TileMap::INVALID_CELL);
+			}
+
+			return true;
 		}
 
 		if (tool == TOOL_SELECTING) {
@@ -985,8 +1050,8 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 
 				paint_undo.clear();
 
-				for (int i = rectangle.pos.y; i <= rectangle.pos.y + rectangle.size.y; i++) {
-					for (int j = rectangle.pos.x; j <= rectangle.pos.x + rectangle.size.x; j++) {
+				for (int i = rectangle.position.y; i <= rectangle.position.y + rectangle.size.y; i++) {
+					for (int j = rectangle.position.x; j <= rectangle.position.x + rectangle.size.x; j++) {
 
 						Point2i tile = Point2i(j, i);
 						paint_undo[tile] = _get_op_from_cell(tile);
@@ -995,16 +1060,6 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 					}
 				}
 			}
-
-			return true;
-		}
-		if (tool == TOOL_ERASING) {
-
-			if (!paint_undo.has(over_tile)) {
-				paint_undo[over_tile] = _get_op_from_cell(over_tile);
-			}
-
-			_set_cell(over_tile, TileMap::INVALID_CELL);
 
 			return true;
 		}
@@ -1034,9 +1089,25 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 			return true;
 		}
 
-		if (tool != TOOL_NONE || !mouse_over)
+		if (!mouse_over) {
+			// Editor shortcuts should not fire if mouse not in viewport
 			return false;
+		}
 
+		if (ED_IS_SHORTCUT("tile_map_editor/paint_tile", p_event)) {
+			// NOTE: We do not set tool = TOOL_PAINTING as this begins painting
+			// immediately without pressing the left mouse button first
+			tool = TOOL_NONE;
+			canvas_item_editor->update();
+
+			return true;
+		}
+		if (ED_IS_SHORTCUT("tile_map_editor/bucket_fill", p_event)) {
+			tool = TOOL_BUCKET;
+			canvas_item_editor->update();
+
+			return true;
+		}
 		if (ED_IS_SHORTCUT("tile_map_editor/erase_selection", p_event)) {
 			_menu_option(OPTION_ERASE_SELECTION);
 
@@ -1090,7 +1161,7 @@ bool TileMapEditor::forward_gui_input(const Ref<InputEvent> &p_event) {
 	return false;
 }
 
-void TileMapEditor::_canvas_draw() {
+void TileMapEditor::forward_draw_over_viewport(Control *p_overlay) {
 
 	if (!node)
 		return;
@@ -1103,7 +1174,7 @@ void TileMapEditor::_canvas_draw() {
 	Size2 screen_size = canvas_item_editor->get_size();
 	{
 		Rect2 aabb;
-		aabb.pos = node->world_to_map(xform_inv.xform(Vector2()));
+		aabb.position = node->world_to_map(xform_inv.xform(Vector2()));
 		aabb.expand_to(node->world_to_map(xform_inv.xform(Vector2(0, screen_size.height))));
 		aabb.expand_to(node->world_to_map(xform_inv.xform(Vector2(screen_size.width, 0))));
 		aabb.expand_to(node->world_to_map(xform_inv.xform(screen_size)));
@@ -1113,10 +1184,10 @@ void TileMapEditor::_canvas_draw() {
 
 			int max_lines = 2000; //avoid crash if size too smal
 
-			for (int i = (si.pos.x) - 1; i <= (si.pos.x + si.size.x); i++) {
+			for (int i = (si.position.x) - 1; i <= (si.position.x + si.size.x); i++) {
 
-				Vector2 from = xform.xform(node->map_to_world(Vector2(i, si.pos.y)));
-				Vector2 to = xform.xform(node->map_to_world(Vector2(i, si.pos.y + si.size.y + 1)));
+				Vector2 from = xform.xform(node->map_to_world(Vector2(i, si.position.y)));
+				Vector2 to = xform.xform(node->map_to_world(Vector2(i, si.position.y + si.size.y + 1)));
 
 				Color col = i == 0 ? Color(1, 0.8, 0.2, 0.5) : Color(1, 0.3, 0.1, 0.2);
 				canvas_item_editor->draw_line(from, to, col, 1);
@@ -1127,9 +1198,9 @@ void TileMapEditor::_canvas_draw() {
 
 			int max_lines = 10000; //avoid crash if size too smal
 
-			for (int i = (si.pos.x) - 1; i <= (si.pos.x + si.size.x); i++) {
+			for (int i = (si.position.x) - 1; i <= (si.position.x + si.size.x); i++) {
 
-				for (int j = (si.pos.y) - 1; j <= (si.pos.y + si.size.y); j++) {
+				for (int j = (si.position.y) - 1; j <= (si.position.y + si.size.y); j++) {
 
 					Vector2 ofs;
 					if (ABS(j) & 1) {
@@ -1151,10 +1222,10 @@ void TileMapEditor::_canvas_draw() {
 
 		if (node->get_half_offset() != TileMap::HALF_OFFSET_Y) {
 
-			for (int i = (si.pos.y) - 1; i <= (si.pos.y + si.size.y); i++) {
+			for (int i = (si.position.y) - 1; i <= (si.position.y + si.size.y); i++) {
 
-				Vector2 from = xform.xform(node->map_to_world(Vector2(si.pos.x, i)));
-				Vector2 to = xform.xform(node->map_to_world(Vector2(si.pos.x + si.size.x + 1, i)));
+				Vector2 from = xform.xform(node->map_to_world(Vector2(si.position.x, i)));
+				Vector2 to = xform.xform(node->map_to_world(Vector2(si.position.x + si.size.x + 1, i)));
 
 				Color col = i == 0 ? Color(1, 0.8, 0.2, 0.5) : Color(1, 0.3, 0.1, 0.2);
 				canvas_item_editor->draw_line(from, to, col, 1);
@@ -1164,9 +1235,9 @@ void TileMapEditor::_canvas_draw() {
 			}
 		} else {
 
-			for (int i = (si.pos.y) - 1; i <= (si.pos.y + si.size.y); i++) {
+			for (int i = (si.position.y) - 1; i <= (si.position.y + si.size.y); i++) {
 
-				for (int j = (si.pos.x) - 1; j <= (si.pos.x + si.size.x); j++) {
+				for (int j = (si.position.x) - 1; j <= (si.position.x + si.size.x); j++) {
 
 					Vector2 ofs;
 					if (ABS(j) & 1) {
@@ -1188,10 +1259,10 @@ void TileMapEditor::_canvas_draw() {
 	if (selection_active) {
 
 		Vector<Vector2> points;
-		points.push_back(xform.xform(node->map_to_world((rectangle.pos))));
-		points.push_back(xform.xform(node->map_to_world((rectangle.pos + Point2(rectangle.size.x + 1, 0)))));
-		points.push_back(xform.xform(node->map_to_world((rectangle.pos + Point2(rectangle.size.x + 1, rectangle.size.y + 1)))));
-		points.push_back(xform.xform(node->map_to_world((rectangle.pos + Point2(0, rectangle.size.y + 1)))));
+		points.push_back(xform.xform(node->map_to_world((rectangle.position))));
+		points.push_back(xform.xform(node->map_to_world((rectangle.position + Point2(rectangle.size.x + 1, 0)))));
+		points.push_back(xform.xform(node->map_to_world((rectangle.position + Point2(rectangle.size.x + 1, rectangle.size.y + 1)))));
+		points.push_back(xform.xform(node->map_to_world((rectangle.position + Point2(0, rectangle.size.y + 1)))));
 
 		canvas_item_editor->draw_colored_polygon(points, Color(0.2, 0.8, 1, 0.4));
 	}
@@ -1248,8 +1319,8 @@ void TileMapEditor::_canvas_draw() {
 			if (id == TileMap::INVALID_CELL)
 				return;
 
-			for (int i = rectangle.pos.y; i <= rectangle.pos.y + rectangle.size.y; i++) {
-				for (int j = rectangle.pos.x; j <= rectangle.pos.x + rectangle.size.x; j++) {
+			for (int i = rectangle.position.y; i <= rectangle.position.y + rectangle.size.y; i++) {
+				for (int j = rectangle.position.x; j <= rectangle.position.x + rectangle.size.x; j++) {
 
 					_draw_cell(id, Point2i(j, i), flip_h, flip_v, transpose, xform);
 				}
@@ -1264,7 +1335,7 @@ void TileMapEditor::_canvas_draw() {
 			if (ts.is_null())
 				return;
 
-			Point2 ofs = over_tile - rectangle.pos;
+			Point2 ofs = over_tile - rectangle.position;
 
 			for (List<TileData>::Element *E = copydata.front(); E; E = E->next()) {
 
@@ -1277,13 +1348,13 @@ void TileMapEditor::_canvas_draw() {
 			}
 
 			Rect2i duplicate = rectangle;
-			duplicate.pos = over_tile;
+			duplicate.position = over_tile;
 
 			Vector<Vector2> points;
-			points.push_back(xform.xform(node->map_to_world(duplicate.pos)));
-			points.push_back(xform.xform(node->map_to_world((duplicate.pos + Point2(duplicate.size.x + 1, 0)))));
-			points.push_back(xform.xform(node->map_to_world((duplicate.pos + Point2(duplicate.size.x + 1, duplicate.size.y + 1)))));
-			points.push_back(xform.xform(node->map_to_world((duplicate.pos + Point2(0, duplicate.size.y + 1)))));
+			points.push_back(xform.xform(node->map_to_world(duplicate.position)));
+			points.push_back(xform.xform(node->map_to_world((duplicate.position + Point2(duplicate.size.x + 1, 0)))));
+			points.push_back(xform.xform(node->map_to_world((duplicate.position + Point2(duplicate.size.x + 1, duplicate.size.y + 1)))));
+			points.push_back(xform.xform(node->map_to_world((duplicate.position + Point2(0, duplicate.size.y + 1)))));
 
 			canvas_item_editor->draw_colored_polygon(points, Color(0.2, 1.0, 0.8, 0.2));
 
@@ -1316,9 +1387,7 @@ void TileMapEditor::edit(Node *p_tile_map) {
 		node->disconnect("settings_changed", this, "_tileset_settings_changed");
 	if (p_tile_map) {
 
-		node = p_tile_map->cast_to<TileMap>();
-		if (!canvas_item_editor->is_connected("draw", this, "_canvas_draw"))
-			canvas_item_editor->connect("draw", this, "_canvas_draw");
+		node = Object::cast_to<TileMap>(p_tile_map);
 		if (!canvas_item_editor->is_connected("mouse_entered", this, "_canvas_mouse_enter"))
 			canvas_item_editor->connect("mouse_entered", this, "_canvas_mouse_enter");
 		if (!canvas_item_editor->is_connected("mouse_exited", this, "_canvas_mouse_exit"))
@@ -1329,8 +1398,6 @@ void TileMapEditor::edit(Node *p_tile_map) {
 	} else {
 		node = NULL;
 
-		if (canvas_item_editor->is_connected("draw", this, "_canvas_draw"))
-			canvas_item_editor->disconnect("draw", this, "_canvas_draw");
 		if (canvas_item_editor->is_connected("mouse_entered", this, "_canvas_mouse_enter"))
 			canvas_item_editor->disconnect("mouse_entered", this, "_canvas_mouse_enter");
 		if (canvas_item_editor->is_connected("mouse_exited", this, "_canvas_mouse_exit"))
@@ -1366,7 +1433,6 @@ void TileMapEditor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_text_changed"), &TileMapEditor::_text_changed);
 	ClassDB::bind_method(D_METHOD("_sbox_input"), &TileMapEditor::_sbox_input);
 	ClassDB::bind_method(D_METHOD("_menu_option"), &TileMapEditor::_menu_option);
-	ClassDB::bind_method(D_METHOD("_canvas_draw"), &TileMapEditor::_canvas_draw);
 	ClassDB::bind_method(D_METHOD("_canvas_mouse_enter"), &TileMapEditor::_canvas_mouse_enter);
 	ClassDB::bind_method(D_METHOD("_canvas_mouse_exit"), &TileMapEditor::_canvas_mouse_exit);
 	ClassDB::bind_method(D_METHOD("_tileset_settings_changed"), &TileMapEditor::_tileset_settings_changed);
@@ -1394,7 +1460,7 @@ TileMapEditor::CellOp TileMapEditor::_get_op_from_cell(const Point2i &p_pos) {
 
 void TileMapEditor::_update_transform_buttons(Object *p_button) {
 	//ERR_FAIL_NULL(p_button);
-	ToolButton *b = p_button->cast_to<ToolButton>();
+	ToolButton *b = Object::cast_to<ToolButton>(p_button);
 	//ERR_FAIL_COND(!b);
 
 	if (b == rotate_0) {
@@ -1435,6 +1501,7 @@ TileMapEditor::TileMapEditor(EditorNode *p_editor) {
 	tool = TOOL_NONE;
 	selection_active = false;
 	mouse_over = false;
+	show_tile_info = true;
 
 	flip_h = false;
 	flip_v = false;
@@ -1445,9 +1512,14 @@ TileMapEditor::TileMapEditor(EditorNode *p_editor) {
 
 	ED_SHORTCUT("tile_map_editor/erase_selection", TTR("Erase selection"), KEY_DELETE);
 	ED_SHORTCUT("tile_map_editor/find_tile", TTR("Find tile"), KEY_MASK_CMD + KEY_F);
-	ED_SHORTCUT("tile_map_editor/transpose", TTR("Transpose"));
+	ED_SHORTCUT("tile_map_editor/transpose", TTR("Transpose"), KEY_T);
 	ED_SHORTCUT("tile_map_editor/mirror_x", TTR("Mirror X"), KEY_A);
 	ED_SHORTCUT("tile_map_editor/mirror_y", TTR("Mirror Y"), KEY_S);
+
+	HBoxContainer *tool_hb1 = memnew(HBoxContainer);
+	add_child(tool_hb1);
+	HBoxContainer *tool_hb2 = memnew(HBoxContainer);
+	add_child(tool_hb2);
 
 	search_box = memnew(LineEdit);
 	search_box->set_h_size_flags(SIZE_EXPAND_FILL);
@@ -1480,6 +1552,7 @@ TileMapEditor::TileMapEditor(EditorNode *p_editor) {
 	toolbar = memnew(HBoxContainer);
 	toolbar->set_h_size_flags(SIZE_EXPAND_FILL);
 	toolbar->set_alignment(BoxContainer::ALIGN_END);
+	toolbar->hide();
 	CanvasItemEditor::get_singleton()->add_control_to_menu_panel(toolbar);
 
 	// Tile position
@@ -1493,7 +1566,8 @@ TileMapEditor::TileMapEditor(EditorNode *p_editor) {
 
 	PopupMenu *p = options->get_popup();
 
-	p->add_item(TTR("Bucket"), OPTION_BUCKET);
+	p->add_shortcut(ED_SHORTCUT("tile_map_editor/paint_tile", TTR("Paint Tile"), KEY_P), OPTION_PAINTING);
+	p->add_shortcut(ED_SHORTCUT("tile_map_editor/bucket_fill", TTR("Bucket Fill"), KEY_G), OPTION_BUCKET);
 	p->add_separator();
 	p->add_item(TTR("Pick Tile"), OPTION_PICK_TILE, KEY_CONTROL);
 	p->add_separator();
@@ -1505,54 +1579,49 @@ TileMapEditor::TileMapEditor(EditorNode *p_editor) {
 
 	toolbar->add_child(options);
 
-	toolbar->add_child(memnew(VSeparator));
-
 	transp = memnew(ToolButton);
 	transp->set_toggle_mode(true);
 	transp->set_tooltip(TTR("Transpose") + " (" + ED_GET_SHORTCUT("tile_map_editor/transpose")->get_as_text() + ")");
 	transp->set_focus_mode(FOCUS_NONE);
 	transp->connect("pressed", this, "_update_transform_buttons", make_binds(transp));
-	toolbar->add_child(transp);
+	tool_hb1->add_child(transp);
 	mirror_x = memnew(ToolButton);
 	mirror_x->set_toggle_mode(true);
 	mirror_x->set_tooltip(TTR("Mirror X") + " (" + ED_GET_SHORTCUT("tile_map_editor/mirror_x")->get_as_text() + ")");
 	mirror_x->set_focus_mode(FOCUS_NONE);
 	mirror_x->connect("pressed", this, "_update_transform_buttons", make_binds(mirror_x));
-	toolbar->add_child(mirror_x);
+	tool_hb1->add_child(mirror_x);
 	mirror_y = memnew(ToolButton);
 	mirror_y->set_toggle_mode(true);
 	mirror_y->set_tooltip(TTR("Mirror Y") + " (" + ED_GET_SHORTCUT("tile_map_editor/mirror_y")->get_as_text() + ")");
 	mirror_y->set_focus_mode(FOCUS_NONE);
 	mirror_y->connect("pressed", this, "_update_transform_buttons", make_binds(mirror_y));
-	toolbar->add_child(mirror_y);
-
-	toolbar->add_child(memnew(VSeparator));
+	tool_hb1->add_child(mirror_y);
 
 	rotate_0 = memnew(ToolButton);
 	rotate_0->set_toggle_mode(true);
 	rotate_0->set_tooltip(TTR("Rotate 0 degrees"));
 	rotate_0->set_focus_mode(FOCUS_NONE);
 	rotate_0->connect("pressed", this, "_update_transform_buttons", make_binds(rotate_0));
-	toolbar->add_child(rotate_0);
+	tool_hb2->add_child(rotate_0);
 	rotate_90 = memnew(ToolButton);
 	rotate_90->set_toggle_mode(true);
 	rotate_90->set_tooltip(TTR("Rotate 90 degrees"));
 	rotate_90->set_focus_mode(FOCUS_NONE);
 	rotate_90->connect("pressed", this, "_update_transform_buttons", make_binds(rotate_90));
-	toolbar->add_child(rotate_90);
+	tool_hb2->add_child(rotate_90);
 	rotate_180 = memnew(ToolButton);
 	rotate_180->set_toggle_mode(true);
 	rotate_180->set_tooltip(TTR("Rotate 180 degrees"));
 	rotate_180->set_focus_mode(FOCUS_NONE);
 	rotate_180->connect("pressed", this, "_update_transform_buttons", make_binds(rotate_180));
-	toolbar->add_child(rotate_180);
+	tool_hb2->add_child(rotate_180);
 	rotate_270 = memnew(ToolButton);
 	rotate_270->set_toggle_mode(true);
 	rotate_270->set_tooltip(TTR("Rotate 270 degrees"));
 	rotate_270->set_focus_mode(FOCUS_NONE);
 	rotate_270->connect("pressed", this, "_update_transform_buttons", make_binds(rotate_270));
-	toolbar->add_child(rotate_270);
-	toolbar->hide();
+	tool_hb2->add_child(rotate_270);
 
 	rotate_0->set_pressed(true);
 }
@@ -1567,7 +1636,7 @@ TileMapEditor::~TileMapEditor() {
 
 void TileMapEditorPlugin::edit(Object *p_object) {
 
-	tile_map_editor->edit(p_object->cast_to<Node>());
+	tile_map_editor->edit(Object::cast_to<Node>(p_object));
 }
 
 bool TileMapEditorPlugin::handles(Object *p_object) const {
@@ -1597,10 +1666,12 @@ TileMapEditorPlugin::TileMapEditorPlugin(EditorNode *p_node) {
 	EDITOR_DEF("editors/tile_map/show_tile_ids", false);
 	EDITOR_DEF("editors/tile_map/sort_tiles_by_name", true);
 	EDITOR_DEF("editors/tile_map/bucket_fill_preview", true);
+	EDITOR_DEF("editors/tile_map/show_tile_info_on_hover", true);
 
 	tile_map_editor = memnew(TileMapEditor(p_node));
 	add_control_to_container(CONTAINER_CANVAS_EDITOR_SIDE, tile_map_editor);
 	tile_map_editor->hide();
+	tile_map_editor->set_process(true);
 }
 
 TileMapEditorPlugin::~TileMapEditorPlugin() {

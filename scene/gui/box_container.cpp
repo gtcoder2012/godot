@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -54,7 +54,7 @@ void BoxContainer::_resort() {
 	Map<Control *, _MinSizeCache> min_size_cache;
 
 	for (int i = 0; i < get_child_count(); i++) {
-		Control *c = get_child(i)->cast_to<Control>();
+		Control *c = Object::cast_to<Control>(get_child(i));
 		if (!c || !c->is_visible_in_tree())
 			continue;
 		if (c->is_set_as_toplevel())
@@ -106,7 +106,7 @@ void BoxContainer::_resort() {
 
 		for (int i = 0; i < get_child_count(); i++) {
 
-			Control *c = get_child(i)->cast_to<Control>();
+			Control *c = Object::cast_to<Control>(get_child(i));
 			if (!c || !c->is_visible_in_tree())
 				continue;
 			if (c->is_set_as_toplevel())
@@ -159,7 +159,7 @@ void BoxContainer::_resort() {
 
 	for (int i = 0; i < get_child_count(); i++) {
 
-		Control *c = get_child(i)->cast_to<Control>();
+		Control *c = Object::cast_to<Control>(get_child(i));
 		if (!c || !c->is_visible_in_tree())
 			continue;
 		if (c->is_set_as_toplevel())
@@ -211,7 +211,7 @@ Size2 BoxContainer::get_minimum_size() const {
 	bool first = true;
 
 	for (int i = 0; i < get_child_count(); i++) {
-		Control *c = get_child(i)->cast_to<Control>();
+		Control *c = Object::cast_to<Control>(get_child(i));
 		if (!c)
 			continue;
 		if (c->is_set_as_toplevel())
@@ -295,9 +295,9 @@ void BoxContainer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_alignment"), &BoxContainer::get_alignment);
 	ClassDB::bind_method(D_METHOD("set_alignment", "alignment"), &BoxContainer::set_alignment);
 
-	BIND_CONSTANT(ALIGN_BEGIN);
-	BIND_CONSTANT(ALIGN_CENTER);
-	BIND_CONSTANT(ALIGN_END);
+	BIND_ENUM_CONSTANT(ALIGN_BEGIN);
+	BIND_ENUM_CONSTANT(ALIGN_CENTER);
+	BIND_ENUM_CONSTANT(ALIGN_END);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "alignment", PROPERTY_HINT_ENUM, "Begin,Center,End"), "set_alignment", "get_alignment");
 }

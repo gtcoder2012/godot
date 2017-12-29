@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,8 +28,12 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "register_server_types.h"
-#include "global_config.h"
+#include "engine.h"
+#include "project_settings.h"
 
+#include "arvr/arvr_interface.h"
+#include "arvr/arvr_positional_tracker.h"
+#include "arvr_server.h"
 #include "audio/audio_effect.h"
 #include "audio/audio_stream.h"
 #include "audio/effects/audio_effect_amplify.h"
@@ -46,6 +50,9 @@
 #include "audio/effects/audio_effect_reverb.h"
 #include "audio/effects/audio_effect_stereo_enhance.h"
 #include "audio_server.h"
+#include "physics/physics_server_sw.h"
+#include "physics_2d/physics_2d_server_sw.h"
+#include "physics_2d/physics_2d_server_wrap_mt.h"
 #include "physics_2d_server.h"
 #include "physics_server.h"
 #include "script_debugger_remote.h"
@@ -71,20 +78,33 @@ static void _debugger_get_resource_usage(List<ScriptDebuggerRemote::ResourceUsag
 
 ShaderTypes *shader_types = NULL;
 
+PhysicsServer *_createGodotPhysicsCallback() {
+	return memnew(PhysicsServerSW);
+}
+
+Physics2DServer *_createGodotPhysics2DCallback() {
+	return Physics2DServerWrapMT::init_server<Physics2DServerSW>();
+}
+
 void register_server_types() {
 
-	GLOBAL_DEF("memory/multithread/thread_rid_pool_prealloc", 20);
-
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("VisualServer", VisualServer::get_singleton()));
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("AudioServer", AudioServer::get_singleton()));
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("PhysicsServer", PhysicsServer::get_singleton()));
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("Physics2DServer", Physics2DServer::get_singleton()));
+	ClassDB::register_virtual_class<VisualServer>();
+	ClassDB::register_class<AudioServer>();
+	ClassDB::register_virtual_class<PhysicsServer>();
+	ClassDB::register_virtual_class<Physics2DServer>();
+	ClassDB::register_class<ARVRServer>();
 
 	shader_types = memnew(ShaderTypes);
 
+	ClassDB::register_virtual_class<ARVRInterface>();
+	ClassDB::register_class<ARVRPositionalTracker>();
+
 	ClassDB::register_virtual_class<AudioStream>();
 	ClassDB::register_virtual_class<AudioStreamPlayback>();
+	ClassDB::register_class<AudioStreamRandomPitch>();
 	ClassDB::register_virtual_class<AudioEffect>();
+	ClassDB::register_class<AudioEffectEQ>();
+	ClassDB::register_class<AudioEffectFilter>();
 	ClassDB::register_class<AudioBusLayout>();
 
 	{
@@ -130,9 +150,31 @@ void register_server_types() {
 	ClassDB::register_virtual_class<PhysicsShapeQueryResult>();
 
 	ScriptDebuggerRemote::resource_usage_func = _debugger_get_resource_usage;
+
+	// Physics 2D
+	GLOBAL_DEF(Physics2DServerManager::setting_property_name, "DEFAULT");
+	ProjectSettings::get_singleton()->set_custom_property_info(Physics2DServerManager::setting_property_name, PropertyInfo(Variant::STRING, Physics2DServerManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"));
+
+	Physics2DServerManager::register_server("GodotPhysics", &_createGodotPhysics2DCallback);
+	Physics2DServerManager::set_default_server("GodotPhysics");
+
+	// Physics 3D
+	GLOBAL_DEF(PhysicsServerManager::setting_property_name, "DEFAULT");
+	ProjectSettings::get_singleton()->set_custom_property_info(PhysicsServerManager::setting_property_name, PropertyInfo(Variant::STRING, PhysicsServerManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"));
+
+	PhysicsServerManager::register_server("GodotPhysics", &_createGodotPhysicsCallback);
+	PhysicsServerManager::set_default_server("GodotPhysics");
 }
 
 void unregister_server_types() {
 
 	memdelete(shader_types);
+}
+
+void register_server_singletons() {
+	Engine::get_singleton()->add_singleton(Engine::Singleton("VisualServer", VisualServer::get_singleton()));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("AudioServer", AudioServer::get_singleton()));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("PhysicsServer", PhysicsServer::get_singleton()));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("Physics2DServer", Physics2DServer::get_singleton()));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("ARVRServer", ARVRServer::get_singleton()));
 }

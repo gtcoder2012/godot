@@ -1,9 +1,9 @@
 /*************************************************************************/
-/* b2d_decompose.cpp                                                     */
+/*  b2d_decompose.cpp                                                    */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -153,7 +153,7 @@ static Vector<Vector<Vector2> > _b2d_decompose(const Vector<Vector2> &p_polygon)
 	delete p;
 	return res; // pdarray; //needs to be deleted after body is created
 }
-}
+} // namespace b2ConvexDecomp
 
 Vector<Vector<Vector2> > b2d_decompose(const Vector<Vector2> &p_polygon) {
 

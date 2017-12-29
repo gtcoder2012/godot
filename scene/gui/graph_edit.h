@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -110,7 +110,7 @@ private:
 	bool awaiting_scroll_offset_update;
 	List<Connection> connections;
 
-	void _bake_segment2d(CanvasItem *p_where, float p_begin, float p_end, const Vector2 &p_a, const Vector2 &p_out, const Vector2 &p_b, const Vector2 &p_in, int p_depth, int p_min_depth, int p_max_depth, float p_tol, const Color &p_color, const Color &p_to_color, int &lines) const;
+	void _bake_segment2d(Vector<Vector2> &points, Vector<Color> &colors, float p_begin, float p_end, const Vector2 &p_a, const Vector2 &p_out, const Vector2 &p_b, const Vector2 &p_in, int p_depth, int p_min_depth, int p_max_depth, float p_tol, const Color &p_color, const Color &p_to_color, int &lines) const;
 
 	void _draw_cos_line(CanvasItem *p_where, const Vector2 &p_from, const Vector2 &p_to, const Color &p_color, const Color &p_to_color);
 
@@ -179,6 +179,7 @@ public:
 	bool is_valid_connection_type(int p_type, int p_with_type) const;
 
 	void set_zoom(float p_zoom);
+	void set_zoom_custom(float p_zoom, const Vector2 &p_center);
 	float get_zoom() const;
 
 	GraphEditFilter *get_top_layer() const { return top_layer; }

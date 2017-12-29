@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -60,9 +60,13 @@ class VMap {
 
 		int low = 0;
 		int high = _data.size() - 1;
-		int middle;
 		const _Pair *a = &_data[0];
+		int middle = 0;
 
+#if DEBUG_ENABLED
+		if (low > high)
+			ERR_PRINT("low > high, this may be a bug");
+#endif
 		while (low <= high) {
 			middle = (low + high) / 2;
 
@@ -180,10 +184,8 @@ public:
 	inline const V &operator[](const T &p_key) const {
 
 		int pos = _find_exact(p_key);
-		if (pos < 0) {
-			const T &aux = *((T *)0); //nullreturn
-			ERR_FAIL_COND_V(pos < 1, aux);
-		}
+
+		CRASH_COND(pos < 0);
 
 		return _data[pos].value;
 	}

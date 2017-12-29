@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,6 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "position_2d.h"
+
+#include "engine.h"
 #include "scene/resources/texture.h"
 
 void Position2D::_draw_cross() {
@@ -36,7 +38,7 @@ void Position2D::_draw_cross() {
 	draw_line(Point2(0, -10), Point2(0, +10), Color(0.5, 1, 0.5));
 }
 
-Rect2 Position2D::get_item_rect() const {
+Rect2 Position2D::_edit_get_rect() const {
 
 	return Rect2(Point2(-10, -10), Size2(20, 20));
 }
@@ -52,7 +54,7 @@ void Position2D::_notification(int p_what) {
 		case NOTIFICATION_DRAW: {
 			if (!is_inside_tree())
 				break;
-			if (get_tree()->is_editor_hint())
+			if (Engine::get_singleton()->is_editor_hint())
 				_draw_cross();
 
 		} break;

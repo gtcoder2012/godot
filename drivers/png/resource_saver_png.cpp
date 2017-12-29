@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,8 +30,8 @@
 #include "resource_saver_png.h"
 
 #include "core/image.h"
-#include "global_config.h"
 #include "os/file_access.h"
+#include "project_settings.h"
 #include "scene/resources/texture.h"
 
 #include <png.h>
@@ -55,41 +55,6 @@ Error ResourceSaverPNG::save(const String &p_path, const RES &p_resource, uint32
 	Error err = save_image(p_path, img);
 
 	if (err == OK) {
-
-		bool global_filter = GlobalConfig::get_singleton()->get("image_loader/filter");
-		bool global_mipmaps = GlobalConfig::get_singleton()->get("image_loader/gen_mipmaps");
-		bool global_repeat = GlobalConfig::get_singleton()->get("image_loader/repeat");
-
-		String text;
-
-		if (global_filter != bool(texture->get_flags() & Texture::FLAG_FILTER)) {
-			text += bool(texture->get_flags() & Texture::FLAG_FILTER) ? "filter=true\n" : "filter=false\n";
-		}
-		if (global_mipmaps != bool(texture->get_flags() & Texture::FLAG_MIPMAPS)) {
-			text += bool(texture->get_flags() & Texture::FLAG_MIPMAPS) ? "gen_mipmaps=true\n" : "gen_mipmaps=false\n";
-		}
-		if (global_repeat != bool(texture->get_flags() & Texture::FLAG_REPEAT)) {
-			text += bool(texture->get_flags() & Texture::FLAG_REPEAT) ? "repeat=true\n" : "repeat=false\n";
-		}
-		if (bool(texture->get_flags() & Texture::FLAG_ANISOTROPIC_FILTER)) {
-			text += "anisotropic=true\n";
-		}
-		if (bool(texture->get_flags() & Texture::FLAG_CONVERT_TO_LINEAR)) {
-			text += "tolinear=true\n";
-		}
-		if (bool(texture->get_flags() & Texture::FLAG_MIRRORED_REPEAT)) {
-			text += "mirroredrepeat=true\n";
-		}
-
-		if (text != "" || FileAccess::exists(p_path + ".flags")) {
-
-			FileAccess *f = FileAccess::open(p_path + ".flags", FileAccess::WRITE);
-			if (f) {
-
-				f->store_string(text);
-				memdelete(f);
-			}
-		}
 	}
 
 	return err;
@@ -222,7 +187,7 @@ bool ResourceSaverPNG::recognize(const RES &p_resource) const {
 }
 void ResourceSaverPNG::get_recognized_extensions(const RES &p_resource, List<String> *p_extensions) const {
 
-	if (p_resource->cast_to<Texture>()) {
+	if (Object::cast_to<Texture>(*p_resource)) {
 		p_extensions->push_back("png");
 	}
 }

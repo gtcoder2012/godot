@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -73,7 +73,7 @@ T *_nullptr() {
 
 #define OFFSET_OF(st, m) \
 	((size_t)((char *)&(_nullptr<st>()->m) - (char *)0))
-/**
+	/**
  * Some platforms (devices) not define NULL
  */
 
@@ -81,7 +81,7 @@ T *_nullptr() {
 #define NULL 0
 #endif
 
-/**
+	/**
  * Windows defines a lot of badly stuff we'll never ever use. undefine it.
  */
 
@@ -98,12 +98,12 @@ T *_nullptr() {
 #undef OK
 #endif
 
+#include "int_types.h"
+
 #include "error_list.h"
 #include "error_macros.h"
 
-#include "int_types.h"
-
-/** Generic ABS function, for math uses please use Math::abs */
+	/** Generic ABS function, for math uses please use Math::abs */
 
 #ifndef ABS
 #define ABS(m_v) ((m_v < 0) ? (-(m_v)) : (m_v))
@@ -162,9 +162,9 @@ inline void __swap_tmpl(T &x, T &y) {
 #define _add_overflow __builtin_add_overflow
 #endif
 
-/** Function to find the nearest (bigger) power of 2 to an integer */
+/** Function to find the next power of 2 to an integer */
 
-static _FORCE_INLINE_ unsigned int nearest_power_of_2(unsigned int x) {
+static _FORCE_INLINE_ unsigned int next_power_of_2(unsigned int x) {
 
 	--x;
 	x |= x >> 1;
@@ -174,6 +174,23 @@ static _FORCE_INLINE_ unsigned int nearest_power_of_2(unsigned int x) {
 	x |= x >> 16;
 
 	return ++x;
+}
+
+static _FORCE_INLINE_ unsigned int previous_power_of_2(unsigned int x) {
+
+	x |= x >> 1;
+	x |= x >> 2;
+	x |= x >> 4;
+	x |= x >> 8;
+	x |= x >> 16;
+	return x - (x >> 1);
+}
+
+static _FORCE_INLINE_ unsigned int closest_power_of_2(unsigned int x) {
+
+	unsigned int nx = next_power_of_2(x);
+	unsigned int px = previous_power_of_2(x);
+	return (nx - x) > (x - px) ? px : nx;
 }
 
 // We need this definition inside the function below.
@@ -272,5 +289,13 @@ struct _GlobalLock {
 
 #define __STRX(m_index) #m_index
 #define __STR(m_index) __STRX(m_index)
+
+#ifdef __GNUC__
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#define likely(x) x
+#define unlikely(x) x
+#endif
 
 #endif /* typedefs.h */

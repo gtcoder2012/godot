@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -27,11 +27,16 @@
 /* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
-#include "material_editor_plugin.h"
 
-#include "scene/main/viewport.h"
+// FIXME: Disabled as (according to reduz) users were complaining that it gets in the way
+// Waiting for PropertyEditor rewrite (planned for 3.1) to be refactored.
+
+#include "material_editor_plugin.h"
+#include "scene/3d/particles.h"
 
 #if 0
+
+#include "scene/main/viewport.h"
 
 void MaterialEditor::_gui_input(InputEvent p_event) {
 
@@ -40,7 +45,7 @@ void MaterialEditor::_gui_input(InputEvent p_event) {
 
 void MaterialEditor::_notification(int p_what) {
 
-	if (p_what==NOTIFICATION_FIXED_PROCESS) {
+	if (p_what==NOTIFICATION_PHYSICS_PROCESS) {
 
 	}
 
@@ -333,7 +338,7 @@ MaterialEditor::MaterialEditor() {
 
 	HBoxContainer *hb = memnew( HBoxContainer );
 	add_child(hb);
-	hb->set_area_as_parent_rect(2);
+	hb->set_anchors_and_margins_preset(Control::PRESET_WIDE, Control::PRESET_MODE_MINSIZE, 2);
 
 	VBoxContainer *vb_shape = memnew( VBoxContainer );
 	hb->add_child(vb_shape);
@@ -372,7 +377,7 @@ MaterialEditor::MaterialEditor() {
 
 void MaterialEditorPlugin::edit(Object *p_object) {
 
-	Material * s = p_object->cast_to<Material>();
+	Material * s = Object::cast_to<Material>(p_object);
 	if (!s)
 		return;
 
@@ -414,3 +419,125 @@ MaterialEditorPlugin::~MaterialEditorPlugin()
 }
 
 #endif
+
+String SpatialMaterialConversionPlugin::converts_to() const {
+
+	return "ShaderMaterial";
+}
+bool SpatialMaterialConversionPlugin::handles(const Ref<Resource> &p_resource) const {
+
+	Ref<SpatialMaterial> mat = p_resource;
+	return mat.is_valid();
+}
+Ref<Resource> SpatialMaterialConversionPlugin::convert(const Ref<Resource> &p_resource) {
+
+	Ref<SpatialMaterial> mat = p_resource;
+	ERR_FAIL_COND_V(!mat.is_valid(), Ref<Resource>());
+
+	Ref<ShaderMaterial> smat;
+	smat.instance();
+
+	Ref<Shader> shader;
+	shader.instance();
+
+	String code = VS::get_singleton()->shader_get_code(mat->get_shader_rid());
+
+	shader->set_code(code);
+
+	smat->set_shader(shader);
+
+	List<PropertyInfo> params;
+	VS::get_singleton()->shader_get_param_list(mat->get_shader_rid(), &params);
+
+	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
+
+		// Texture parameter has to be treated specially since SpatialMaterial saved it
+		// as RID but ShaderMaterial needs Texture itself
+		Ref<Texture> texture = mat->get_texture_by_name(E->get().name);
+		if (texture.is_valid()) {
+			smat->set_shader_param(E->get().name, texture);
+		} else {
+			Variant value = VS::get_singleton()->material_get_param(mat->get_rid(), E->get().name);
+			smat->set_shader_param(E->get().name, value);
+		}
+	}
+
+	smat->set_render_priority(mat->get_render_priority());
+	return smat;
+}
+
+String ParticlesMaterialConversionPlugin::converts_to() const {
+
+	return "ShaderMaterial";
+}
+bool ParticlesMaterialConversionPlugin::handles(const Ref<Resource> &p_resource) const {
+
+	Ref<ParticlesMaterial> mat = p_resource;
+	return mat.is_valid();
+}
+Ref<Resource> ParticlesMaterialConversionPlugin::convert(const Ref<Resource> &p_resource) {
+
+	Ref<ParticlesMaterial> mat = p_resource;
+	ERR_FAIL_COND_V(!mat.is_valid(), Ref<Resource>());
+
+	Ref<ShaderMaterial> smat;
+	smat.instance();
+
+	Ref<Shader> shader;
+	shader.instance();
+
+	String code = VS::get_singleton()->shader_get_code(mat->get_shader_rid());
+
+	shader->set_code(code);
+
+	smat->set_shader(shader);
+
+	List<PropertyInfo> params;
+	VS::get_singleton()->shader_get_param_list(mat->get_shader_rid(), &params);
+
+	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
+		Variant value = VS::get_singleton()->material_get_param(mat->get_rid(), E->get().name);
+		smat->set_shader_param(E->get().name, value);
+	}
+
+	smat->set_render_priority(mat->get_render_priority());
+	return smat;
+}
+
+String CanvasItemMaterialConversionPlugin::converts_to() const {
+
+	return "ShaderMaterial";
+}
+bool CanvasItemMaterialConversionPlugin::handles(const Ref<Resource> &p_resource) const {
+
+	Ref<CanvasItemMaterial> mat = p_resource;
+	return mat.is_valid();
+}
+Ref<Resource> CanvasItemMaterialConversionPlugin::convert(const Ref<Resource> &p_resource) {
+
+	Ref<CanvasItemMaterial> mat = p_resource;
+	ERR_FAIL_COND_V(!mat.is_valid(), Ref<Resource>());
+
+	Ref<ShaderMaterial> smat;
+	smat.instance();
+
+	Ref<Shader> shader;
+	shader.instance();
+
+	String code = VS::get_singleton()->shader_get_code(mat->get_shader_rid());
+
+	shader->set_code(code);
+
+	smat->set_shader(shader);
+
+	List<PropertyInfo> params;
+	VS::get_singleton()->shader_get_param_list(mat->get_shader_rid(), &params);
+
+	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
+		Variant value = VS::get_singleton()->material_get_param(mat->get_rid(), E->get().name);
+		smat->set_shader_param(E->get().name, value);
+	}
+
+	smat->set_render_priority(mat->get_render_priority());
+	return smat;
+}

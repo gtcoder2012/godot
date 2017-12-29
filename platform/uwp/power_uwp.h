@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -33,14 +33,14 @@
 
 #include "os/dir_access.h"
 #include "os/file_access.h"
-#include "os/power.h"
+#include "os/os.h"
 
 class PowerUWP {
 
 private:
 	int nsecs_left;
 	int percent_left;
-	PowerState power_state;
+	OS::PowerState power_state;
 
 	bool UpdatePowerInfo();
 
@@ -48,7 +48,7 @@ public:
 	PowerUWP();
 	virtual ~PowerUWP();
 
-	PowerState get_power_state();
+	OS::PowerState get_power_state();
 	int get_power_seconds_left();
 	int get_power_percent_left();
 };

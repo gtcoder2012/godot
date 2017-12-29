@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -75,7 +75,7 @@ void ConfigFile::set_value(const String &p_section, const String &p_key, const V
 
 	} else {
 		if (!values.has(p_section)) {
-			values[p_section] = Map<String, Variant>();
+			values[p_section] = OrderedHashMap<String, Variant>();
 		}
 
 		values[p_section][p_key] = p_value;
@@ -106,16 +106,16 @@ bool ConfigFile::has_section_key(const String &p_section, const String &p_key) c
 
 void ConfigFile::get_sections(List<String> *r_sections) const {
 
-	for (const Map<String, Map<String, Variant> >::Element *E = values.front(); E; E = E->next()) {
-		r_sections->push_back(E->key());
+	for (OrderedHashMap<String, OrderedHashMap<String, Variant> >::ConstElement E = values.front(); E; E = E.next()) {
+		r_sections->push_back(E.key());
 	}
 }
 void ConfigFile::get_section_keys(const String &p_section, List<String> *r_keys) const {
 
 	ERR_FAIL_COND(!values.has(p_section));
 
-	for (const Map<String, Variant>::Element *E = values[p_section].front(); E; E = E->next()) {
-		r_keys->push_back(E->key());
+	for (OrderedHashMap<String, Variant>::ConstElement E = values[p_section].front(); E; E = E.next()) {
+		r_keys->push_back(E.key());
 	}
 }
 
@@ -135,17 +135,17 @@ Error ConfigFile::save(const String &p_path) {
 		return err;
 	}
 
-	for (Map<String, Map<String, Variant> >::Element *E = values.front(); E; E = E->next()) {
+	for (OrderedHashMap<String, OrderedHashMap<String, Variant> >::Element E = values.front(); E; E = E.next()) {
 
 		if (E != values.front())
 			file->store_string("\n");
-		file->store_string("[" + E->key() + "]\n\n");
+		file->store_string("[" + E.key() + "]\n\n");
 
-		for (Map<String, Variant>::Element *F = E->get().front(); F; F = F->next()) {
+		for (OrderedHashMap<String, Variant>::Element F = E.get().front(); F; F = F.next()) {
 
 			String vstr;
-			VariantWriter::write_to_string(F->get(), vstr);
-			file->store_string(F->key() + "=" + vstr + "\n");
+			VariantWriter::write_to_string(F.get(), vstr);
+			file->store_string(F.key() + "=" + vstr + "\n");
 		}
 	}
 
@@ -205,7 +205,7 @@ Error ConfigFile::load(const String &p_path) {
 void ConfigFile::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_value", "section", "key", "value"), &ConfigFile::set_value);
-	ClassDB::bind_method(D_METHOD("get_value:Variant", "section", "key", "default"), &ConfigFile::get_value, DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_value", "section", "key", "default"), &ConfigFile::get_value, DEFVAL(Variant()));
 
 	ClassDB::bind_method(D_METHOD("has_section", "section"), &ConfigFile::has_section);
 	ClassDB::bind_method(D_METHOD("has_section_key", "section", "key"), &ConfigFile::has_section_key);
@@ -215,8 +215,8 @@ void ConfigFile::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("erase_section", "section"), &ConfigFile::erase_section);
 
-	ClassDB::bind_method(D_METHOD("load:Error", "path"), &ConfigFile::load);
-	ClassDB::bind_method(D_METHOD("save:Error", "path"), &ConfigFile::save);
+	ClassDB::bind_method(D_METHOD("load", "path"), &ConfigFile::load);
+	ClassDB::bind_method(D_METHOD("save", "path"), &ConfigFile::save);
 }
 
 ConfigFile::ConfigFile() {

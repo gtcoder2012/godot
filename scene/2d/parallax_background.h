@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -42,6 +42,7 @@ class ParallaxBackground : public CanvasLayer {
 	float scale;
 	Point2 base_offset;
 	Point2 base_scale;
+	Point2 screen_offset;
 	String group_name;
 	Point2 limit_begin;
 	Point2 limit_end;
@@ -51,7 +52,7 @@ class ParallaxBackground : public CanvasLayer {
 	void _update_scroll();
 
 protected:
-	void _camera_moved(const Transform2D &p_transform);
+	void _camera_moved(const Transform2D &p_transform, const Point2 &p_screen_offset);
 
 	void _notification(int p_what);
 	static void _bind_methods();
@@ -60,7 +61,7 @@ public:
 	void set_scroll_offset(const Point2 &p_ofs);
 	Point2 get_scroll_offset() const;
 
-	void set_scroll_scale(float p_ofs);
+	void set_scroll_scale(float p_scale);
 	float get_scroll_scale() const;
 
 	void set_scroll_base_offset(const Point2 &p_ofs);

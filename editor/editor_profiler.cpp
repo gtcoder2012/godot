@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,6 +29,7 @@
 /*************************************************************************/
 #include "editor_profiler.h"
 
+#include "editor_scale.h"
 #include "editor_settings.h"
 #include "os/os.h"
 
@@ -88,7 +89,7 @@ void EditorProfiler::clear() {
 	variables->clear();
 	//activate->set_pressed(false);
 	plot_sigs.clear();
-	plot_sigs.insert("fixed_frame_time");
+	plot_sigs.insert("physics_frame_time");
 	plot_sigs.insert("category_frame_time");
 
 	updating_frame = true;
@@ -119,9 +120,9 @@ String EditorProfiler::_get_time_as_text(Metric &m, float p_time, int p_calls) {
 			return rtos(p_time / p_calls);
 	} else if (dmode == DISPLAY_FRAME_PERCENT) {
 		return _get_percent_txt(p_time, m.frame_time);
-	} else if (dmode == DISPLAY_FIXED_FRAME_PERCENT) {
+	} else if (dmode == DISPLAY_PHYSICS_FRAME_PERCENT) {
 
-		return _get_percent_txt(p_time, m.fixed_frame_time);
+		return _get_percent_txt(p_time, m.physics_frame_time);
 	}
 
 	return "err";
@@ -129,10 +130,11 @@ String EditorProfiler::_get_time_as_text(Metric &m, float p_time, int p_calls) {
 
 Color EditorProfiler::_get_color_from_signature(const StringName &p_signature) const {
 
+	Color bc = get_color("error_color", "Editor");
 	double rot = ABS(double(p_signature.hash()) / double(0x7FFFFFFF));
 	Color c;
-	c.set_hsv(rot, 1, 1);
-	return c;
+	c.set_hsv(rot, bc.get_s(), bc.get_v());
+	return c.linear_interpolate(get_color("base_color", "Editor"), 0.07);
 }
 
 void EditorProfiler::_item_edited() {
@@ -219,7 +221,7 @@ void EditorProfiler::_update_plot() {
 		Vector<int> columnv;
 		columnv.resize(h * 4);
 
-		int *column = columnv.ptr();
+		int *column = columnv.ptrw();
 
 		Map<StringName, int> plot_prev;
 		//Map<StringName,int> plot_max;
@@ -387,7 +389,6 @@ void EditorProfiler::_update_frame() {
 
 		if (plot_sigs.has(m.categories[i].signature)) {
 			category->set_checked(0, true);
-			category->set_custom_bg_color(0, Color(0, 0, 0));
 			category->set_custom_color(0, _get_color_from_signature(m.categories[i].signature));
 		}
 
@@ -411,7 +412,6 @@ void EditorProfiler::_update_frame() {
 
 			if (plot_sigs.has(it.signature)) {
 				item->set_checked(0, true);
-				item->set_custom_bg_color(0, Color(0, 0, 0));
 				item->set_custom_color(0, _get_color_from_signature(it.signature));
 			}
 		}
@@ -496,7 +496,7 @@ void EditorProfiler::_graph_tex_input(const Ref<InputEvent> &p_ev) {
 			(mb.is_valid() && mb->get_button_index() == BUTTON_LEFT && mb->is_pressed()) ||
 			(mm.is_valid())) {
 
-		int x = me->get_pos().x;
+		int x = me->get_position().x;
 		x = x * frame_metrics.size() / graph->get_size().width;
 
 		bool show_hover = x >= 0 && x < frame_metrics.size();
@@ -634,7 +634,7 @@ EditorProfiler::EditorProfiler() {
 	display_mode->add_item(TTR("Frame Time (sec)"));
 	display_mode->add_item(TTR("Average Time (sec)"));
 	display_mode->add_item(TTR("Frame %"));
-	display_mode->add_item(TTR("Fixed Frame %"));
+	display_mode->add_item(TTR("Physics Frame %"));
 	display_mode->connect("item_selected", this, "_combo_changed");
 
 	hb->add_child(display_mode);
@@ -657,28 +657,28 @@ EditorProfiler::EditorProfiler() {
 	hb->add_child(cursor_metric_edit);
 	cursor_metric_edit->connect("value_changed", this, "_cursor_metric_changed");
 
-	hb->add_constant_override("separation", 8);
+	hb->add_constant_override("separation", 8 * EDSCALE);
 
 	h_split = memnew(HSplitContainer);
 	add_child(h_split);
 	h_split->set_v_size_flags(SIZE_EXPAND_FILL);
 
 	variables = memnew(Tree);
-	variables->set_custom_minimum_size(Size2(300, 0));
+	variables->set_custom_minimum_size(Size2(300, 0) * EDSCALE);
 	variables->set_hide_folding(true);
 	h_split->add_child(variables);
 	variables->set_hide_root(true);
 	variables->set_columns(3);
 	variables->set_column_titles_visible(true);
-	variables->set_column_title(0, "Name");
+	variables->set_column_title(0, TTR("Name"));
 	variables->set_column_expand(0, true);
 	variables->set_column_min_width(0, 60);
-	variables->set_column_title(1, "Time");
+	variables->set_column_title(1, TTR("Time"));
 	variables->set_column_expand(1, false);
-	variables->set_column_min_width(1, 60);
-	variables->set_column_title(2, "Calls");
+	variables->set_column_min_width(1, 60 * EDSCALE);
+	variables->set_column_title(2, TTR("Calls"));
 	variables->set_column_expand(2, false);
-	variables->set_column_min_width(2, 60);
+	variables->set_column_min_width(2, 60 * EDSCALE);
 	variables->connect("item_edited", this, "_item_edited");
 
 	graph = memnew(TextureRect);
@@ -691,8 +691,6 @@ EditorProfiler::EditorProfiler() {
 
 	h_split->add_child(graph);
 	graph->set_h_size_flags(SIZE_EXPAND_FILL);
-
-	add_constant_override("separation", 3);
 
 	int metric_size = CLAMP(int(EDITOR_DEF("debugger/profiler_frame_history_size", 600)), 60, 1024);
 	frame_metrics.resize(metric_size);
@@ -716,7 +714,7 @@ EditorProfiler::EditorProfiler() {
 	add_child(plot_delay);
 	plot_delay->connect("timeout", this, "_update_plot");
 
-	plot_sigs.insert("fixed_frame_time");
+	plot_sigs.insert("physics_frame_time");
 	plot_sigs.insert("category_frame_time");
 
 	seeking = false;

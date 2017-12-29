@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -71,7 +71,7 @@ public:
 
 	virtual void set_pause(bool p_pause);
 
-	static void setup(jobject act);
+	static void setup(jobject p_io);
 	static void thread_func(JNIEnv *env);
 
 	AudioDriverAndroid();

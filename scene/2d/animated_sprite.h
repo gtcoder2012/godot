@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -47,6 +47,8 @@ class SpriteFrames : public Resource {
 			loop = true;
 			speed = 5;
 		}
+
+		StringName normal_name;
 	};
 
 	Map<StringName, Anim> animations;
@@ -87,6 +89,20 @@ public:
 			return Ref<Texture>();
 
 		return E->get().frames[p_idx];
+	}
+
+	_FORCE_INLINE_ Ref<Texture> get_normal_frame(const StringName &p_anim, int p_idx) const {
+
+		const Map<StringName, Anim>::Element *E = animations.find(p_anim);
+		ERR_FAIL_COND_V(!E, Ref<Texture>());
+		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture>());
+
+		const Map<StringName, Anim>::Element *EN = animations.find(E->get().normal_name);
+
+		if (!EN || p_idx >= EN->get().frames.size())
+			return Ref<Texture>();
+
+		return EN->get().frames[p_idx];
 	}
 
 	void set_frame(const StringName &p_anim, int p_idx, const Ref<Texture> &p_frame) {
@@ -133,9 +149,9 @@ protected:
 	virtual void _validate_property(PropertyInfo &property) const;
 
 public:
-	virtual void edit_set_pivot(const Point2 &p_pivot);
-	virtual Point2 edit_get_pivot() const;
-	virtual bool edit_has_pivot() const;
+	virtual void _edit_set_pivot(const Point2 &p_pivot);
+	virtual Point2 _edit_get_pivot() const;
+	virtual bool _edit_use_pivot() const;
 
 	void set_sprite_frames(const Ref<SpriteFrames> &p_frames);
 	Ref<SpriteFrames> get_sprite_frames() const;
@@ -165,7 +181,7 @@ public:
 	void set_modulate(const Color &p_color);
 	Color get_modulate() const;
 
-	virtual Rect2 get_item_rect() const;
+	virtual Rect2 _edit_get_rect() const;
 
 	virtual String get_configuration_warning() const;
 	AnimatedSprite();

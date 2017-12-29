@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -44,6 +44,11 @@ class GIProbeEditorPlugin : public EditorPlugin {
 	Button *bake;
 	EditorNode *editor;
 
+	static EditorProgress *tmp_progress;
+	static void bake_func_begin(int p_steps);
+	static void bake_func_step(int p_step, const String &p_description);
+	static void bake_func_end();
+
 	void _bake();
 
 protected:
@@ -52,8 +57,8 @@ protected:
 public:
 	virtual String get_name() const { return "GIProbe"; }
 	bool has_main_screen() const { return false; }
-	virtual void edit(Object *p_node);
-	virtual bool handles(Object *p_node) const;
+	virtual void edit(Object *p_object);
+	virtual bool handles(Object *p_object) const;
 	virtual void make_visible(bool p_visible);
 
 	GIProbeEditorPlugin(EditorNode *p_node);

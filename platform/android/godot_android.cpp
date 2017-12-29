@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,23 +29,23 @@
 /*************************************************************************/
 #ifdef ANDROID_NATIVE_ACTIVITY
 
-#include <errno.h>
-#include <jni.h>
-
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
-
+#include "engine.h"
 #include "file_access_android.h"
-#include "global_config.h"
 #include "main/main.h"
 #include "os_android.h"
+#include "project_settings.h"
+
+#include <EGL/egl.h>
 #include <android/log.h>
 #include <android/sensor.h>
 #include <android/window.h>
 #include <android_native_app_glue.h>
+#include <errno.h>
+#include <jni.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "godot", __VA_ARGS__))
 #define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "godot", __VA_ARGS__))
 
@@ -565,20 +565,6 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 		case APP_CMD_CONFIG_CHANGED:
 		case APP_CMD_WINDOW_RESIZED: {
 
-#if 0
-// android blows
-		if (engine->display_active) {
-
-			EGLint w,h;
-			eglQuerySurface(engine->display, engine->surface, EGL_WIDTH, &w);
-			eglQuerySurface(engine->display, engine->surface, EGL_HEIGHT, &h);
-			engine->os->init_video_mode(w,h);
-			//print_line("RESIZED VIDEO MODE: "+itos(w)+","+itos(h));
-			engine_draw_frame(engine);
-
-		}
-#else
-
 			if (engine->display_active) {
 
 				EGLint w, h;
@@ -594,17 +580,6 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 			engine_draw_frame(engine);
 			engine->animating = 1;
 
-/*
-			    EGLint w,h;
-			    eglQuerySurface(engine->display, engine->surface, EGL_WIDTH, &w);
-			    eglQuerySurface(engine->display, engine->surface, EGL_HEIGHT, &h);
-			    engine->os->init_video_mode(w,h);
-			    //print_line("RESIZED VIDEO MODE: "+itos(w)+","+itos(h));
-
-		    }*/
-
-#endif
-
 		} break;
 		case APP_CMD_INIT_WINDOW:
 			//The window is being shown, get it ready.
@@ -616,14 +591,11 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 					//do initialization here, when there's OpenGL! hackish but the only way
 					engine->os = new OS_Android(_gfx_init, engine);
 
-					//char *args[]={"-test","gui",NULL};
 					__android_log_print(ANDROID_LOG_INFO, "godot", "pre asdasd setup...");
-#if 0
-				Error err  = Main::setup("apk",2,args);
-#else
+
 					Error err = Main::setup("apk", 0, NULL);
 
-					String modules = GlobalConfig::get_singleton()->get("android/modules");
+					String modules = ProjectSettings::get_singleton()->get("android/modules");
 					Vector<String> mods = modules.split(",", false);
 					mods.push_back("GodotOS");
 					__android_log_print(ANDROID_LOG_INFO, "godot", "mod count: %i", mods.size());
@@ -670,8 +642,6 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 						}
 					}
 
-#endif
-
 					if (!Main::start())
 						return; //should exit instead and print the error
 
@@ -699,6 +669,14 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 				ASensorEventQueue_setEventRate(engine->sensorEventQueue,
 						engine->accelerometerSensor, (1000L / 60) * 1000);
 			}
+			// start monitoring gravity
+			if (engine->gravitySensor != NULL) {
+				ASensorEventQueue_enableSensor(engine->sensorEventQueue,
+						engine->gravitySensor);
+				// We'd like to get 60 events per second (in us).
+				ASensorEventQueue_setEventRate(engine->sensorEventQueue,
+						engine->gravitySensor, (1000L / 60) * 1000);
+			}
 			// Also start monitoring the magnetometer.
 			if (engine->magnetometerSensor != NULL) {
 				ASensorEventQueue_enableSensor(engine->sensorEventQueue,
@@ -724,6 +702,10 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 				ASensorEventQueue_disableSensor(engine->sensorEventQueue,
 						engine->accelerometerSensor);
 			}
+			if (engine->gravitySensor != NULL) {
+				ASensorEventQueue_disableSensor(engine->sensorEventQueue,
+						engine->gravitySensor);
+			}
 			if (engine->magnetometerSensor != NULL) {
 				ASensorEventQueue_disableSensor(engine->sensorEventQueue,
 						engine->magnetometerSensor);
@@ -739,36 +721,38 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
 	}
 }
 
-void android_main(struct android_app *state) {
+void android_main(struct android_app *app) {
 	struct engine engine;
 	// Make sure glue isn't stripped.
 	app_dummy();
 
 	memset(&engine, 0, sizeof(engine));
-	state->userData = &engine;
-	state->onAppCmd = engine_handle_cmd;
-	state->onInputEvent = engine_handle_input;
-	engine.app = state;
+	app->userData = &engine;
+	app->onAppCmd = engine_handle_cmd;
+	app->onInputEvent = engine_handle_input;
+	engine.app = app;
 	engine.requested_quit = false;
 	engine.os = NULL;
 	engine.display_active = false;
 
-	FileAccessAndroid::asset_manager = state->activity->assetManager;
+	FileAccessAndroid::asset_manager = app->activity->assetManager;
 
 	// Prepare to monitor sensors
 	engine.sensorManager = ASensorManager_getInstance();
 	engine.accelerometerSensor = ASensorManager_getDefaultSensor(engine.sensorManager,
 			ASENSOR_TYPE_ACCELEROMETER);
+	engine.gravitySensor = ASensorManager_getDefaultSensor(engine.sensorManager,
+			ASENSOR_TYPE_GRAVITY);
 	engine.magnetometerSensor = ASensorManager_getDefaultSensor(engine.sensorManager,
 			ASENSOR_TYPE_MAGNETIC_FIELD);
 	engine.gyroscopeSensor = ASensorManager_getDefaultSensor(engine.sensorManager,
 			ASENSOR_TYPE_GYROSCOPE);
 	engine.sensorEventQueue = ASensorManager_createEventQueue(engine.sensorManager,
-			state->looper, LOOPER_ID_USER, NULL, NULL);
+			app->looper, LOOPER_ID_USER, NULL, NULL);
 
-	ANativeActivity_setWindowFlags(state->activity, AWINDOW_FLAG_FULLSCREEN | AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
+	ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_FULLSCREEN | AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
 
-	state->activity->vm->AttachCurrentThread(&engine.jni, NULL);
+	app->activity->vm->AttachCurrentThread(&engine.jni, NULL);
 
 	// loop waiting for stuff to do.
 
@@ -790,7 +774,7 @@ void android_main(struct android_app *state) {
 
 			if (source != NULL) {
 				// LOGI("process\n");
-				source->process(state, source);
+				source->process(app, source);
 			} else {
 				nullmax--;
 				if (nullmax < 0)
@@ -824,17 +808,16 @@ void android_main(struct android_app *state) {
 			}
 
 			// Check if we are exiting.
-			if (state->destroyRequested != 0) {
+			if (app->destroyRequested != 0) {
 				if (engine.os) {
 					engine.os->main_loop_request_quit();
 				}
-				state->destroyRequested = 0;
+				app->destroyRequested = 0;
 			}
 
 			if (engine.requested_quit) {
 				engine_term_display(&engine);
 				exit(0);
-				return;
 			}
 
 			//     LOGI("end\n");
@@ -859,7 +842,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_Godot_registerSingleton(JNIEnv
 	s->set_instance(env->NewGlobalRef(p_object));
 	jni_singletons[singname] = s;
 
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton(singname, s));
+	Engine::get_singleton()->add_singleton(Engine::Singleton(singname, s));
 }
 
 static Variant::Type get_jni_type(const String &p_type) {
@@ -926,7 +909,7 @@ JNIEXPORT jstring JNICALL Java_org_godotengine_godot_Godot_getGlobal(JNIEnv *env
 
 	String js = env->GetStringUTFChars(path, NULL);
 
-	return env->NewStringUTF(GlobalConfig::get_singleton()->get(js).operator String().utf8().get_data());
+	return env->NewStringUTF(ProjectSettings::get_singleton()->get(js).operator String().utf8().get_data());
 }
 
 JNIEXPORT void JNICALL Java_org_godotengine_godot_Godot_registerMethod(JNIEnv *env, jobject obj, jstring sname, jstring name, jstring ret, jobjectArray args) {
@@ -944,7 +927,6 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_Godot_registerMethod(JNIEnv *e
 
 	int stringCount = env->GetArrayLength(args);
 
-	print_line("Singl:  " + singname + " Method: " + mname + " RetVal: " + retval);
 	for (int i = 0; i < stringCount; i++) {
 
 		jstring string = (jstring)env->GetObjectArrayElement(args, i);
@@ -956,7 +938,6 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_Godot_registerMethod(JNIEnv *e
 	cs += ")";
 	cs += get_jni_sig(retval);
 	jclass cls = env->GetObjectClass(s->get_instance());
-	print_line("METHOD: " + mname + " sig: " + cs);
 	jmethodID mid = env->GetMethodID(cls, mname.ascii().get_data(), cs.ascii().get_data());
 	if (!mid) {
 

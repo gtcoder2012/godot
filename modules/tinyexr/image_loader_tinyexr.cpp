@@ -1,9 +1,9 @@
 /*************************************************************************/
-/*  image_loader_jpegd.cpp                                               */
+/*  image_loader_tinyexr.cpp                                             */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -34,7 +34,7 @@
 
 #include "thirdparty/tinyexr/tinyexr.h"
 
-Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
+Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f, bool p_force_linear, float p_scale) {
 
 	PoolVector<uint8_t> src_image;
 	int src_image_len = f->get_len();
@@ -46,6 +46,11 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
 	f->get_buffer(&w[0], src_image_len);
 
 	f->close();
+
+	// Re-implementation of tinyexr's LoadEXRFromMemory using Godot types to store the Image data
+	// and Godot's error codes.
+	// When debugging after updating the thirdparty library, check that we're still in sync with
+	// their API usage in LoadEXRFromMemory.
 
 	EXRVersion exr_version;
 	EXRImage exr_image;
@@ -66,6 +71,13 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
 			ERR_PRINTS(String(err));
 		}
 		return ERR_FILE_CORRUPT;
+	}
+
+	// Read HALF channel as FLOAT. (GH-13490)
+	for (int i = 0; i < exr_header.num_channels; i++) {
+		if (exr_header.pixel_types[i] == TINYEXR_PIXELTYPE_HALF) {
+			exr_header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
+		}
 	}
 
 	InitEXRImage(&exr_image);
@@ -95,22 +107,24 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
 	}
 
 	if (idxR == -1) {
-		ERR_PRINT("R channel not found");
+		ERR_PRINT("TinyEXR: R channel not found.");
 		// @todo { free exr_image }
 		return ERR_FILE_CORRUPT;
 	}
 
 	if (idxG == -1) {
-		ERR_PRINT("G channel not found\n")
+		ERR_PRINT("TinyEXR: G channel not found.")
 		// @todo { free exr_image }
 		return ERR_FILE_CORRUPT;
 	}
 
 	if (idxB == -1) {
-		ERR_PRINT("B channel not found\n")
+		ERR_PRINT("TinyEXR: B channel not found.")
 		// @todo { free exr_image }
 		return ERR_FILE_CORRUPT;
 	}
+
+	// EXR image data loaded, now parse it into Godot-friendly image data
 
 	PoolVector<uint8_t> imgdata;
 	Image::Format format;
@@ -126,16 +140,23 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
 	}
 
 	{
-
 		PoolVector<uint8_t>::Write wd = imgdata.write();
 		uint16_t *iw = (uint16_t *)wd.ptr();
 
 		// Assume `out_rgba` have enough memory allocated.
 		for (int i = 0; i < exr_image.width * exr_image.height; i++) {
 
-			*iw++ = Math::make_half_float(reinterpret_cast<float **>(exr_image.images)[idxR][i]);
-			*iw++ = Math::make_half_float(reinterpret_cast<float **>(exr_image.images)[idxG][i]);
-			*iw++ = Math::make_half_float(reinterpret_cast<float **>(exr_image.images)[idxB][i]);
+			Color color(
+					reinterpret_cast<float **>(exr_image.images)[idxR][i],
+					reinterpret_cast<float **>(exr_image.images)[idxG][i],
+					reinterpret_cast<float **>(exr_image.images)[idxB][i]);
+
+			if (p_force_linear)
+				color = color.to_linear();
+
+			*iw++ = Math::make_half_float(color.r);
+			*iw++ = Math::make_half_float(color.g);
+			*iw++ = Math::make_half_float(color.b);
 
 			if (idxA > 0) {
 				*iw++ = Math::make_half_float(reinterpret_cast<float **>(exr_image.images)[idxA][i]);
@@ -143,10 +164,12 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f) {
 		}
 	}
 
-	print_line("EXR w: " + itos(exr_image.width) + " h:" + itos(exr_image.height) + " format " + Image::get_format_name(format));
 	p_image->create(exr_image.width, exr_image.height, false, format, imgdata);
 
 	w = PoolVector<uint8_t>::Write();
+
+	FreeEXRHeader(&exr_header);
+	FreeEXRImage(&exr_image);
 
 	return OK;
 }

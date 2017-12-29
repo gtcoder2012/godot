@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -43,6 +43,9 @@ class RasterizerGLES3 : public Rasterizer {
 	RasterizerCanvasGLES3 *canvas;
 	RasterizerSceneGLES3 *scene;
 
+	uint64_t prev_ticks;
+	double time_total;
+
 public:
 	virtual RasterizerStorage *get_storage();
 	virtual RasterizerCanvas *get_canvas();
@@ -56,7 +59,7 @@ public:
 	virtual void restore_render_target();
 	virtual void clear_render_target(const Color &p_color);
 	virtual void blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect, int p_screen = 0);
-	virtual void end_frame();
+	virtual void end_frame(bool p_swap_buffers);
 	virtual void finalize();
 
 	static void make_current();

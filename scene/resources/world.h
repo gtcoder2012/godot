@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -41,13 +41,14 @@ class VisibilityNotifier;
 
 class World : public Resource {
 	GDCLASS(World, Resource);
-	RES_BASE_EXTENSION("wrd");
+	RES_BASE_EXTENSION("world");
 
 private:
 	RID space;
 	RID scenario;
 	SpatialIndexer *indexer;
 	Ref<Environment> environment;
+	Ref<Environment> fallback_environment;
 
 protected:
 	static void _bind_methods();
@@ -59,8 +60,8 @@ protected:
 	void _update_camera(Camera *p_camera);
 	void _remove_camera(Camera *p_camera);
 
-	void _register_notifier(VisibilityNotifier *p_notifier, const Rect3 &p_rect);
-	void _update_notifier(VisibilityNotifier *p_notifier, const Rect3 &p_rect);
+	void _register_notifier(VisibilityNotifier *p_notifier, const AABB &p_rect);
+	void _update_notifier(VisibilityNotifier *p_notifier, const AABB &p_rect);
 	void _remove_notifier(VisibilityNotifier *p_notifier);
 	friend class Viewport;
 	void _update(uint64_t p_frame);
@@ -68,8 +69,14 @@ protected:
 public:
 	RID get_space() const;
 	RID get_scenario() const;
+
 	void set_environment(const Ref<Environment> &p_environment);
 	Ref<Environment> get_environment() const;
+
+	void set_fallback_environment(const Ref<Environment> &p_environment);
+	Ref<Environment> get_fallback_environment() const;
+
+	void get_camera_list(List<Camera *> *r_cameras);
 
 	PhysicsDirectSpaceState *get_direct_space_state();
 

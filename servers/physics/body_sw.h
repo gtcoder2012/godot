@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -53,8 +53,9 @@ class BodySW : public CollisionObjectSW {
 	real_t angular_damp;
 	real_t gravity_scale;
 
-	PhysicsServer::BodyAxisLock axis_lock;
+	uint16_t locked_axis;
 
+	real_t kinematic_safe_margin;
 	real_t _inv_mass;
 	Vector3 _inv_inertia; // Relative to the principal axes of inertia
 
@@ -149,6 +150,9 @@ class BodySW : public CollisionObjectSW {
 public:
 	void set_force_integration_callback(ObjectID p_id, const StringName &p_method, const Variant &p_udata = Variant());
 
+	void set_kinematic_margin(real_t p_margin);
+	_FORCE_INLINE_ real_t get_kinematic_margin() { return kinematic_safe_margin; }
+
 	_FORCE_INLINE_ void add_area(AreaSW *p_area) {
 		int index = areas.find(AreaCMP(p_area));
 		if (index > -1) {
@@ -194,6 +198,7 @@ public:
 	_FORCE_INLINE_ void add_constraint(ConstraintSW *p_constraint, int p_pos) { constraint_map[p_constraint] = p_pos; }
 	_FORCE_INLINE_ void remove_constraint(ConstraintSW *p_constraint) { constraint_map.erase(p_constraint); }
 	const Map<ConstraintSW *, int> &get_constraint_map() const { return constraint_map; }
+	_FORCE_INLINE_ void clear_constraint_map() { constraint_map.clear(); }
 
 	_FORCE_INLINE_ void set_omit_force_integration(bool p_omit_force_integration) { omit_force_integration = p_omit_force_integration; }
 	_FORCE_INLINE_ bool get_omit_force_integration() const { return omit_force_integration; }
@@ -222,10 +227,16 @@ public:
 		angular_velocity += _inv_inertia_tensor.xform(p_j);
 	}
 
-	_FORCE_INLINE_ void apply_bias_impulse(const Vector3 &p_pos, const Vector3 &p_j) {
+	_FORCE_INLINE_ void apply_bias_impulse(const Vector3 &p_pos, const Vector3 &p_j, real_t p_max_delta_av = -1.0) {
 
 		biased_linear_velocity += p_j * _inv_mass;
-		biased_angular_velocity += _inv_inertia_tensor.xform((p_pos - center_of_mass).cross(p_j));
+		if (p_max_delta_av != 0.0) {
+			Vector3 delta_av = _inv_inertia_tensor.xform((p_pos - center_of_mass).cross(p_j));
+			if (p_max_delta_av > 0 && delta_av.length() > p_max_delta_av) {
+				delta_av = delta_av.normalized() * p_max_delta_av;
+			}
+			biased_angular_velocity += delta_av;
+		}
 	}
 
 	_FORCE_INLINE_ void apply_bias_torque_impulse(const Vector3 &p_j) {
@@ -277,8 +288,8 @@ public:
 	_FORCE_INLINE_ Vector3 get_gravity() const { return gravity; }
 	_FORCE_INLINE_ real_t get_bounce() const { return bounce; }
 
-	_FORCE_INLINE_ void set_axis_lock(PhysicsServer::BodyAxisLock p_lock) { axis_lock = p_lock; }
-	_FORCE_INLINE_ PhysicsServer::BodyAxisLock get_axis_lock() const { return axis_lock; }
+	void set_axis_lock(PhysicsServer::BodyAxis p_axis, bool lock);
+	bool is_axis_locked(PhysicsServer::BodyAxis p_axis) const;
 
 	void integrate_forces(real_t p_step);
 	void integrate_velocities(real_t p_step);
@@ -398,7 +409,7 @@ public:
 
 	virtual int get_contact_count() const { return body->contact_count; }
 
-	virtual Vector3 get_contact_local_pos(int p_contact_idx) const {
+	virtual Vector3 get_contact_local_position(int p_contact_idx) const {
 		ERR_FAIL_INDEX_V(p_contact_idx, body->contact_count, Vector3());
 		return body->contacts[p_contact_idx].local_pos;
 	}
@@ -415,7 +426,7 @@ public:
 		ERR_FAIL_INDEX_V(p_contact_idx, body->contact_count, RID());
 		return body->contacts[p_contact_idx].collider;
 	}
-	virtual Vector3 get_contact_collider_pos(int p_contact_idx) const {
+	virtual Vector3 get_contact_collider_position(int p_contact_idx) const {
 		ERR_FAIL_INDEX_V(p_contact_idx, body->contact_count, Vector3());
 		return body->contacts[p_contact_idx].collider_pos;
 	}
@@ -427,7 +438,7 @@ public:
 		ERR_FAIL_INDEX_V(p_contact_idx, body->contact_count, 0);
 		return body->contacts[p_contact_idx].collider_shape;
 	}
-	virtual Vector3 get_contact_collider_velocity_at_pos(int p_contact_idx) const {
+	virtual Vector3 get_contact_collider_velocity_at_position(int p_contact_idx) const {
 		ERR_FAIL_INDEX_V(p_contact_idx, body->contact_count, Vector3());
 		return body->contacts[p_contact_idx].collider_velocity_at_pos;
 	}

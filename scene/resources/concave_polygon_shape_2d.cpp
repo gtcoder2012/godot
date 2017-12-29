@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -68,7 +68,7 @@ Rect2 ConcavePolygonShape2D::get_rect() const {
 	PoolVector<Vector2>::Read r = s.read();
 	for (int i = 0; i < len; i++) {
 		if (i == 0)
-			rect.pos = r[i];
+			rect.position = r[i];
 		else
 			rect.expand_to(r[i]);
 	}
@@ -84,6 +84,6 @@ void ConcavePolygonShape2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::POOL_VECTOR2_ARRAY, "segments"), "set_segments", "get_segments");
 }
 
-ConcavePolygonShape2D::ConcavePolygonShape2D()
-	: Shape2D(Physics2DServer::get_singleton()->shape_create(Physics2DServer::SHAPE_CONCAVE_POLYGON)) {
+ConcavePolygonShape2D::ConcavePolygonShape2D() :
+		Shape2D(Physics2DServer::get_singleton()->concave_polygon_shape_create()) {
 }

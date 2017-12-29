@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -58,14 +58,14 @@ public:
 class ShapeSW : public RID_Data {
 
 	RID self;
-	Rect3 aabb;
+	AABB aabb;
 	bool configured;
 	real_t custom_bias;
 
 	Map<ShapeOwnerSW *, int> owners;
 
 protected:
-	void configure(const Rect3 &p_aabb);
+	void configure(const AABB &p_aabb);
 
 public:
 	enum {
@@ -79,7 +79,7 @@ public:
 
 	virtual PhysicsServer::ShapeType get_type() const = 0;
 
-	_FORCE_INLINE_ Rect3 get_aabb() const { return aabb; }
+	_FORCE_INLINE_ AABB get_aabb() const { return aabb; }
 	_FORCE_INLINE_ bool is_configured() const { return configured; }
 
 	virtual bool is_concave() const { return false; }
@@ -87,8 +87,9 @@ public:
 	virtual void project_range(const Vector3 &p_normal, const Transform &p_transform, real_t &r_min, real_t &r_max) const = 0;
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const = 0;
-
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const = 0;
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_point, Vector3 &r_normal) const = 0;
+	virtual bool intersect_point(const Vector3 &p_point) const = 0;
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const = 0;
 
 	virtual void set_data(const Variant &p_data) = 0;
@@ -113,7 +114,7 @@ public:
 	typedef void (*Callback)(void *p_userdata, ShapeSW *p_convex);
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const { r_amount = 0; }
 
-	virtual void cull(const Rect3 &p_local_aabb, Callback p_callback, void *p_userdata) const = 0;
+	virtual void cull(const AABB &p_local_aabb, Callback p_callback, void *p_userdata) const = 0;
 
 	ConcaveShapeSW() {}
 };
@@ -134,7 +135,8 @@ public:
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const { r_amount = 0; }
 
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
-
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
 	virtual void set_data(const Variant &p_data);
@@ -159,6 +161,8 @@ public:
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -185,6 +189,8 @@ public:
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -209,6 +215,8 @@ public:
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -237,6 +245,8 @@ public:
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -261,6 +271,8 @@ public:
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -287,7 +299,7 @@ struct ConcavePolygonShapeSW : public ConcaveShapeSW {
 
 	struct BVH {
 
-		Rect3 aabb;
+		AABB aabb;
 		int left;
 		int right;
 
@@ -298,7 +310,7 @@ struct ConcavePolygonShapeSW : public ConcaveShapeSW {
 
 	struct _CullParams {
 
-		Rect3 aabb;
+		AABB aabb;
 		Callback callback;
 		void *userdata;
 		const Face *faces;
@@ -338,8 +350,10 @@ public:
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
 
 	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
-	virtual void cull(const Rect3 &p_local_aabb, Callback p_callback, void *p_userdata) const;
+	virtual void cull(const AABB &p_local_aabb, Callback p_callback, void *p_userdata) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -371,9 +385,11 @@ public:
 
 	virtual void project_range(const Vector3 &p_normal, const Transform &p_transform, real_t &r_min, real_t &r_max) const;
 	virtual Vector3 get_support(const Vector3 &p_normal) const;
-	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_point, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
 
-	virtual void cull(const Rect3 &p_local_aabb, Callback p_callback, void *p_userdata) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
+	virtual void cull(const AABB &p_local_aabb, Callback p_callback, void *p_userdata) const;
 
 	virtual Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -397,6 +413,8 @@ struct FaceShapeSW : public ShapeSW {
 	Vector3 get_support(const Vector3 &p_normal) const;
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const;
 	bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const;
+	virtual bool intersect_point(const Vector3 &p_point) const;
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const;
 
 	Vector3 get_moment_of_inertia(real_t p_mass) const;
 
@@ -436,13 +454,15 @@ struct MotionShapeSW : public ShapeSW {
 	}
 	virtual void get_supports(const Vector3 &p_normal, int p_max, Vector3 *r_supports, int &r_amount) const { r_amount = 0; }
 	bool intersect_segment(const Vector3 &p_begin, const Vector3 &p_end, Vector3 &r_result, Vector3 &r_normal) const { return false; }
+	virtual bool intersect_point(const Vector3 &p_point) const { return false; }
+	virtual Vector3 get_closest_point_to(const Vector3 &p_point) const { return p_point; }
 
 	Vector3 get_moment_of_inertia(real_t p_mass) const { return Vector3(); }
 
 	virtual void set_data(const Variant &p_data) {}
 	virtual Variant get_data() const { return Variant(); }
 
-	MotionShapeSW() { configure(Rect3()); }
+	MotionShapeSW() { configure(AABB()); }
 };
 
 struct _ShapeTestConvexBSPSW {

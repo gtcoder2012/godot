@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -45,6 +45,7 @@ public:
 		BG_CLEAR_COLOR,
 		BG_COLOR,
 		BG_SKY,
+		BG_COLOR_SKY,
 		BG_CANVAS,
 		BG_KEEP,
 		BG_MAX
@@ -70,12 +71,25 @@ public:
 		DOF_BLUR_QUALITY_HIGH,
 	};
 
+	enum SSAOBlur {
+		SSAO_BLUR_DISABLED,
+		SSAO_BLUR_1x1,
+		SSAO_BLUR_2x2,
+		SSAO_BLUR_3x3
+	};
+
+	enum SSAOQuality {
+		SSAO_QUALITY_LOW,
+		SSAO_QUALITY_MEDIUM,
+		SSAO_QUALITY_HIGH
+	};
+
 private:
 	RID environment;
 
 	BGMode bg_mode;
 	Ref<Sky> bg_sky;
-	float bg_sky_scale;
+	float bg_sky_custom_fov;
 	Color bg_color;
 	float bg_energy;
 	int bg_canvas_max_layer;
@@ -100,10 +114,9 @@ private:
 
 	bool ssr_enabled;
 	int ssr_max_steps;
-	float ssr_accel;
-	float ssr_fade;
+	float ssr_fade_in;
+	float ssr_fade_out;
 	float ssr_depth_tolerance;
-	bool ssr_smooth;
 	bool ssr_roughness;
 
 	bool ssao_enabled;
@@ -114,7 +127,9 @@ private:
 	float ssao_bias;
 	float ssao_direct_light_affect;
 	Color ssao_color;
-	bool ssao_blur;
+	SSAOBlur ssao_blur;
+	float ssao_edge_sharpness;
+	SSAOQuality ssao_quality;
 
 	bool glow_enabled;
 	int glow_levels;
@@ -122,7 +137,7 @@ private:
 	float glow_strength;
 	float glow_bloom;
 	GlowBlendMode glow_blend_mode;
-	float glow_hdr_bleed_treshold;
+	float glow_hdr_bleed_threshold;
 	float glow_hdr_bleed_scale;
 	bool glow_bicubic_upscale;
 
@@ -138,6 +153,23 @@ private:
 	float dof_blur_near_amount;
 	DOFBlurQuality dof_blur_near_quality;
 
+	bool fog_enabled;
+	Color fog_color;
+	Color fog_sun_color;
+	float fog_sun_amount;
+
+	bool fog_depth_enabled;
+	float fog_depth_begin;
+	float fog_depth_curve;
+
+	bool fog_transmit_enabled;
+	float fog_transmit_curve;
+
+	bool fog_height_enabled;
+	float fog_height_min;
+	float fog_height_max;
+	float fog_height_curve;
+
 protected:
 	static void _bind_methods();
 	virtual void _validate_property(PropertyInfo &property) const;
@@ -145,7 +177,7 @@ protected:
 public:
 	void set_background(BGMode p_bg);
 	void set_sky(const Ref<Sky> &p_sky);
-	void set_sky_scale(float p_scale);
+	void set_sky_custom_fov(float p_scale);
 	void set_bg_color(const Color &p_color);
 	void set_bg_energy(float p_energy);
 	void set_canvas_max_layer(int p_max_layer);
@@ -155,7 +187,7 @@ public:
 
 	BGMode get_background() const;
 	Ref<Sky> get_sky() const;
-	float get_sky_scale() const;
+	float get_sky_custom_fov() const;
 	Color get_bg_color() const;
 	float get_bg_energy() const;
 	int get_canvas_max_layer() const;
@@ -208,17 +240,14 @@ public:
 	void set_ssr_max_steps(int p_steps);
 	int get_ssr_max_steps() const;
 
-	void set_ssr_accel(float p_accel);
-	float get_ssr_accel() const;
+	void set_ssr_fade_in(float p_fade_in);
+	float get_ssr_fade_in() const;
 
-	void set_ssr_fade(float p_transition);
-	float get_ssr_fade() const;
+	void set_ssr_fade_out(float p_fade_out);
+	float get_ssr_fade_out() const;
 
 	void set_ssr_depth_tolerance(float p_depth_tolerance);
 	float get_ssr_depth_tolerance() const;
-
-	void set_ssr_smooth(bool p_enable);
-	bool is_ssr_smooth() const;
 
 	void set_ssr_rough(bool p_enable);
 	bool is_ssr_rough() const;
@@ -247,8 +276,14 @@ public:
 	void set_ssao_color(const Color &p_color);
 	Color get_ssao_color() const;
 
-	void set_ssao_blur(bool p_enable);
-	bool is_ssao_blur_enabled() const;
+	void set_ssao_blur(SSAOBlur p_blur);
+	SSAOBlur get_ssao_blur() const;
+
+	void set_ssao_quality(SSAOQuality p_quality);
+	SSAOQuality get_ssao_quality() const;
+
+	void set_ssao_edge_sharpness(float p_edge_sharpness);
+	float get_ssao_edge_sharpness() const;
 
 	void set_glow_enabled(bool p_enabled);
 	bool is_glow_enabled() const;
@@ -262,14 +297,14 @@ public:
 	void set_glow_strength(float p_strength);
 	float get_glow_strength() const;
 
-	void set_glow_bloom(float p_treshold);
+	void set_glow_bloom(float p_threshold);
 	float get_glow_bloom() const;
 
 	void set_glow_blend_mode(GlowBlendMode p_mode);
 	GlowBlendMode get_glow_blend_mode() const;
 
-	void set_glow_hdr_bleed_treshold(float p_treshold);
-	float get_glow_hdr_bleed_treshold() const;
+	void set_glow_hdr_bleed_threshold(float p_threshold);
+	float get_glow_hdr_bleed_threshold() const;
 
 	void set_glow_hdr_bleed_scale(float p_scale);
 	float get_glow_hdr_bleed_scale() const;
@@ -307,6 +342,45 @@ public:
 	void set_dof_blur_near_quality(DOFBlurQuality p_quality);
 	DOFBlurQuality get_dof_blur_near_quality() const;
 
+	void set_fog_enabled(bool p_enabled);
+	bool is_fog_enabled() const;
+
+	void set_fog_color(const Color &p_color);
+	Color get_fog_color() const;
+
+	void set_fog_sun_color(const Color &p_color);
+	Color get_fog_sun_color() const;
+
+	void set_fog_sun_amount(float p_amount);
+	float get_fog_sun_amount() const;
+
+	void set_fog_depth_enabled(bool p_enabled);
+	bool is_fog_depth_enabled() const;
+
+	void set_fog_depth_begin(float p_distance);
+	float get_fog_depth_begin() const;
+
+	void set_fog_depth_curve(float p_curve);
+	float get_fog_depth_curve() const;
+
+	void set_fog_transmit_enabled(bool p_enabled);
+	bool is_fog_transmit_enabled() const;
+
+	void set_fog_transmit_curve(float p_curve);
+	float get_fog_transmit_curve() const;
+
+	void set_fog_height_enabled(bool p_enabled);
+	bool is_fog_height_enabled() const;
+
+	void set_fog_height_min(float p_distance);
+	float get_fog_height_min() const;
+
+	void set_fog_height_max(float p_distance);
+	float get_fog_height_max() const;
+
+	void set_fog_height_curve(float p_distance);
+	float get_fog_height_curve() const;
+
 	virtual RID get_rid() const;
 
 	Environment();
@@ -317,5 +391,7 @@ VARIANT_ENUM_CAST(Environment::BGMode)
 VARIANT_ENUM_CAST(Environment::ToneMapper)
 VARIANT_ENUM_CAST(Environment::GlowBlendMode)
 VARIANT_ENUM_CAST(Environment::DOFBlurQuality)
+VARIANT_ENUM_CAST(Environment::SSAOQuality)
+VARIANT_ENUM_CAST(Environment::SSAOBlur)
 
 #endif // ENVIRONMENT_H

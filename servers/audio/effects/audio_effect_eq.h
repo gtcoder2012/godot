@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -76,22 +76,22 @@ public:
 class AudioEffectEQ6 : public AudioEffectEQ {
 	GDCLASS(AudioEffectEQ6, AudioEffectEQ)
 public:
-	AudioEffectEQ6()
-		: AudioEffectEQ(EQ::PRESET_6_BANDS) {}
+	AudioEffectEQ6() :
+			AudioEffectEQ(EQ::PRESET_6_BANDS) {}
 };
 
 class AudioEffectEQ10 : public AudioEffectEQ {
 	GDCLASS(AudioEffectEQ10, AudioEffectEQ)
 public:
-	AudioEffectEQ10()
-		: AudioEffectEQ(EQ::PRESET_10_BANDS) {}
+	AudioEffectEQ10() :
+			AudioEffectEQ(EQ::PRESET_10_BANDS) {}
 };
 
 class AudioEffectEQ21 : public AudioEffectEQ {
 	GDCLASS(AudioEffectEQ21, AudioEffectEQ)
 public:
-	AudioEffectEQ21()
-		: AudioEffectEQ(EQ::PRESET_21_BANDS) {}
+	AudioEffectEQ21() :
+			AudioEffectEQ(EQ::PRESET_21_BANDS) {}
 };
 
 #endif // AUDIOEFFECTEQ_H

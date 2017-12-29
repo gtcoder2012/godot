@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -210,7 +210,7 @@ void StreamPeer::put_double(double p_val) {
 void StreamPeer::put_utf8_string(const String &p_string) {
 
 	CharString cs = p_string.utf8();
-	put_u32(p_string.length());
+	put_u32(cs.length());
 	put_data((const uint8_t *)cs.get_data(), cs.length());
 }
 void StreamPeer::put_var(const Variant &p_variant) {
@@ -220,7 +220,7 @@ void StreamPeer::put_var(const Variant &p_variant) {
 	encode_variant(p_variant, NULL, len);
 	buf.resize(len);
 	put_32(len);
-	encode_variant(p_variant, buf.ptr(), len);
+	encode_variant(p_variant, buf.ptrw(), len);
 	put_data(buf.ptr(), buf.size());
 }
 
@@ -340,7 +340,7 @@ String StreamPeer::get_utf8_string(int p_bytes) {
 	Vector<uint8_t> buf;
 	Error err = buf.resize(p_bytes);
 	ERR_FAIL_COND_V(err != OK, String());
-	err = get_data(buf.ptr(), p_bytes);
+	err = get_data(buf.ptrw(), p_bytes);
 	ERR_FAIL_COND_V(err != OK, String());
 
 	String ret;
@@ -353,7 +353,7 @@ Variant StreamPeer::get_var() {
 	Vector<uint8_t> var;
 	Error err = var.resize(len);
 	ERR_FAIL_COND_V(err != OK, Variant());
-	err = get_data(var.ptr(), len);
+	err = get_data(var.ptrw(), len);
 	ERR_FAIL_COND_V(err != OK, Variant());
 
 	Variant ret;
@@ -385,7 +385,7 @@ void StreamPeer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("put_float", "val"), &StreamPeer::put_float);
 	ClassDB::bind_method(D_METHOD("put_double", "val"), &StreamPeer::put_double);
 	ClassDB::bind_method(D_METHOD("put_utf8_string", "val"), &StreamPeer::put_utf8_string);
-	ClassDB::bind_method(D_METHOD("put_var", "val:Variant"), &StreamPeer::put_var);
+	ClassDB::bind_method(D_METHOD("put_var", "val"), &StreamPeer::put_var);
 
 	ClassDB::bind_method(D_METHOD("get_8"), &StreamPeer::get_8);
 	ClassDB::bind_method(D_METHOD("get_u8"), &StreamPeer::get_u8);
@@ -399,20 +399,20 @@ void StreamPeer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_double"), &StreamPeer::get_double);
 	ClassDB::bind_method(D_METHOD("get_string", "bytes"), &StreamPeer::get_string);
 	ClassDB::bind_method(D_METHOD("get_utf8_string", "bytes"), &StreamPeer::get_utf8_string);
-	ClassDB::bind_method(D_METHOD("get_var:Variant"), &StreamPeer::get_var);
+	ClassDB::bind_method(D_METHOD("get_var"), &StreamPeer::get_var);
 }
 ////////////////////////////////
 
 void StreamPeerBuffer::_bind_methods() {
 
-	ClassDB::bind_method(D_METHOD("seek", "pos"), &StreamPeerBuffer::seek);
+	ClassDB::bind_method(D_METHOD("seek", "position"), &StreamPeerBuffer::seek);
 	ClassDB::bind_method(D_METHOD("get_size"), &StreamPeerBuffer::get_size);
-	ClassDB::bind_method(D_METHOD("get_pos"), &StreamPeerBuffer::get_pos);
+	ClassDB::bind_method(D_METHOD("get_position"), &StreamPeerBuffer::get_position);
 	ClassDB::bind_method(D_METHOD("resize", "size"), &StreamPeerBuffer::resize);
 	ClassDB::bind_method(D_METHOD("set_data_array", "data"), &StreamPeerBuffer::set_data_array);
 	ClassDB::bind_method(D_METHOD("get_data_array"), &StreamPeerBuffer::get_data_array);
 	ClassDB::bind_method(D_METHOD("clear"), &StreamPeerBuffer::clear);
-	ClassDB::bind_method(D_METHOD("duplicate:StreamPeerBuffer"), &StreamPeerBuffer::duplicate);
+	ClassDB::bind_method(D_METHOD("duplicate"), &StreamPeerBuffer::duplicate);
 }
 
 Error StreamPeerBuffer::put_data(const uint8_t *p_data, int p_bytes) {
@@ -446,6 +446,7 @@ Error StreamPeerBuffer::get_data(uint8_t *p_buffer, int p_bytes) {
 
 	return OK;
 }
+
 Error StreamPeerBuffer::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r_received) {
 
 	if (pointer + p_bytes > data.size()) {
@@ -459,9 +460,12 @@ Error StreamPeerBuffer::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r_
 	}
 
 	PoolVector<uint8_t>::Read r = data.read();
-	copymem(p_buffer, r.ptr(), r_received);
+	copymem(p_buffer, r.ptr() + pointer, r_received);
 
+	pointer += r_received;
 	// FIXME: return what? OK or ERR_*
+	// return OK for now so we don't maybe return garbage
+	return OK;
 }
 
 int StreamPeerBuffer::get_available_bytes() const {
@@ -480,7 +484,7 @@ int StreamPeerBuffer::get_size() const {
 	return data.size();
 }
 
-int StreamPeerBuffer::get_pos() const {
+int StreamPeerBuffer::get_position() const {
 
 	return pointer;
 }

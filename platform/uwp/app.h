@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -33,6 +33,7 @@
 
 #include <wrl.h>
 
+// ANGLE doesn't provide a specific lib for GLES3, so we keep using GLES2
 #include "GLES2/gl2.h"
 #include "os_uwp.h"
 

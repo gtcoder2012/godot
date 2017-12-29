@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -61,6 +61,7 @@ private:
 		bool tooltip_enabled;
 		Variant metadata;
 		String tooltip;
+		Color custom_fg;
 		Color custom_bg;
 
 		Rect2 rect_cache;
@@ -77,6 +78,9 @@ private:
 
 	bool ensure_selected_visible;
 	bool same_column_width;
+
+	bool auto_height;
+	float auto_height_value;
 
 	Vector<Item> items;
 	Vector<int> separators;
@@ -102,6 +106,9 @@ private:
 	bool allow_rmb_select;
 
 	real_t icon_scale;
+
+	Array _get_items() const;
+	void _set_items(const Array &p_items);
 
 	void _scroll_changed(double);
 	void _gui_input(const Ref<InputEvent> &p_event);
@@ -144,10 +151,15 @@ public:
 	void set_item_custom_bg_color(int p_idx, const Color &p_custom_bg_color);
 	Color get_item_custom_bg_color(int p_idx) const;
 
+	void set_item_custom_fg_color(int p_idx, const Color &p_custom_fg_color);
+	Color get_item_custom_fg_color(int p_idx) const;
+
 	void select(int p_idx, bool p_single = true);
 	void unselect(int p_idx);
+	void unselect_all();
 	bool is_selected(int p_idx) const;
 	Vector<int> get_selected_items();
+	bool is_anything_selected();
 
 	void set_current(int p_current);
 	int get_current() const;
@@ -163,9 +175,9 @@ public:
 	int get_fixed_column_width() const;
 
 	void set_same_column_width(bool p_enable);
-	int is_same_column_width() const;
+	bool is_same_column_width() const;
 
-	void set_max_text_lines(int p_amount);
+	void set_max_text_lines(int p_lines);
 	int get_max_text_lines() const;
 
 	void set_max_columns(int p_amount);
@@ -189,11 +201,16 @@ public:
 	int find_metadata(const Variant &p_metadata) const;
 
 	virtual String get_tooltip(const Point2 &p_pos) const;
-	int get_item_at_pos(const Point2 &p_pos, bool p_exact = false) const;
+	int get_item_at_position(const Point2 &p_pos, bool p_exact = false) const;
 	bool is_pos_at_end_of_items(const Point2 &p_pos) const;
 
 	void set_icon_scale(real_t p_scale);
 	real_t get_icon_scale() const;
+
+	void set_auto_height(bool p_enable);
+	bool has_auto_height() const;
+
+	Size2 get_minimum_size() const;
 
 	VScrollBar *get_v_scroll() { return scroll_bar; }
 

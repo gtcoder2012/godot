@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -27,16 +27,15 @@
 /* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
-#include <Screen.h>
+#include "os_haiku.h"
 
-#include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles3/rasterizer_gles3.h"
+#include "main/main.h"
 #include "servers/physics/physics_server_sw.h"
 #include "servers/visual/visual_server_raster.h"
 #include "servers/visual/visual_server_wrap_mt.h"
-//#include "servers/physics_2d/physics_2d_server_wrap_mt.h"
-#include "main/main.h"
 
-#include "os_haiku.h"
+#include <Screen.h>
 
 OS_Haiku::OS_Haiku() {
 #ifdef MEDIA_KIT_ENABLED
@@ -77,11 +76,7 @@ int OS_Haiku::get_video_driver_count() const {
 }
 
 const char *OS_Haiku::get_video_driver_name(int p_driver) const {
-	return "GLES2";
-}
-
-OS::VideoMode OS_Haiku::get_default_video_mode() const {
-	return OS::VideoMode(800, 600, false);
+	return "GLES3";
 }
 
 void OS_Haiku::initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver) {
@@ -106,12 +101,15 @@ void OS_Haiku::initialize(const VideoMode &p_desired, int p_video_driver, int p_
 		window->SetFlags(flags);
 	}
 
-#if defined(OPENGL_ENABLED) || defined(LEGACYGL_ENABLED)
+#if defined(OPENGL_ENABLED)
 	context_gl = memnew(ContextGL_Haiku(window));
 	context_gl->initialize();
 	context_gl->make_current();
+	context_gl->set_use_vsync(current_video_mode.use_vsync);
 
-	rasterizer = memnew(RasterizerGLES2);
+	/* Port to GLES 3 rasterizer */
+	//rasterizer = memnew(RasterizerGLES2);
+
 #endif
 
 	visual_server = memnew(VisualServerRaster(rasterizer));
@@ -131,18 +129,7 @@ void OS_Haiku::initialize(const VideoMode &p_desired, int p_video_driver, int p_
 	window->Show();
 	visual_server->init();
 
-	physics_server = memnew(PhysicsServerSW);
-	physics_server->init();
-	physics_2d_server = memnew(Physics2DServerSW);
-	// TODO: enable multithreaded PS
-	//physics_2d_server = Physics2DServerWrapMT::init_server<Physics2DServerSW>();
-	physics_2d_server->init();
-
-	AudioDriverManager::get_driver(p_audio_driver)->set_singleton();
-
-	if (AudioDriverManager::get_driver(p_audio_driver)->init() != OK) {
-		ERR_PRINT("Initializing audio failed.");
-	}
+	AudioDriverManager::initialize(p_audio_driver);
 
 	power_manager = memnew(PowerHaiku);
 }
@@ -158,15 +145,9 @@ void OS_Haiku::finalize() {
 	memdelete(visual_server);
 	memdelete(rasterizer);
 
-	physics_server->finish();
-	memdelete(physics_server);
-
-	physics_2d_server->finish();
-	memdelete(physics_2d_server);
-
 	memdelete(input);
 
-#if defined(OPENGL_ENABLED) || defined(LEGACYGL_ENABLED)
+#if defined(OPENGL_ENABLED)
 	memdelete(context_gl);
 #endif
 }
@@ -330,4 +311,42 @@ void OS_Haiku::get_fullscreen_mode_list(List<VideoMode> *p_list, int p_screen) c
 
 String OS_Haiku::get_executable_path() const {
 	return OS::get_executable_path();
+}
+
+bool OS_Haiku::_check_internal_feature_support(const String &p_feature) {
+
+	return p_feature == "pc" || p_feature == "s3tc";
+}
+
+String OS_Haiku::get_config_path() const {
+
+	if (has_environment("XDG_CONFIG_HOME")) {
+		return get_environment("XDG_CONFIG_HOME");
+	} else if (has_environment("HOME")) {
+		return get_environment("HOME").plus_file(".config");
+	} else {
+		return ".";
+	}
+}
+
+String OS_Haiku::get_data_path() const {
+
+	if (has_environment("XDG_DATA_HOME")) {
+		return get_environment("XDG_DATA_HOME");
+	} else if (has_environment("HOME")) {
+		return get_environment("HOME").plus_file(".local/share");
+	} else {
+		return get_config_path();
+	}
+}
+
+String OS_Haiku::get_cache_path() const {
+
+	if (has_environment("XDG_CACHE_HOME")) {
+		return get_environment("XDG_CACHE_HOME");
+	} else if (has_environment("HOME")) {
+		return get_environment("HOME").plus_file(".cache");
+	} else {
+		return get_config_path();
+	}
 }

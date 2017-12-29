@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -38,13 +38,31 @@
 	@author Juan Linietsky <reduzio@gmail.com>
 */
 
+#ifdef TOOLS_ENABLED
+// To save/restore animated values
+class AnimatedValuesBackup {
+	struct Entry {
+		Object *object;
+		Vector<StringName> subpath; // Unused if bone
+		int bone_idx; // -1 if not a bone
+		Variant value;
+	};
+	Vector<Entry> entries;
+
+	friend class AnimationPlayer;
+
+public:
+	void update_skeletons();
+};
+#endif
+
 class AnimationPlayer : public Node {
 	GDCLASS(AnimationPlayer, Node);
 	OBJ_CATEGORY("Animation Nodes");
 
 public:
 	enum AnimationProcessMode {
-		ANIMATION_PROCESS_FIXED,
+		ANIMATION_PROCESS_PHYSICS,
 		ANIMATION_PROCESS_IDLE,
 	};
 
@@ -83,7 +101,7 @@ private:
 
 			TrackNodeCache *owner;
 			SpecialProperty special; //small optimization
-			StringName prop;
+			Vector<StringName> subpath;
 			Object *object;
 			Variant value_accum;
 			uint64_t accum_pass;
@@ -198,7 +216,7 @@ private:
 
 	void _animation_process_animation(AnimationData *p_anim, float p_time, float p_delta, float p_interp, bool p_allow_discrete = true);
 
-	void _generate_node_caches(AnimationData *p_anim);
+	void _ensure_node_caches(AnimationData *p_anim);
 	void _animation_process_data(PlaybackData &cd, float p_delta, float p_blend);
 	void _animation_process2(float p_delta);
 	void _animation_update_transforms();
@@ -271,7 +289,7 @@ public:
 	void set_speed_scale(float p_speed);
 	float get_speed_scale() const;
 
-	void set_autoplay(const String &pname);
+	void set_autoplay(const String &p_name);
 	String get_autoplay() const;
 
 	void set_animation_process_mode(AnimationProcessMode p_mode);
@@ -279,7 +297,7 @@ public:
 
 	void seek(float p_time, bool p_update = false);
 	void seek_delta(float p_time, float p_delta);
-	float get_current_animation_pos() const;
+	float get_current_animation_position() const;
 	float get_current_animation_length() const;
 
 	void advance(float p_time);
@@ -290,6 +308,12 @@ public:
 	void clear_caches(); ///< must be called by hand if an animation was modified after added
 
 	void get_argument_options(const StringName &p_function, int p_idx, List<String> *r_options) const;
+
+#ifdef TOOLS_ENABLED
+	// These may be interesting for games, but are too dangerous for general use
+	AnimatedValuesBackup backup_animated_values();
+	void restore_animated_values(const AnimatedValuesBackup &p_backup);
+#endif
 
 	AnimationPlayer();
 	~AnimationPlayer();

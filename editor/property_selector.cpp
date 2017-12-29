@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -75,6 +75,8 @@ void PropertySelector::_update_search() {
 
 	if (properties)
 		set_title(TTR("Select Property"));
+	else if (virtuals_only)
+		set_title(TTR("Select Virtual Method"));
 	else
 		set_title(TTR("Select Method"));
 
@@ -98,10 +100,10 @@ void PropertySelector::_update_search() {
 		} else {
 
 			Object *obj = ObjectDB::get_instance(script);
-			if (obj && obj->cast_to<Script>()) {
+			if (Object::cast_to<Script>(obj)) {
 
 				props.push_back(PropertyInfo(Variant::NIL, "Script Variables", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_CATEGORY));
-				obj->cast_to<Script>()->get_script_property_list(&props);
+				Object::cast_to<Script>(obj)->get_script_property_list(&props);
 			}
 
 			StringName base = base_type;
@@ -167,7 +169,7 @@ void PropertySelector::_update_search() {
 				continue;
 			}
 
-			if (!(E->get().usage & PROPERTY_USAGE_EDITOR))
+			if (!(E->get().usage & PROPERTY_USAGE_EDITOR) && !(E->get().usage & PROPERTY_USAGE_SCRIPT_VARIABLE))
 				continue;
 
 			if (search_box->get_text() != String() && E->get().name.find(search_box->get_text()) == -1)
@@ -200,16 +202,16 @@ void PropertySelector::_update_search() {
 		} else {
 
 			Object *obj = ObjectDB::get_instance(script);
-			if (obj && obj->cast_to<Script>()) {
+			if (Object::cast_to<Script>(obj)) {
 
 				methods.push_back(MethodInfo("*Script Methods"));
-				obj->cast_to<Script>()->get_script_method_list(&methods);
+				Object::cast_to<Script>(obj)->get_script_method_list(&methods);
 			}
 
 			StringName base = base_type;
 			while (base) {
 				methods.push_back(MethodInfo("*" + String(base)));
-				ClassDB::get_method_list(base, &methods, true);
+				ClassDB::get_method_list(base, &methods, true, true);
 				base = ClassDB::get_parent_class(base);
 			}
 		}
@@ -230,11 +232,13 @@ void PropertySelector::_update_search() {
 
 				Ref<Texture> icon;
 				script_methods = false;
+				print_line("name: " + E->get().name);
+				String rep = E->get().name.replace("*", "");
 				if (E->get().name == "*Script Methods") {
 					icon = get_icon("Script", "EditorIcons");
 					script_methods = true;
-				} else if (has_icon(E->get().name, "EditorIcons")) {
-					icon = get_icon(E->get().name, "EditorIcons");
+				} else if (has_icon(rep, "EditorIcons")) {
+					icon = get_icon(rep, "EditorIcons");
 				} else {
 					icon = get_icon("Object", "EditorIcons");
 				}
@@ -245,6 +249,12 @@ void PropertySelector::_update_search() {
 
 			String name = E->get().name.get_slice(":", 0);
 			if (!script_methods && name.begins_with("_") && !(E->get().flags & METHOD_FLAG_VIRTUAL))
+				continue;
+
+			if (virtuals_only && !(E->get().flags & METHOD_FLAG_VIRTUAL))
+				continue;
+
+			if (!virtuals_only && (E->get().flags & METHOD_FLAG_VIRTUAL))
 				continue;
 
 			if (search_box->get_text() != String() && name.find(search_box->get_text()) == -1)
@@ -282,6 +292,12 @@ void PropertySelector::_update_search() {
 			}
 
 			desc += " )";
+
+			if (E->get().flags & METHOD_FLAG_CONST)
+				desc += " const";
+
+			if (E->get().flags & METHOD_FLAG_VIRTUAL)
+				desc += " virtual";
 
 			item->set_text(0, desc);
 			item->set_metadata(0, name);
@@ -347,23 +363,6 @@ void PropertySelector::_item_selected() {
 
 			at_class = ClassDB::get_parent_class(at_class);
 		}
-
-		if (text == String()) {
-
-			StringName setter;
-			StringName type;
-			if (ClassDB::get_setter_and_type_for_property(class_type, name, type, setter)) {
-				Map<String, DocData::ClassDoc>::Element *E = dd->class_list.find(type);
-				if (E) {
-					for (int i = 0; i < E->get().methods.size(); i++) {
-						if (E->get().methods[i].name == setter.operator String()) {
-							text = E->get().methods[i].description;
-						}
-					}
-				}
-			}
-		}
-
 	} else {
 
 		String at_class = class_type;
@@ -397,7 +396,7 @@ void PropertySelector::_notification(int p_what) {
 	}
 }
 
-void PropertySelector::select_method_from_base_type(const String &p_base, const String &p_current) {
+void PropertySelector::select_method_from_base_type(const String &p_base, const String &p_current, bool p_virtuals_only) {
 
 	base_type = p_base;
 	selected = p_current;
@@ -405,6 +404,7 @@ void PropertySelector::select_method_from_base_type(const String &p_base, const 
 	script = 0;
 	properties = false;
 	instance = NULL;
+	virtuals_only = p_virtuals_only;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -418,9 +418,10 @@ void PropertySelector::select_method_from_script(const Ref<Script> &p_script, co
 	base_type = p_script->get_instance_base_type();
 	selected = p_current;
 	type = Variant::NIL;
-	script = p_script->get_instance_ID();
+	script = p_script->get_instance_id();
 	properties = false;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -436,6 +437,7 @@ void PropertySelector::select_method_from_basic_type(Variant::Type p_type, const
 	script = 0;
 	properties = false;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -452,10 +454,11 @@ void PropertySelector::select_method_from_instance(Object *p_instance, const Str
 	{
 		Ref<Script> scr = p_instance->get_script();
 		if (scr.is_valid())
-			script = scr->get_instance_ID();
+			script = scr->get_instance_id();
 	}
 	properties = false;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -471,6 +474,7 @@ void PropertySelector::select_property_from_base_type(const String &p_base, cons
 	script = 0;
 	properties = true;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -485,15 +489,17 @@ void PropertySelector::select_property_from_script(const Ref<Script> &p_script, 
 	base_type = p_script->get_instance_base_type();
 	selected = p_current;
 	type = Variant::NIL;
-	script = p_script->get_instance_ID();
+	script = p_script->get_instance_id();
 	properties = true;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
 	search_box->grab_focus();
 	_update_search();
 }
+
 void PropertySelector::select_property_from_basic_type(Variant::Type p_type, const String &p_current) {
 
 	ERR_FAIL_COND(p_type == Variant::NIL);
@@ -503,6 +509,7 @@ void PropertySelector::select_property_from_basic_type(Variant::Type p_type, con
 	script = 0;
 	properties = true;
 	instance = NULL;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -518,6 +525,7 @@ void PropertySelector::select_property_from_instance(Object *p_instance, const S
 	script = 0;
 	properties = true;
 	instance = p_instance;
+	virtuals_only = false;
 
 	popup_centered_ratio(0.6);
 	search_box->set_text("");
@@ -554,6 +562,7 @@ PropertySelector::PropertySelector() {
 	search_options->connect("cell_selected", this, "_item_selected");
 	search_options->set_hide_root(true);
 	search_options->set_hide_folding(true);
+	virtuals_only = false;
 
 	help_bit = memnew(EditorHelpBit);
 	vbc->add_margin_child(TTR("Description:"), help_bit);

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -32,7 +32,7 @@
 
 #include "image.h"
 
-void image_compress_squish(Image *p_image);
+void image_compress_squish(Image *p_image, Image::CompressSource p_source);
 void image_decompress_squish(Image *p_image);
 
 #endif // IMAGE_COMPRESS_SQUISH_H

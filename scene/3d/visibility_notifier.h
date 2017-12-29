@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -39,7 +39,7 @@ class VisibilityNotifier : public Spatial {
 
 	Set<Camera *> cameras;
 
-	Rect3 aabb;
+	AABB aabb;
 
 protected:
 	virtual void _screen_enter() {}
@@ -53,8 +53,8 @@ protected:
 	void _exit_camera(Camera *p_camera);
 
 public:
-	void set_aabb(const Rect3 &p_aabb);
-	Rect3 get_aabb() const;
+	void set_aabb(const AABB &p_aabb);
+	AABB get_aabb() const;
 	bool is_on_screen() const;
 
 	VisibilityNotifier();

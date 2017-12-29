@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -33,7 +33,6 @@
 #include "editor/editor_node.h"
 #include "editor/editor_plugin.h"
 #include "scene/2d/path_2d.h"
-#include "scene/gui/button_group.h"
 #include "scene/gui/tool_button.h"
 
 /**
@@ -85,7 +84,6 @@ class Path2DEditor : public HBoxContainer {
 
 	void _mode_selected(int p_mode);
 
-	void _canvas_draw();
 	void _node_visibility_changed();
 	friend class Path2DEditorPlugin;
 
@@ -96,6 +94,7 @@ protected:
 
 public:
 	bool forward_gui_input(const Ref<InputEvent> &p_event);
+	void forward_draw_over_viewport(Control *p_overlay);
 	void edit(Node *p_path2d);
 	Path2DEditor(EditorNode *p_editor);
 };
@@ -108,12 +107,13 @@ class Path2DEditorPlugin : public EditorPlugin {
 	EditorNode *editor;
 
 public:
-	virtual bool forward_canvas_gui_input(const Transform2D &p_canvas_xform, const Ref<InputEvent> &p_event) { return path2d_editor->forward_gui_input(p_event); }
+	virtual bool forward_canvas_gui_input(const Ref<InputEvent> &p_event) { return path2d_editor->forward_gui_input(p_event); }
+	virtual void forward_draw_over_viewport(Control *p_overlay) { return path2d_editor->forward_draw_over_viewport(p_overlay); }
 
 	virtual String get_name() const { return "Path2D"; }
 	bool has_main_screen() const { return false; }
-	virtual void edit(Object *p_node);
-	virtual bool handles(Object *p_node) const;
+	virtual void edit(Object *p_object);
+	virtual bool handles(Object *p_object) const;
 	virtual void make_visible(bool p_visible);
 
 	Path2DEditorPlugin(EditorNode *p_node);

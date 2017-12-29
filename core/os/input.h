@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -81,7 +81,7 @@ public:
 	virtual Point2 get_last_mouse_speed() const = 0;
 	virtual int get_mouse_button_mask() const = 0;
 
-	virtual void warp_mouse_pos(const Vector2 &p_to) = 0;
+	virtual void warp_mouse_position(const Vector2 &p_to) = 0;
 	virtual Point2i warp_mouse_motion(const Ref<InputEventMouseMotion> &p_motion, const Rect2 &p_rect) = 0;
 
 	virtual Vector3 get_gravity() const = 0;

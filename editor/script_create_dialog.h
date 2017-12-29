@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -48,6 +48,7 @@ class ScriptCreateDialog : public ConfirmationDialog {
 	LineEdit *parent_name;
 	Button *parent_browse_button;
 	OptionButton *language_menu;
+	OptionButton *template_menu;
 	LineEdit *file_path;
 	Button *path_button;
 	EditorFileDialog *file_browse;
@@ -58,23 +59,27 @@ class ScriptCreateDialog : public ConfirmationDialog {
 	bool create_new;
 	bool is_browsing_parent;
 	String initial_bp;
-	EditorSettings *editor_settings;
 	bool is_new_script_created;
 	bool is_path_valid;
 	bool has_named_classes;
+	bool supports_built_in;
 	bool can_inherit_from_file;
 	bool is_parent_name_valid;
 	bool is_class_name_valid;
 	bool is_built_in;
 	int current_language;
 	bool re_check_path;
+	String script_template;
+	Vector<String> template_list;
 
 	void _path_changed(const String &p_path = String());
+	void _path_entered(const String &p_path = String());
 	void _lang_changed(int l = 0);
 	void _built_in_pressed();
-	bool _validate(const String &p_strin);
+	bool _validate(const String &p_string);
 	void _class_name_changed(const String &p_name);
 	void _parent_name_changed(const String &p_parent);
+	void _template_changed(int p_template = 0);
 	void _browse_path(bool browse_parent);
 	void _file_selected(const String &p_file);
 	virtual void ok_pressed();

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -44,7 +44,7 @@
  * The events are pretty obvious.
  */
 
-enum {
+enum ButtonList {
 	BUTTON_LEFT = 1,
 	BUTTON_RIGHT = 2,
 	BUTTON_MIDDLE = 3,
@@ -58,7 +58,7 @@ enum {
 
 };
 
-enum {
+enum JoystickList {
 
 	JOY_BUTTON_0 = 0,
 	JOY_BUTTON_1 = 1,
@@ -122,7 +122,9 @@ enum {
 	JOY_AXIS_5 = 5,
 	JOY_AXIS_6 = 6,
 	JOY_AXIS_7 = 7,
-	JOY_AXIS_MAX = 8,
+	JOY_AXIS_8 = 8,
+	JOY_AXIS_9 = 9,
+	JOY_AXIS_MAX = 10,
 
 	JOY_ANALOG_LX = JOY_AXIS_0,
 	JOY_ANALOG_LY = JOY_AXIS_1,
@@ -142,16 +144,12 @@ enum {
 class InputEvent : public Resource {
 	GDCLASS(InputEvent, Resource)
 
-	uint32_t id;
 	int device;
 
 protected:
 	static void _bind_methods();
 
 public:
-	void set_id(uint32_t p_id);
-	uint32_t get_id() const;
-
 	void set_device(int p_device);
 	int get_device() const;
 
@@ -165,6 +163,7 @@ public:
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
 
 	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool shortcut_match(const Ref<InputEvent> &p_event) const;
 	virtual bool is_action_type() const;
 
 	InputEvent();
@@ -210,6 +209,8 @@ public:
 	void set_command(bool p_enabled);
 	bool get_command() const;
 
+	void set_modifiers_from_event(const InputEventWithModifiers *event);
+
 	InputEventWithModifiers();
 };
 
@@ -243,8 +244,11 @@ public:
 	uint32_t get_scancode_with_modifiers() const;
 
 	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool shortcut_match(const Ref<InputEvent> &p_event) const;
 
 	virtual bool is_action_type() const { return true; }
+
+	virtual String as_text() const;
 
 	InputEventKey();
 };
@@ -265,11 +269,11 @@ public:
 	void set_button_mask(int p_mask);
 	int get_button_mask() const;
 
-	void set_pos(const Vector2 &p_pos);
-	Vector2 get_pos() const;
+	void set_position(const Vector2 &p_pos);
+	Vector2 get_position() const;
 
-	void set_global_pos(const Vector2 &p_global_pos);
-	Vector2 get_global_pos() const;
+	void set_global_position(const Vector2 &p_global_pos);
+	Vector2 get_global_position() const;
 
 	InputEventMouse();
 };
@@ -303,6 +307,7 @@ public:
 	virtual bool action_match(const Ref<InputEvent> &p_event) const;
 
 	virtual bool is_action_type() const { return true; }
+	virtual String as_text() const;
 
 	InputEventMouseButton();
 };
@@ -324,6 +329,7 @@ public:
 	Vector2 get_speed() const;
 
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
+	virtual String as_text() const;
 
 	InputEventMouseMotion();
 };
@@ -344,9 +350,11 @@ public:
 	void set_axis_value(float p_value);
 	float get_axis_value() const;
 
+	virtual bool is_pressed() const;
 	virtual bool action_match(const Ref<InputEvent> &p_event) const;
 
 	virtual bool is_action_type() const { return true; }
+	virtual String as_text() const;
 
 	InputEventJoypadMotion();
 };
@@ -373,6 +381,7 @@ public:
 	virtual bool action_match(const Ref<InputEvent> &p_event) const;
 
 	virtual bool is_action_type() const { return true; }
+	virtual String as_text() const;
 
 	InputEventJoypadButton();
 };
@@ -390,13 +399,14 @@ public:
 	void set_index(int p_index);
 	int get_index() const;
 
-	void set_pos(const Vector2 &p_pos);
-	Vector2 get_pos() const;
+	void set_position(const Vector2 &p_pos);
+	Vector2 get_position() const;
 
 	void set_pressed(bool p_pressed);
 	virtual bool is_pressed() const;
 
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
+	virtual String as_text() const;
 
 	InputEventScreenTouch();
 };
@@ -416,8 +426,8 @@ public:
 	void set_index(int p_index);
 	int get_index() const;
 
-	void set_pos(const Vector2 &p_pos);
-	Vector2 get_pos() const;
+	void set_position(const Vector2 &p_pos);
+	Vector2 get_position() const;
 
 	void set_relative(const Vector2 &p_relative);
 	Vector2 get_relative() const;
@@ -426,6 +436,7 @@ public:
 	Vector2 get_speed() const;
 
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
+	virtual String as_text() const;
 
 	InputEventScreenDrag();
 };
@@ -450,8 +461,56 @@ public:
 	virtual bool is_action(const StringName &p_action) const;
 
 	virtual bool is_action_type() const { return true; }
+	virtual String as_text() const;
 
 	InputEventAction();
 };
 
+class InputEventGesture : public InputEventWithModifiers {
+
+	GDCLASS(InputEventGesture, InputEventWithModifiers)
+
+	Vector2 pos;
+
+protected:
+	static void _bind_methods();
+
+public:
+	void set_position(const Vector2 &p_pos);
+	Vector2 get_position() const;
+};
+
+class InputEventMagnifyGesture : public InputEventGesture {
+
+	GDCLASS(InputEventMagnifyGesture, InputEventGesture)
+	real_t factor;
+
+protected:
+	static void _bind_methods();
+
+public:
+	void set_factor(real_t p_factor);
+	real_t get_factor() const;
+
+	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
+
+	InputEventMagnifyGesture();
+};
+
+class InputEventPanGesture : public InputEventGesture {
+
+	GDCLASS(InputEventPanGesture, InputEventGesture)
+	Vector2 delta;
+
+protected:
+	static void _bind_methods();
+
+public:
+	void set_delta(const Vector2 &p_delta);
+	Vector2 get_delta() const;
+
+	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
+
+	InputEventPanGesture();
+};
 #endif

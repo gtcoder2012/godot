@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -68,9 +68,11 @@ public:
 	Variant front() const;
 	Variant back() const;
 
-	void sort();
-	void sort_custom(Object *p_obj, const StringName &p_function);
-	void invert();
+	Array &sort();
+	Array &sort_custom(Object *p_obj, const StringName &p_function);
+	int bsearch(const Variant &p_value, bool p_before = true);
+	int bsearch_custom(const Variant &p_value, Object *p_obj, const StringName &p_function, bool p_before = true);
+	Array &invert();
 
 	int find(const Variant &p_value, int p_from = 0) const;
 	int rfind(const Variant &p_value, int p_from = -1) const;
@@ -83,6 +85,8 @@ public:
 	void push_front(const Variant &p_value);
 	Variant pop_back();
 	Variant pop_front();
+
+	Array duplicate() const;
 
 	Array(const Array &p_from);
 	Array();

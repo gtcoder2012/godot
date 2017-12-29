@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,7 +31,7 @@
 #include "error_macros.h"
 #include "print_string.h"
 
-void BSP_Tree::from_aabb(const Rect3 &p_aabb) {
+void BSP_Tree::from_aabb(const AABB &p_aabb) {
 
 	planes.clear();
 
@@ -39,8 +39,8 @@ void BSP_Tree::from_aabb(const Rect3 &p_aabb) {
 
 		Vector3 n;
 		n[i] = 1;
-		planes.push_back(Plane(n, p_aabb.pos[i] + p_aabb.size[i]));
-		planes.push_back(Plane(-n, -p_aabb.pos[i]));
+		planes.push_back(Plane(n, p_aabb.position[i] + p_aabb.size[i]));
+		planes.push_back(Plane(-n, -p_aabb.position[i]));
 	}
 
 	nodes.clear();
@@ -67,7 +67,7 @@ Vector<Plane> BSP_Tree::get_planes() const {
 	return planes;
 }
 
-Rect3 BSP_Tree::get_aabb() const {
+AABB BSP_Tree::get_aabb() const {
 
 	return aabb;
 }
@@ -552,7 +552,7 @@ BSP_Tree::BSP_Tree(const PoolVector<Face3> &p_faces, real_t p_error_radius) {
 
 			if (first) {
 
-				aabb.pos = f.vertex[0];
+				aabb.position = f.vertex[0];
 				first = false;
 			} else {
 
@@ -577,12 +577,11 @@ BSP_Tree::BSP_Tree(const PoolVector<Face3> &p_faces, real_t p_error_radius) {
 	error_radius = p_error_radius;
 }
 
-BSP_Tree::BSP_Tree(const Vector<Node> &p_nodes, const Vector<Plane> &p_planes, const Rect3 &p_aabb, real_t p_error_radius) {
-
-	nodes = p_nodes;
-	planes = p_planes;
-	aabb = p_aabb;
-	error_radius = p_error_radius;
+BSP_Tree::BSP_Tree(const Vector<Node> &p_nodes, const Vector<Plane> &p_planes, const AABB &p_aabb, real_t p_error_radius) :
+		nodes(p_nodes),
+		planes(p_planes),
+		aabb(p_aabb),
+		error_radius(p_error_radius) {
 }
 
 BSP_Tree::~BSP_Tree() {

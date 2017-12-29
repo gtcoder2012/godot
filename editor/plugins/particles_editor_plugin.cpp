@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -40,18 +40,13 @@ void ParticlesEditor::_node_removed(Node *p_node) {
 	}
 }
 
-void ParticlesEditor::_resource_seleted(const String &p_res) {
-
-	//print_line("selected resource path: "+p_res);
-}
-
 void ParticlesEditor::_node_selected(const NodePath &p_path) {
 
 	Node *sel = get_node(p_path);
 	if (!sel)
 		return;
 
-	VisualInstance *vi = sel->cast_to<VisualInstance>();
+	VisualInstance *vi = Object::cast_to<VisualInstance>(sel);
 	if (!vi) {
 
 		err_dialog->set_text(TTR("Node does not contain geometry."));
@@ -84,23 +79,6 @@ void ParticlesEditor::_node_selected(const NodePath &p_path) {
 	emission_dialog->popup_centered(Size2(300, 130));
 }
 
-/*
-
-void ParticlesEditor::_populate() {
-
-	if(!node)
-		return;
-
-
-	if (node->get_particles().is_null())
-		return;
-
-	node->get_particles()->set_instance_count(populate_amount->get_text().to_int());
-	node->populate_parent(populate_rotate_random->get_val(),populate_tilt_random->get_val(),populate_scale_random->get_text().to_double(),populate_scale->get_text().to_double());
-
-}
-*/
-
 void ParticlesEditor::_notification(int p_notification) {
 
 	if (p_notification == NOTIFICATION_ENTER_TREE) {
@@ -132,13 +110,7 @@ void ParticlesEditor::_menu_option(int p_option) {
 				EditorNode::get_singleton()->show_warning(TTR("A processor material of type 'ParticlesMaterial' is required."));
 				return;
 			}
-			/*
-			Node *root = get_scene()->get_root_node();
-			ERR_FAIL_COND(!root);
-			EditorNode *en = root->cast_to<EditorNode>();
-			ERR_FAIL_COND(!en);
-			Node * node = en->get_edited_scene();
-*/
+
 			emission_tree_dialog->popup_centered_ratio();
 
 		} break;
@@ -153,15 +125,15 @@ void ParticlesEditor::_generate_aabb() {
 
 	EditorProgress ep("gen_aabb", TTR("Generating AABB"), int(time));
 
-	Rect3 rect;
+	AABB rect;
 	while (running < time) {
 
 		uint64_t ticks = OS::get_singleton()->get_ticks_usec();
 		ep.step("Generating..", int(running), true);
 		OS::get_singleton()->delay_usec(1000);
 
-		Rect3 capture = node->capture_aabb();
-		if (rect == Rect3())
+		AABB capture = node->capture_aabb();
+		if (rect == AABB())
 			rect = capture;
 		else
 			rect.merge_with(capture);
@@ -247,14 +219,14 @@ void ParticlesEditor::_generate_emission_points() {
 
 		PoolVector<Face3>::Read r = geometry.read();
 
-		Rect3 aabb;
+		AABB aabb;
 
 		for (int i = 0; i < gcount; i++) {
 
 			for (int j = 0; j < 3; j++) {
 
 				if (i == 0 && j == 0)
-					aabb.pos = r[i].vertex[j];
+					aabb.position = r[i].vertex[j];
 				else
 					aabb.expand_to(r[i].vertex[j]);
 			}
@@ -270,9 +242,7 @@ void ParticlesEditor::_generate_emission_points() {
 
 				Vector3 dir;
 				dir[Math::rand() % 3] = 1.0;
-				Vector3 ofs = Vector3(1, 1, 1) - dir;
-				ofs = (Vector3(1, 1, 1) - dir) * Vector3(Math::randf(), Math::randf(), Math::randf()) * aabb.size;
-				ofs += aabb.pos;
+				Vector3 ofs = (Vector3(1, 1, 1) - dir) * Vector3(Math::randf(), Math::randf(), Math::randf()) * aabb.size + aabb.position;
 
 				Vector3 ofsv = ofs + aabb.size * dir;
 
@@ -367,20 +337,14 @@ void ParticlesEditor::_generate_emission_points() {
 		material->set_emission_point_count(point_count);
 		material->set_emission_point_texture(tex);
 	}
-
-	//print_line("point count: "+itos(points.size()));
-	//node->set_emission_points(points);
 }
 
 void ParticlesEditor::_bind_methods() {
 
 	ClassDB::bind_method("_menu_option", &ParticlesEditor::_menu_option);
-	ClassDB::bind_method("_resource_seleted", &ParticlesEditor::_resource_seleted);
 	ClassDB::bind_method("_node_selected", &ParticlesEditor::_node_selected);
 	ClassDB::bind_method("_generate_emission_points", &ParticlesEditor::_generate_emission_points);
 	ClassDB::bind_method("_generate_aabb", &ParticlesEditor::_generate_aabb);
-
-	//ClassDB::bind_method("_populate",&ParticlesEditor::_populate);
 }
 
 ParticlesEditor::ParticlesEditor() {
@@ -391,13 +355,11 @@ ParticlesEditor::ParticlesEditor() {
 	particles_editor_hb->add_child(options);
 	particles_editor_hb->hide();
 
-	options->set_text("Particles");
+	options->set_text(TTR("Particles"));
 	options->get_popup()->add_item(TTR("Generate AABB"), MENU_OPTION_GENERATE_AABB);
 	options->get_popup()->add_separator();
 	options->get_popup()->add_item(TTR("Create Emission Points From Mesh"), MENU_OPTION_CREATE_EMISSION_VOLUME_FROM_MESH);
 	options->get_popup()->add_item(TTR("Create Emission Points From Node"), MENU_OPTION_CREATE_EMISSION_VOLUME_FROM_NODE);
-	//	options->get_popup()->add_item(TTR("Clear Emitter"), MENU_OPTION_CLEAR_EMISSION_VOLUME);
-
 	options->get_popup()->connect("id_pressed", this, "_menu_option");
 
 	emission_dialog = memnew(ConfirmationDialog);
@@ -422,7 +384,6 @@ ParticlesEditor::ParticlesEditor() {
 	emission_dialog->connect("confirmed", this, "_generate_emission_points");
 
 	err_dialog = memnew(ConfirmationDialog);
-	//err_dialog->get_cancel()->hide();
 	add_child(err_dialog);
 
 	emission_file_dialog = memnew(EditorFileDialog);
@@ -456,14 +417,11 @@ ParticlesEditor::ParticlesEditor() {
 	add_child(generate_aabb);
 
 	generate_aabb->connect("confirmed", this, "_generate_aabb");
-
-	//options->set_anchor(MARGIN_LEFT,Control::ANCHOR_END);
-	//options->set_anchor(MARGIN_RIGHT,Control::ANCHOR_END);
 }
 
 void ParticlesEditorPlugin::edit(Object *p_object) {
 
-	particles_editor->edit(p_object->cast_to<Particles>());
+	particles_editor->edit(Object::cast_to<Particles>(p_object));
 }
 
 bool ParticlesEditorPlugin::handles(Object *p_object) const {

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -38,7 +38,7 @@ Size2 ViewportContainer::get_minimum_size() const {
 	Size2 ms;
 	for (int i = 0; i < get_child_count(); i++) {
 
-		Viewport *c = get_child(i)->cast_to<Viewport>();
+		Viewport *c = Object::cast_to<Viewport>(get_child(i));
 		if (!c)
 			continue;
 
@@ -62,6 +62,34 @@ bool ViewportContainer::is_stretch_enabled() const {
 	return stretch;
 }
 
+void ViewportContainer::set_stretch_shrink(int p_shrink) {
+
+	ERR_FAIL_COND(p_shrink < 1);
+	if (shrink == p_shrink)
+		return;
+
+	shrink = p_shrink;
+
+	if (!stretch)
+		return;
+
+	for (int i = 0; i < get_child_count(); i++) {
+
+		Viewport *c = Object::cast_to<Viewport>(get_child(i));
+		if (!c)
+			continue;
+
+		c->set_size(get_size() / shrink);
+	}
+
+	update();
+}
+
+int ViewportContainer::get_stretch_shrink() const {
+
+	return shrink;
+}
+
 void ViewportContainer::_notification(int p_what) {
 
 	if (p_what == NOTIFICATION_RESIZED) {
@@ -71,11 +99,11 @@ void ViewportContainer::_notification(int p_what) {
 
 		for (int i = 0; i < get_child_count(); i++) {
 
-			Viewport *c = get_child(i)->cast_to<Viewport>();
+			Viewport *c = Object::cast_to<Viewport>(get_child(i));
 			if (!c)
 				continue;
 
-			c->set_size(get_size());
+			c->set_size(get_size() / shrink);
 		}
 	}
 
@@ -83,7 +111,7 @@ void ViewportContainer::_notification(int p_what) {
 
 		for (int i = 0; i < get_child_count(); i++) {
 
-			Viewport *c = get_child(i)->cast_to<Viewport>();
+			Viewport *c = Object::cast_to<Viewport>(get_child(i));
 			if (!c)
 				continue;
 
@@ -98,7 +126,7 @@ void ViewportContainer::_notification(int p_what) {
 
 		for (int i = 0; i < get_child_count(); i++) {
 
-			Viewport *c = get_child(i)->cast_to<Viewport>();
+			Viewport *c = Object::cast_to<Viewport>(get_child(i));
 			if (!c)
 				continue;
 
@@ -115,10 +143,15 @@ void ViewportContainer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_stretch", "enable"), &ViewportContainer::set_stretch);
 	ClassDB::bind_method(D_METHOD("is_stretch_enabled"), &ViewportContainer::is_stretch_enabled);
 
+	ClassDB::bind_method(D_METHOD("set_stretch_shrink", "amount"), &ViewportContainer::set_stretch_shrink);
+	ClassDB::bind_method(D_METHOD("get_stretch_shrink"), &ViewportContainer::get_stretch_shrink);
+
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "stretch"), "set_stretch", "is_stretch_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "stretch_shrink"), "set_stretch_shrink", "get_stretch_shrink");
 }
 
 ViewportContainer::ViewportContainer() {
 
 	stretch = false;
+	shrink = 1;
 }

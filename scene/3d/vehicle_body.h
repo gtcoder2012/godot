@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -131,6 +131,10 @@ public:
 	void set_roll_influence(float p_value);
 	float get_roll_influence() const;
 
+	float get_skidinfo() const;
+
+	String get_configuration_warning() const;
+
 	VehicleWheel();
 };
 
@@ -196,7 +200,7 @@ public:
 	void set_engine_force(float p_engine_force);
 	float get_engine_force() const;
 
-	void set_brake(float p_force);
+	void set_brake(float p_brake);
 	float get_brake() const;
 
 	void set_steering(float p_steering);

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -113,6 +113,9 @@ public:
 		else
 			return 0;
 	}
+	_FORCE_INLINE_ const void *data_unique_pointer() const {
+		return (void *)_data;
+	}
 	bool operator!=(const StringName &p_name) const;
 
 	_FORCE_INLINE_ operator String() const {
@@ -135,7 +138,22 @@ public:
 
 		_FORCE_INLINE_ bool operator()(const StringName &l, const StringName &r) const {
 
-			return l.operator String() < r.operator String();
+			const char *l_cname = l._data ? l._data->cname : "";
+			const char *r_cname = r._data ? r._data->cname : "";
+
+			if (l_cname) {
+
+				if (r_cname)
+					return is_str_less(l_cname, r_cname);
+				else
+					return is_str_less(l_cname, r._data->name.ptr());
+			} else {
+
+				if (r_cname)
+					return is_str_less(l._data->name.ptr(), r_cname);
+				else
+					return is_str_less(l._data->name.ptr(), r._data->name.ptr());
+			}
 		}
 	};
 

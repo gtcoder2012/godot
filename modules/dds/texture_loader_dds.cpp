@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -76,8 +76,6 @@ static const DDSFormatInfo dds_format_info[DDS_MAX] = {
 	{ "DXT1", true, false, 4, 8, Image::FORMAT_DXT1 },
 	{ "DXT3", true, false, 4, 16, Image::FORMAT_DXT3 },
 	{ "DXT5", true, false, 4, 16, Image::FORMAT_DXT5 },
-	{ "ATI1", true, false, 4, 8, Image::FORMAT_LATC_L },
-	{ "ATI2", true, false, 4, 16, Image::FORMAT_LATC_LA },
 	{ "BGRA8", false, false, 1, 4, Image::FORMAT_RGBA8 },
 	{ "BGR8", false, false, 1, 3, Image::FORMAT_RGB8 },
 	{ "RGBA8", false, false, 1, 4, Image::FORMAT_RGBA8 },
@@ -154,7 +152,7 @@ RES ResourceFormatDDS::load(const String &p_path, const String &p_original_path,
 	*/
 
 	//must avoid this later
-	while (f->get_pos() < 128)
+	while (f->get_position() < 128)
 		f->get_8();
 
 	DDSFormat dds_format;

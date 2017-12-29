@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -49,7 +49,7 @@ void BackBufferCopy::_update_copy_mode() {
 	}
 }
 
-Rect2 BackBufferCopy::get_item_rect() const {
+Rect2 BackBufferCopy::_edit_get_rect() const {
 
 	return rect;
 }
@@ -85,9 +85,9 @@ void BackBufferCopy::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "copy_mode", PROPERTY_HINT_ENUM, "Disabled,Rect,Viewport"), "set_copy_mode", "get_copy_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "rect"), "set_rect", "get_rect");
 
-	BIND_CONSTANT(COPY_MODE_DISABLED);
-	BIND_CONSTANT(COPY_MODE_RECT);
-	BIND_CONSTANT(COPY_MODE_VIEWPORT);
+	BIND_ENUM_CONSTANT(COPY_MODE_DISABLED);
+	BIND_ENUM_CONSTANT(COPY_MODE_RECT);
+	BIND_ENUM_CONSTANT(COPY_MODE_VIEWPORT);
 }
 
 BackBufferCopy::BackBufferCopy() {

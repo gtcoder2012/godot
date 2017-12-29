@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,12 +30,14 @@
 #include "ray_cast.h"
 
 #include "collision_object.h"
+#include "engine.h"
 #include "mesh_instance.h"
 #include "servers/physics_server.h"
+
 void RayCast::set_cast_to(const Vector3 &p_point) {
 
 	cast_to = p_point;
-	if (is_inside_tree() && (get_tree()->is_editor_hint() || get_tree()->is_debugging_collisions_hint()))
+	if (is_inside_tree() && (Engine::get_singleton()->is_editor_hint() || get_tree()->is_debugging_collisions_hint()))
 		update_gizmo();
 	if (is_inside_tree() && get_tree()->is_debugging_collisions_hint())
 		_update_debug_shape();
@@ -46,24 +48,29 @@ Vector3 RayCast::get_cast_to() const {
 	return cast_to;
 }
 
-void RayCast::set_layer_mask(uint32_t p_mask) {
+void RayCast::set_collision_mask(uint32_t p_mask) {
 
-	layer_mask = p_mask;
+	collision_mask = p_mask;
 }
 
-uint32_t RayCast::get_layer_mask() const {
+uint32_t RayCast::get_collision_mask() const {
 
-	return layer_mask;
+	return collision_mask;
 }
 
-void RayCast::set_type_mask(uint32_t p_mask) {
+void RayCast::set_collision_mask_bit(int p_bit, bool p_value) {
 
-	type_mask = p_mask;
+	uint32_t mask = get_collision_mask();
+	if (p_value)
+		mask |= 1 << p_bit;
+	else
+		mask &= ~(1 << p_bit);
+	set_collision_mask(mask);
 }
 
-uint32_t RayCast::get_type_mask() const {
+bool RayCast::get_collision_mask_bit(int p_bit) const {
 
-	return type_mask;
+	return get_collision_mask() & (1 << p_bit);
 }
 
 bool RayCast::is_colliding() const {
@@ -94,8 +101,8 @@ Vector3 RayCast::get_collision_normal() const {
 void RayCast::set_enabled(bool p_enabled) {
 
 	enabled = p_enabled;
-	if (is_inside_tree() && !get_tree()->is_editor_hint())
-		set_fixed_process(p_enabled);
+	if (is_inside_tree() && !Engine::get_singleton()->is_editor_hint())
+		set_physics_process(p_enabled);
 	if (!p_enabled)
 		collided = false;
 
@@ -112,32 +119,62 @@ bool RayCast::is_enabled() const {
 	return enabled;
 }
 
+void RayCast::set_exclude_parent_body(bool p_exclude_parent_body) {
+
+	if (exclude_parent_body == p_exclude_parent_body)
+		return;
+
+	exclude_parent_body = p_exclude_parent_body;
+
+	if (!is_inside_tree())
+		return;
+
+	if (Object::cast_to<CollisionObject>(get_parent())) {
+		if (exclude_parent_body)
+			exclude.insert(Object::cast_to<CollisionObject>(get_parent())->get_rid());
+		else
+			exclude.erase(Object::cast_to<CollisionObject>(get_parent())->get_rid());
+	}
+}
+
+bool RayCast::get_exclude_parent_body() const {
+
+	return exclude_parent_body;
+}
+
 void RayCast::_notification(int p_what) {
 
 	switch (p_what) {
 
 		case NOTIFICATION_ENTER_TREE: {
 
-			if (enabled && !get_tree()->is_editor_hint()) {
-				set_fixed_process(true);
+			if (enabled && !Engine::get_singleton()->is_editor_hint()) {
+				set_physics_process(true);
 
 				if (get_tree()->is_debugging_collisions_hint())
 					_update_debug_shape();
 			} else
-				set_fixed_process(false);
+				set_physics_process(false);
+
+			if (Object::cast_to<CollisionObject>(get_parent())) {
+				if (exclude_parent_body)
+					exclude.insert(Object::cast_to<CollisionObject>(get_parent())->get_rid());
+				else
+					exclude.erase(Object::cast_to<CollisionObject>(get_parent())->get_rid());
+			}
 
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
 
 			if (enabled) {
-				set_fixed_process(false);
+				set_physics_process(false);
 			}
 
 			if (debug_shape)
 				_clear_debug_shape();
 
 		} break;
-		case NOTIFICATION_FIXED_PROCESS: {
+		case NOTIFICATION_PHYSICS_PROCESS: {
 
 			if (!enabled)
 				break;
@@ -170,7 +207,7 @@ void RayCast::_update_raycast_state() {
 
 	PhysicsDirectSpaceState::RayResult rr;
 
-	if (dss->intersect_ray(gt.get_origin(), gt.xform(to), rr, exclude, layer_mask, type_mask)) {
+	if (dss->intersect_ray(gt.get_origin(), gt.xform(to), rr, exclude, collision_mask)) {
 
 		collided = true;
 		against = rr.collider_id;
@@ -194,7 +231,7 @@ void RayCast::add_exception_rid(const RID &p_rid) {
 void RayCast::add_exception(const Object *p_object) {
 
 	ERR_FAIL_NULL(p_object);
-	CollisionObject *co = ((Object *)p_object)->cast_to<CollisionObject>();
+	const CollisionObject *co = Object::cast_to<CollisionObject>(p_object);
 	if (!co)
 		return;
 	add_exception_rid(co->get_rid());
@@ -208,7 +245,7 @@ void RayCast::remove_exception_rid(const RID &p_rid) {
 void RayCast::remove_exception(const Object *p_object) {
 
 	ERR_FAIL_NULL(p_object);
-	CollisionObject *co = ((Object *)p_object)->cast_to<CollisionObject>();
+	const CollisionObject *co = Object::cast_to<CollisionObject>(p_object);
 	if (!co)
 		return;
 	remove_exception_rid(co->get_rid());
@@ -243,16 +280,19 @@ void RayCast::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("clear_exceptions"), &RayCast::clear_exceptions);
 
-	ClassDB::bind_method(D_METHOD("set_layer_mask", "mask"), &RayCast::set_layer_mask);
-	ClassDB::bind_method(D_METHOD("get_layer_mask"), &RayCast::get_layer_mask);
+	ClassDB::bind_method(D_METHOD("set_collision_mask", "mask"), &RayCast::set_collision_mask);
+	ClassDB::bind_method(D_METHOD("get_collision_mask"), &RayCast::get_collision_mask);
 
-	ClassDB::bind_method(D_METHOD("set_type_mask", "mask"), &RayCast::set_type_mask);
-	ClassDB::bind_method(D_METHOD("get_type_mask"), &RayCast::get_type_mask);
+	ClassDB::bind_method(D_METHOD("set_collision_mask_bit", "bit", "value"), &RayCast::set_collision_mask_bit);
+	ClassDB::bind_method(D_METHOD("get_collision_mask_bit", "bit"), &RayCast::get_collision_mask_bit);
+
+	ClassDB::bind_method(D_METHOD("set_exclude_parent_body", "mask"), &RayCast::set_exclude_parent_body);
+	ClassDB::bind_method(D_METHOD("get_exclude_parent_body"), &RayCast::get_exclude_parent_body);
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "exclude_parent"), "set_exclude_parent_body", "get_exclude_parent_body");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "cast_to"), "set_cast_to", "get_cast_to");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "layer_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_layer_mask", "get_layer_mask");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "type_mask", PROPERTY_HINT_FLAGS, "Static,Kinematic,Rigid,Character,Area"), "set_type_mask", "get_type_mask");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_mask", "get_collision_mask");
 }
 
 void RayCast::_create_debug_shape() {
@@ -266,7 +306,7 @@ void RayCast::_create_debug_shape() {
 		line_material->set_albedo(Color(1.0, 0.8, 0.6));
 	}
 
-	Ref<Mesh> mesh = memnew(Mesh);
+	Ref<ArrayMesh> mesh = memnew(ArrayMesh);
 
 	MeshInstance *mi = memnew(MeshInstance);
 	mi->set_mesh(mesh);
@@ -287,7 +327,7 @@ void RayCast::_update_debug_shape() {
 	if (!mi->get_mesh().is_valid())
 		return;
 
-	Ref<Mesh> mesh = mi->get_mesh();
+	Ref<ArrayMesh> mesh = mi->get_mesh();
 	if (mesh->get_surface_count() > 0)
 		mesh->surface_remove(0);
 
@@ -323,8 +363,8 @@ RayCast::RayCast() {
 	against = 0;
 	collided = false;
 	against_shape = 0;
-	layer_mask = 1;
-	type_mask = PhysicsDirectSpaceState::TYPE_MASK_COLLISION;
+	collision_mask = 1;
 	cast_to = Vector3(0, -1, 0);
 	debug_shape = NULL;
+	exclude_parent_body = true;
 }

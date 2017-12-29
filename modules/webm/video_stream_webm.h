@@ -1,9 +1,9 @@
 /*************************************************************************/
-/*  av_stream_webm.cpp.cpp                                              */
+/*  video_stream_webm.h                                                  */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -60,7 +60,7 @@ class VideoStreamPlaybackWebm : public VideoStreamPlayback {
 	PoolVector<uint8_t> frame_data;
 	Ref<ImageTexture> texture;
 
-	int16_t *pcm;
+	float *pcm;
 
 public:
 	VideoStreamPlaybackWebm();
@@ -74,15 +74,15 @@ public:
 	virtual bool is_playing() const;
 
 	virtual void set_paused(bool p_paused);
-	virtual bool is_paused(bool p_paused) const;
+	virtual bool is_paused() const;
 
 	virtual void set_loop(bool p_enable);
 	virtual bool has_loop() const;
 
 	virtual float get_length() const;
 
-	virtual float get_pos() const;
-	virtual void seek_pos(float p_time);
+	virtual float get_playback_position() const;
+	virtual void seek(float p_time);
 
 	virtual void set_audio_track(int p_idx);
 
@@ -95,6 +95,7 @@ public:
 
 private:
 	inline bool has_enough_video_frames() const;
+	bool should_process(WebMFrame &video_frame);
 
 	void delete_pointers();
 };
@@ -103,10 +104,14 @@ private:
 
 class VideoStreamWebm : public VideoStream {
 
-	GDCLASS(VideoStreamWebm, VideoStream)
+	GDCLASS(VideoStreamWebm, VideoStream);
+	RES_BASE_EXTENSION("webmstr");
 
 	String file;
 	int audio_track;
+
+protected:
+	static void _bind_methods();
 
 public:
 	VideoStreamWebm();
@@ -114,16 +119,6 @@ public:
 	virtual Ref<VideoStreamPlayback> instance_playback();
 
 	virtual void set_file(const String &p_file);
+	String get_file();
 	virtual void set_audio_track(int p_track);
-};
-
-/**/
-
-class ResourceFormatLoaderVideoStreamWebm : public ResourceFormatLoader {
-
-public:
-	virtual RES load(const String &p_path, const String &p_original_path, Error *r_error);
-	virtual void get_recognized_extensions(List<String> *p_extensions) const;
-	virtual bool handles_type(const String &p_type) const;
-	virtual String get_resource_type(const String &p_path) const;
 };

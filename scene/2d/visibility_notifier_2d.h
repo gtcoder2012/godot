@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -54,12 +54,12 @@ protected:
 	static void _bind_methods();
 
 public:
+	virtual Rect2 _edit_get_rect() const;
+
 	void set_rect(const Rect2 &p_rect);
 	Rect2 get_rect() const;
 
 	bool is_on_screen() const;
-
-	virtual Rect2 get_item_rect() const;
 
 	VisibilityNotifier2D();
 };
@@ -74,7 +74,7 @@ public:
 		ENABLER_FREEZE_BODIES,
 		ENABLER_PAUSE_PARTICLES,
 		ENABLER_PARENT_PROCESS,
-		ENABLER_PARENT_FIXED_PROCESS,
+		ENABLER_PARENT_PHYSICS_PROCESS,
 		ENABLER_PAUSE_ANIMATED_SPRITES,
 		ENABLER_MAX
 	};

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -41,6 +41,7 @@ public:
 	enum DrawFlags {
 		FLAG_TRANSPARENT,
 		FLAG_SHADED,
+		FLAG_DOUBLE_SIDED,
 		FLAG_MAX
 
 	};
@@ -70,7 +71,7 @@ private:
 
 	Vector3::Axis axis;
 	float pixel_size;
-	Rect3 aabb;
+	AABB aabb;
 
 	RID immediate;
 
@@ -86,7 +87,7 @@ protected:
 	void _notification(int p_what);
 	static void _bind_methods();
 	virtual void _draw() = 0;
-	_FORCE_INLINE_ void set_aabb(const Rect3 &p_aabb) { aabb = p_aabb; }
+	_FORCE_INLINE_ void set_aabb(const AABB &p_aabb) { aabb = p_aabb; }
 	_FORCE_INLINE_ RID &get_immediate() { return immediate; }
 	void _queue_update();
 
@@ -118,7 +119,7 @@ public:
 	void set_pixel_size(float p_amount);
 	float get_pixel_size() const;
 
-	void set_axis(Vector3::Axis p_amount);
+	void set_axis(Vector3::Axis p_axis);
 	Vector3::Axis get_axis() const;
 
 	void set_draw_flag(DrawFlags p_flag, bool p_enable);
@@ -129,7 +130,7 @@ public:
 
 	virtual Rect2 get_item_rect() const = 0;
 
-	virtual Rect3 get_aabb() const;
+	virtual AABB get_aabb() const;
 	virtual PoolVector<Face3> get_faces(uint32_t p_usage_flags) const;
 
 	SpriteBase3D();
@@ -179,37 +180,6 @@ public:
 	Sprite3D();
 	//~Sprite3D();
 };
-
-#if 0
-class AnimatedSprite3D : public SpriteBase3D {
-
-	GDCLASS(AnimatedSprite3D,SpriteBase3D);
-	Ref<SpriteFrames> frames;
-
-
-	StringName animation;
-	int frame;
-
-protected:
-	virtual void _draw();
-	static void _bind_methods();
-public:
-
-
-
-	void set_sprite_frames(const Ref<SpriteFrames>& p_sprite_frames);
-	Ref<SpriteFrames> get_sprite_frames() const;
-
-	void set_frame(int p_frame);
-	int get_frame() const;
-
-
-	virtual Rect2 get_item_rect() const;
-
-	AnimatedSprite3D();
-	//~AnimatedSprite3D();
-};
-#endif
 
 class AnimatedSprite3D : public SpriteBase3D {
 

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,6 +31,7 @@
 #define PROPERTY_EDITOR_H
 
 #include "editor/editor_file_dialog.h"
+#include "editor/scene_tree_editor.h"
 #include "scene/gui/button.h"
 #include "scene/gui/check_box.h"
 #include "scene/gui/check_button.h"
@@ -43,7 +44,6 @@
 #include "scene/gui/text_edit.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/gui/tree.h"
-#include "scene_tree_editor.h"
 
 /**
 	@author Juan Linietsky <reduzio@gmail.com>
@@ -52,6 +52,19 @@
 class PropertyValueEvaluator;
 class CreateDialog;
 class PropertySelector;
+
+class EditorResourceConversionPlugin : public Reference {
+
+	GDCLASS(EditorResourceConversionPlugin, Reference)
+
+protected:
+	static void _bind_methods();
+
+public:
+	virtual String converts_to() const;
+	virtual bool handles(const Ref<Resource> &p_resource) const;
+	virtual Ref<Resource> convert(const Ref<Resource> &p_resource);
+};
 
 class CustomPropertyEditor : public Popup {
 
@@ -66,10 +79,10 @@ class CustomPropertyEditor : public Popup {
 		OBJ_MENU_MAKE_UNIQUE = 3,
 		OBJ_MENU_COPY = 4,
 		OBJ_MENU_PASTE = 5,
-		OBJ_MENU_REIMPORT = 6,
-		OBJ_MENU_NEW_SCRIPT = 7,
-		OBJ_MENU_SHOW_IN_FILE_SYSTEM = 8,
-		TYPE_BASE_ID = 100
+		OBJ_MENU_NEW_SCRIPT = 6,
+		OBJ_MENU_SHOW_IN_FILE_SYSTEM = 7,
+		TYPE_BASE_ID = 100,
+		CONVERT_BASE_ID = 1000
 	};
 
 	enum {
@@ -120,7 +133,6 @@ class CustomPropertyEditor : public Popup {
 
 	void _text_edit_changed();
 	void _file_selected(String p_file);
-	void _scroll_modified(double p_value);
 	void _modified(String p_string);
 	void _range_modified(double p_value);
 	void _focus_enter();
@@ -168,7 +180,6 @@ class PropertyEditor : public Control {
 
 	Tree *tree;
 	Label *top_label;
-	//Object *object;
 	LineEdit *search_box;
 
 	PropertyValueEvaluator *evaluator;
@@ -190,7 +201,11 @@ class PropertyEditor : public Control {
 	bool use_filter;
 	bool subsection_selectable;
 	bool hide_script;
+	bool use_folding;
+	bool property_selectable;
+	bool updating_folding;
 
+	List<String> foldable_property_cache;
 	HashMap<String, String> pending;
 	String selected_property;
 
@@ -205,15 +220,16 @@ class PropertyEditor : public Control {
 	void _custom_editor_request(bool p_arrow);
 
 	void _item_selected();
+	void _item_rmb_edited();
 	void _item_edited();
-	TreeItem *get_parent_node(String p_path, HashMap<String, TreeItem *> &item_paths, TreeItem *root);
+	TreeItem *get_parent_node(String p_path, HashMap<String, TreeItem *> &item_paths, TreeItem *root, TreeItem *category);
 
 	void set_item_text(TreeItem *p_item, int p_type, const String &p_name, int p_hint = PROPERTY_HINT_NONE, const String &p_hint_text = "");
 
 	TreeItem *find_item(TreeItem *p_item, const String &p_name);
 
-	virtual void _changed_callback(Object *p_changed, const char *p_what);
-	virtual void _changed_callbacks(Object *p_changed, const String &p_callback);
+	virtual void _changed_callback(Object *p_changed, const char *p_prop);
+	virtual void _changed_callbacks(Object *p_changed, const String &p_prop);
 
 	void _check_reload_status(const String &p_name, TreeItem *item);
 
@@ -223,11 +239,12 @@ class PropertyEditor : public Control {
 
 	friend class ProjectExportDialog;
 	void _edit_set(const String &p_name, const Variant &p_value, bool p_refresh_all = false, const String &p_changed_field = "");
-	void _draw_flags(Object *ti, const Rect2 &p_rect);
+	void _draw_flags(Object *p_object, const Rect2 &p_rect);
 
 	bool _might_be_in_instance();
 	bool _get_instanced_node_original_property(const StringName &p_prop, Variant &value);
 	bool _is_property_different(const Variant &p_current, const Variant &p_orig, int p_usage = 0);
+	bool _is_instanced_node_with_original_property_different(const String &p_name, TreeItem *item);
 
 	void _refresh_item(TreeItem *p_item);
 	void _set_range_def(Object *p_item, String prop, float p_frame);
@@ -244,6 +261,7 @@ class PropertyEditor : public Control {
 
 	void _resource_preview_done(const String &p_path, const Ref<Texture> &p_preview, Variant p_ud);
 	void _draw_transparency(Object *t, const Rect2 &p_rect);
+	void _item_folded(Object *item_obj);
 
 	UndoRedo *undo_redo;
 
@@ -284,16 +302,21 @@ public:
 	void register_text_enter(Node *p_line_edit);
 
 	void set_subsection_selectable(bool p_selectable);
+	void set_property_selectable(bool p_selectable);
 
+	void set_use_folding(bool p_enable);
+
+	void collapse_all_folding();
+	void expand_all_folding();
 	PropertyEditor();
 	~PropertyEditor();
 };
 
 class SectionedPropertyEditorFilter;
 
-class SectionedPropertyEditor : public HBoxContainer {
+class SectionedPropertyEditor : public HSplitContainer {
 
-	GDCLASS(SectionedPropertyEditor, HBoxContainer);
+	GDCLASS(SectionedPropertyEditor, HSplitContainer);
 
 	ObjectID obj;
 
@@ -302,11 +325,15 @@ class SectionedPropertyEditor : public HBoxContainer {
 
 	Map<String, TreeItem *> section_map;
 	PropertyEditor *editor;
+	LineEdit *search_box;
 
 	static void _bind_methods();
 	void _section_selected();
 
+	void _search_changed(const String &p_what);
+
 public:
+	void register_search_box(LineEdit *p_box);
 	PropertyEditor *get_property_editor();
 	void edit(Object *p_object);
 	String get_full_item_path(const String &p_item);

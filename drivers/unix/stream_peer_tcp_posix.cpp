@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -213,7 +213,7 @@ Error StreamPeerTCPPosix::write(const uint8_t *p_data, int p_bytes, int &r_sent,
 
 			if (errno != EAGAIN) {
 
-				perror("shit?");
+				perror("Nothing sent");
 				disconnect_from_host();
 				ERR_PRINT("Server disconnected!\n");
 				return FAILED;
@@ -270,7 +270,7 @@ Error StreamPeerTCPPosix::read(uint8_t *p_buffer, int p_bytes, int &r_received, 
 
 			if (errno != EAGAIN) {
 
-				perror("shit?");
+				perror("Nothing read");
 				disconnect_from_host();
 				ERR_PRINT("Server disconnected!\n");
 				return FAILED;

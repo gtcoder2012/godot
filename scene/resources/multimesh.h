@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -36,7 +36,7 @@
 class MultiMesh : public Resource {
 
 	GDCLASS(MultiMesh, Resource);
-	RES_BASE_EXTENSION("mmsh");
+	RES_BASE_EXTENSION("multimesh");
 
 public:
 	enum TransformFormat {
@@ -84,7 +84,7 @@ public:
 	void set_instance_color(int p_instance, const Color &p_color);
 	Color get_instance_color(int p_instance) const;
 
-	virtual Rect3 get_aabb() const;
+	virtual AABB get_aabb() const;
 
 	virtual RID get_rid() const;
 

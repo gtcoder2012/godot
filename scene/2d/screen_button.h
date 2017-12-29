@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -61,7 +61,9 @@ private:
 
 	VisibilityMode visibility;
 
-	void _input(const Ref<InputEvent> &p_Event);
+	void _input(const Ref<InputEvent> &p_event);
+
+	bool _is_point_inside(const Point2 &p_point);
 
 	void _press(int p_finger_pressed);
 	void _release(bool p_exiting_tree = false);
@@ -100,7 +102,7 @@ public:
 
 	bool is_pressed() const;
 
-	Rect2 get_item_rect() const;
+	Rect2 _edit_get_rect() const;
 
 	TouchScreenButton();
 };

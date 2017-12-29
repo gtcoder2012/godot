@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,7 +31,7 @@
 #define SPATIAL_H
 
 #include "scene/main/node.h"
-#include "scene/main/scene_main_loop.h"
+#include "scene/main/scene_tree.h"
 
 /**
 	@author Juan Linietsky <reduzio@gmail.com>
@@ -47,6 +47,7 @@ public:
 	virtual void clear() = 0;
 	virtual void redraw() = 0;
 	virtual void free() = 0;
+	virtual bool can_draw() const = 0;
 
 	SpatialGizmo();
 };
@@ -105,10 +106,6 @@ class Spatial : public Node {
 	void _notify_dirty();
 	void _propagate_transform_changed(Spatial *p_origin);
 
-	// Deprecated, should be removed in a future version.
-	void _set_rotation_deg(const Vector3 &p_euler_deg);
-	Vector3 _get_rotation_deg() const;
-
 	void _propagate_visibility_changed();
 
 protected:
@@ -135,12 +132,12 @@ public:
 
 	void set_translation(const Vector3 &p_translation);
 	void set_rotation(const Vector3 &p_euler_rad);
-	void set_rotation_in_degrees(const Vector3 &p_euler_deg);
+	void set_rotation_degrees(const Vector3 &p_euler_deg);
 	void set_scale(const Vector3 &p_scale);
 
 	Vector3 get_translation() const;
 	Vector3 get_rotation() const;
-	Vector3 get_rotation_in_degrees() const;
+	Vector3 get_rotation_degrees() const;
 	Vector3 get_scale() const;
 
 	void set_transform(const Transform &p_transform);
@@ -171,7 +168,10 @@ public:
 	void global_translate(const Vector3 &p_offset);
 
 	void look_at(const Vector3 &p_target, const Vector3 &p_up_normal);
-	void look_at_from_pos(const Vector3 &p_pos, const Vector3 &p_target, const Vector3 &p_up_normal);
+	void look_at_from_position(const Vector3 &p_pos, const Vector3 &p_target, const Vector3 &p_up_normal);
+
+	Vector3 to_local(Vector3 p_global) const;
+	Vector3 to_global(Vector3 p_local) const;
 
 	void set_notify_transform(bool p_enable);
 	bool is_transform_notification_enabled() const;

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -43,7 +43,25 @@ const char *JSON::tk_name[TK_MAX] = {
 	"EOF",
 };
 
-String JSON::_print_var(const Variant &p_var) {
+static String _make_indent(const String &p_indent, int p_size) {
+
+	String indent_text = "";
+	if (!p_indent.empty()) {
+		for (int i = 0; i < p_size; i++)
+			indent_text += p_indent;
+	}
+	return indent_text;
+}
+
+String JSON::_print_var(const Variant &p_var, const String &p_indent, int p_cur_indent, bool p_sort_keys) {
+
+	String colon = ":";
+	String end_statement = "";
+
+	if (!p_indent.empty()) {
+		colon += " ";
+		end_statement += "\n";
+	}
 
 	switch (p_var.get_type()) {
 
@@ -57,52 +75,61 @@ String JSON::_print_var(const Variant &p_var) {
 		case Variant::ARRAY: {
 
 			String s = "[";
+			s += end_statement;
 			Array a = p_var;
 			for (int i = 0; i < a.size(); i++) {
-				if (i > 0)
-					s += ", ";
-				s += _print_var(a[i]);
+				if (i > 0) {
+					s += ",";
+					s += end_statement;
+				}
+				s += _make_indent(p_indent, p_cur_indent + 1) + _print_var(a[i], p_indent, p_cur_indent + 1, p_sort_keys);
 			}
-			s += "]";
+			s += end_statement + _make_indent(p_indent, p_cur_indent) + "]";
 			return s;
 		};
 		case Variant::DICTIONARY: {
 
 			String s = "{";
+			s += end_statement;
 			Dictionary d = p_var;
 			List<Variant> keys;
 			d.get_key_list(&keys);
 
+			if (p_sort_keys)
+				keys.sort();
+
 			for (List<Variant>::Element *E = keys.front(); E; E = E->next()) {
 
-				if (E != keys.front())
-					s += ", ";
-				s += _print_var(String(E->get()));
-				s += ":";
-				s += _print_var(d[E->get()]);
+				if (E != keys.front()) {
+					s += ",";
+					s += end_statement;
+				}
+				s += _make_indent(p_indent, p_cur_indent + 1) + _print_var(String(E->get()), p_indent, p_cur_indent + 1, p_sort_keys);
+				s += colon;
+				s += _print_var(d[E->get()], p_indent, p_cur_indent + 1, p_sort_keys);
 			}
 
-			s += "}";
+			s += end_statement + _make_indent(p_indent, p_cur_indent) + "}";
 			return s;
 		};
 		default: return "\"" + String(p_var).json_escape() + "\"";
 	}
 }
 
-String JSON::print(const Variant &p_var) {
+String JSON::print(const Variant &p_var, const String &p_indent, bool p_sort_keys) {
 
-	return _print_var(p_var);
+	return _print_var(p_var, p_indent, 0, p_sort_keys);
 }
 
-Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_token, int &line, String &r_err_str) {
+Error JSON::_get_token(const CharType *p_str, int &index, int p_len, Token &r_token, int &line, String &r_err_str) {
 
 	while (p_len > 0) {
-		switch (p_str[idx]) {
+		switch (p_str[index]) {
 
 			case '\n': {
 
 				line++;
-				idx++;
+				index++;
 				break;
 			};
 			case 0: {
@@ -112,54 +139,54 @@ Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_toke
 			case '{': {
 
 				r_token.type = TK_CURLY_BRACKET_OPEN;
-				idx++;
+				index++;
 				return OK;
 			};
 			case '}': {
 
 				r_token.type = TK_CURLY_BRACKET_CLOSE;
-				idx++;
+				index++;
 				return OK;
 			};
 			case '[': {
 
 				r_token.type = TK_BRACKET_OPEN;
-				idx++;
+				index++;
 				return OK;
 			};
 			case ']': {
 
 				r_token.type = TK_BRACKET_CLOSE;
-				idx++;
+				index++;
 				return OK;
 			};
 			case ':': {
 
 				r_token.type = TK_COLON;
-				idx++;
+				index++;
 				return OK;
 			};
 			case ',': {
 
 				r_token.type = TK_COMMA;
-				idx++;
+				index++;
 				return OK;
 			};
 			case '"': {
 
-				idx++;
+				index++;
 				String str;
 				while (true) {
-					if (p_str[idx] == 0) {
+					if (p_str[index] == 0) {
 						r_err_str = "Unterminated String";
 						return ERR_PARSE_ERROR;
-					} else if (p_str[idx] == '"') {
-						idx++;
+					} else if (p_str[index] == '"') {
+						index++;
 						break;
-					} else if (p_str[idx] == '\\') {
+					} else if (p_str[index] == '\\') {
 						//escaped characters...
-						idx++;
-						CharType next = p_str[idx];
+						index++;
+						CharType next = p_str[index];
 						if (next == 0) {
 							r_err_str = "Unterminated String";
 							return ERR_PARSE_ERROR;
@@ -177,7 +204,7 @@ Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_toke
 								//hexnumbarh - oct is deprecated
 
 								for (int j = 0; j < 4; j++) {
-									CharType c = p_str[idx + j + 1];
+									CharType c = p_str[index + j + 1];
 									if (c == 0) {
 										r_err_str = "Unterminated String";
 										return ERR_PARSE_ERROR;
@@ -204,7 +231,7 @@ Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_toke
 									res <<= 4;
 									res |= v;
 								}
-								idx += 4; //will add at the end anyway
+								index += 4; //will add at the end anyway
 
 							} break;
 							//case '\"': res='\"'; break;
@@ -220,11 +247,11 @@ Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_toke
 						str += res;
 
 					} else {
-						if (p_str[idx] == '\n')
+						if (p_str[index] == '\n')
 							line++;
-						str += p_str[idx];
+						str += p_str[index];
 					}
-					idx++;
+					index++;
 				}
 
 				r_token.type = TK_STRING;
@@ -234,28 +261,28 @@ Error JSON::_get_token(const CharType *p_str, int &idx, int p_len, Token &r_toke
 			} break;
 			default: {
 
-				if (p_str[idx] <= 32) {
-					idx++;
+				if (p_str[index] <= 32) {
+					index++;
 					break;
 				}
 
-				if (p_str[idx] == '-' || (p_str[idx] >= '0' && p_str[idx] <= '9')) {
+				if (p_str[index] == '-' || (p_str[index] >= '0' && p_str[index] <= '9')) {
 					//a number
 					const CharType *rptr;
-					double number = String::to_double(&p_str[idx], &rptr);
-					idx += (rptr - &p_str[idx]);
+					double number = String::to_double(&p_str[index], &rptr);
+					index += (rptr - &p_str[index]);
 					r_token.type = TK_NUMBER;
 					r_token.value = number;
 					return OK;
 
-				} else if ((p_str[idx] >= 'A' && p_str[idx] <= 'Z') || (p_str[idx] >= 'a' && p_str[idx] <= 'z')) {
+				} else if ((p_str[index] >= 'A' && p_str[index] <= 'Z') || (p_str[index] >= 'a' && p_str[index] <= 'z')) {
 
 					String id;
 
-					while ((p_str[idx] >= 'A' && p_str[idx] <= 'Z') || (p_str[idx] >= 'a' && p_str[idx] <= 'z')) {
+					while ((p_str[index] >= 'A' && p_str[index] <= 'Z') || (p_str[index] >= 'a' && p_str[index] <= 'z')) {
 
-						id += p_str[idx];
-						idx++;
+						id += p_str[index];
+						index++;
 					}
 
 					r_token.type = TK_IDENTIFIER;

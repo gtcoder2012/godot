@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -240,20 +240,20 @@ void IP::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_resolve_item_address", "id"), &IP::get_resolve_item_address);
 	ClassDB::bind_method(D_METHOD("erase_resolve_item", "id"), &IP::erase_resolve_item);
 	ClassDB::bind_method(D_METHOD("get_local_addresses"), &IP::_get_local_addresses);
-	ClassDB::bind_method(D_METHOD("clear_cache"), &IP::clear_cache, DEFVAL(""));
+	ClassDB::bind_method(D_METHOD("clear_cache", "hostname"), &IP::clear_cache, DEFVAL(""));
 
-	BIND_CONSTANT(RESOLVER_STATUS_NONE);
-	BIND_CONSTANT(RESOLVER_STATUS_WAITING);
-	BIND_CONSTANT(RESOLVER_STATUS_DONE);
-	BIND_CONSTANT(RESOLVER_STATUS_ERROR);
+	BIND_ENUM_CONSTANT(RESOLVER_STATUS_NONE);
+	BIND_ENUM_CONSTANT(RESOLVER_STATUS_WAITING);
+	BIND_ENUM_CONSTANT(RESOLVER_STATUS_DONE);
+	BIND_ENUM_CONSTANT(RESOLVER_STATUS_ERROR);
 
 	BIND_CONSTANT(RESOLVER_MAX_QUERIES);
 	BIND_CONSTANT(RESOLVER_INVALID_ID);
 
-	BIND_CONSTANT(TYPE_NONE);
-	BIND_CONSTANT(TYPE_IPV4);
-	BIND_CONSTANT(TYPE_IPV6);
-	BIND_CONSTANT(TYPE_ANY);
+	BIND_ENUM_CONSTANT(TYPE_NONE);
+	BIND_ENUM_CONSTANT(TYPE_IPV4);
+	BIND_ENUM_CONSTANT(TYPE_IPV6);
+	BIND_ENUM_CONSTANT(TYPE_ANY);
 }
 
 IP *IP::singleton = NULL;

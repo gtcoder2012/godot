@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -38,10 +38,17 @@
 /**
 	@author Juan Linietsky <reduzio@gmail.com>
 */
-class Mesh : public Resource {
 
+class Mesh : public Resource {
 	GDCLASS(Mesh, Resource);
-	RES_BASE_EXTENSION("msh");
+
+	mutable Ref<TriangleMesh> triangle_mesh; //cached
+	Size2 lightmap_size_hint;
+
+protected:
+	void _clear_triangle_mesh() const;
+
+	static void _bind_methods();
 
 public:
 	enum {
@@ -90,6 +97,7 @@ public:
 
 		ARRAY_FLAG_USE_2D_VERTICES = ARRAY_COMPRESS_INDEX << 1,
 		ARRAY_FLAG_USE_16_BIT_BONES = ARRAY_COMPRESS_INDEX << 2,
+		ARRAY_FLAG_USE_DYNAMIC_UPDATE = ARRAY_COMPRESS_INDEX << 3,
 
 		ARRAY_COMPRESS_DEFAULT = ARRAY_COMPRESS_VERTEX | ARRAY_COMPRESS_NORMAL | ARRAY_COMPRESS_TANGENT | ARRAY_COMPRESS_COLOR | ARRAY_COMPRESS_TEX_UV | ARRAY_COMPRESS_TEX_UV2 | ARRAY_COMPRESS_WEIGHTS
 
@@ -111,20 +119,51 @@ public:
 		BLEND_SHAPE_MODE_RELATIVE = VS::BLEND_SHAPE_MODE_RELATIVE,
 	};
 
+	virtual int get_surface_count() const = 0;
+	virtual int surface_get_array_len(int p_idx) const = 0;
+	virtual int surface_get_array_index_len(int p_idx) const = 0;
+	virtual Array surface_get_arrays(int p_surface) const = 0;
+	virtual Array surface_get_blend_shape_arrays(int p_surface) const = 0;
+	virtual uint32_t surface_get_format(int p_idx) const = 0;
+	virtual PrimitiveType surface_get_primitive_type(int p_idx) const = 0;
+	virtual Ref<Material> surface_get_material(int p_idx) const = 0;
+	virtual int get_blend_shape_count() const = 0;
+	virtual StringName get_blend_shape_name(int p_index) const = 0;
+
+	PoolVector<Face3> get_faces() const;
+	Ref<TriangleMesh> generate_triangle_mesh() const;
+
+	Ref<Shape> create_trimesh_shape() const;
+	Ref<Shape> create_convex_shape() const;
+
+	Ref<Mesh> create_outline(float p_margin) const;
+
+	virtual AABB get_aabb() const = 0;
+
+	void set_lightmap_size_hint(const Vector2 &p_size);
+	Size2 get_lightmap_size_hint() const;
+
+	Mesh();
+};
+
+class ArrayMesh : public Mesh {
+
+	GDCLASS(ArrayMesh, Mesh);
+	RES_BASE_EXTENSION("mesh");
+
 private:
 	struct Surface {
 		String name;
-		Rect3 aabb;
+		AABB aabb;
 		Ref<Material> material;
+		bool is_2d;
 	};
 	Vector<Surface> surfaces;
 	RID mesh;
-	Rect3 aabb;
+	AABB aabb;
 	BlendShapeMode blend_shape_mode;
 	Vector<StringName> blend_shapes;
-	Rect3 custom_aabb;
-
-	mutable Ref<TriangleMesh> triangle_mesh;
+	AABB custom_aabb;
 
 	void _recompute_aabb();
 
@@ -139,10 +178,10 @@ protected:
 
 public:
 	void add_surface_from_arrays(PrimitiveType p_primitive, const Array &p_arrays, const Array &p_blend_shapes = Array(), uint32_t p_flags = ARRAY_COMPRESS_DEFAULT);
-	void add_surface(uint32_t p_format, PrimitiveType p_primitive, const PoolVector<uint8_t> &p_array, int p_vertex_count, const PoolVector<uint8_t> &p_index_array, int p_index_count, const Rect3 &p_aabb, const Vector<PoolVector<uint8_t> > &p_blend_shapes = Vector<PoolVector<uint8_t> >(), const Vector<Rect3> &p_bone_aabbs = Vector<Rect3>());
+	void add_surface(uint32_t p_format, PrimitiveType p_primitive, const PoolVector<uint8_t> &p_array, int p_vertex_count, const PoolVector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<PoolVector<uint8_t> > &p_blend_shapes = Vector<PoolVector<uint8_t> >(), const Vector<AABB> &p_bone_aabbs = Vector<AABB>());
 
 	Array surface_get_arrays(int p_surface) const;
-	virtual Array surface_get_blend_shape_arrays(int p_surface) const;
+	Array surface_get_blend_shape_arrays(int p_surface) const;
 
 	void add_blend_shape(const StringName &p_name);
 	int get_blend_shape_count() const;
@@ -152,10 +191,12 @@ public:
 	void set_blend_shape_mode(BlendShapeMode p_mode);
 	BlendShapeMode get_blend_shape_mode() const;
 
+	void surface_update_region(int p_surface, int p_offset, const PoolVector<uint8_t> &p_data);
+
 	int get_surface_count() const;
 	void surface_remove(int p_idx);
 
-	void surface_set_custom_aabb(int p_surface, const Rect3 &p_aabb); //only recognized by driver
+	void surface_set_custom_aabb(int p_idx, const AABB &p_aabb); //only recognized by driver
 
 	int surface_get_array_len(int p_idx) const;
 	int surface_get_array_index_len(int p_idx) const;
@@ -171,42 +212,26 @@ public:
 
 	void add_surface_from_mesh_data(const Geometry::MeshData &p_mesh_data);
 
-	void set_custom_aabb(const Rect3 &p_custom);
-	Rect3 get_custom_aabb() const;
+	void set_custom_aabb(const AABB &p_custom);
+	AABB get_custom_aabb() const;
 
-	Rect3 get_aabb() const;
+	AABB get_aabb() const;
 	virtual RID get_rid() const;
-
-	Ref<Shape> create_trimesh_shape() const;
-	Ref<Shape> create_convex_shape() const;
-
-	Ref<Mesh> create_outline(float p_margin) const;
 
 	void center_geometry();
 	void regen_normalmaps();
 
-	PoolVector<Face3> get_faces() const;
-	Ref<TriangleMesh> generate_triangle_mesh() const;
-	Mesh();
+	Error lightmap_unwrap(const Transform &p_base_transform = Transform(), float p_texel_size = 0.05);
 
-	~Mesh();
-};
+	virtual void reload_from_file();
 
-class QuadMesh : public Mesh {
+	ArrayMesh();
 
-	GDCLASS(QuadMesh, Mesh)
-
-protected:
-	virtual bool _is_generated() const { return true; }
-	static void _bind_methods();
-
-public:
-	void set_material(const Ref<Material> &p_material);
-	Ref<Material> get_material() const;
-	QuadMesh();
+	~ArrayMesh();
 };
 
 VARIANT_ENUM_CAST(Mesh::ArrayType);
+VARIANT_ENUM_CAST(Mesh::ArrayFormat);
 VARIANT_ENUM_CAST(Mesh::PrimitiveType);
 VARIANT_ENUM_CAST(Mesh::BlendShapeMode);
 

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -37,7 +37,7 @@
 #include "editor/editor_node.h"
 #include "editor/editor_plugin.h"
 #include "scene/2d/sprite.h"
-#include "scene/gui/patch_9_rect.h"
+#include "scene/gui/nine_patch_rect.h"
 #include "scene/resources/style_box.h"
 #include "scene/resources/texture.h"
 
@@ -82,7 +82,7 @@ class TextureRegionEditor : public Control {
 	Vector2 snap_step;
 	Vector2 snap_separation;
 
-	NinePatchRect *node_patch9;
+	NinePatchRect *node_ninepatch;
 	Sprite *node_sprite;
 	Ref<StyleBoxTexture> obj_styleBox;
 	Ref<AtlasTexture> atlas_tex;
@@ -139,8 +139,8 @@ class TextureRegionEditorPlugin : public EditorPlugin {
 public:
 	virtual String get_name() const { return "TextureRegion"; }
 	bool has_main_screen() const { return false; }
-	virtual void edit(Object *p_node);
-	virtual bool handles(Object *p_node) const;
+	virtual void edit(Object *p_object);
+	virtual bool handles(Object *p_object) const;
 	virtual void make_visible(bool p_visible);
 	void set_state(const Dictionary &p_state);
 	Dictionary get_state() const;

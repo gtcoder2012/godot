@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -46,6 +46,7 @@ class Slider : public Range {
 	bool mouse_inside;
 	Orientation orientation;
 	float custom_step;
+	bool editable;
 
 protected:
 	void _gui_input(Ref<InputEvent> p_event);
@@ -65,6 +66,9 @@ public:
 	void set_ticks_on_borders(bool);
 	bool get_ticks_on_borders() const;
 
+	void set_editable(bool p_editable);
+	bool is_editable() const;
+
 	Slider(Orientation p_orientation = VERTICAL);
 };
 
@@ -73,8 +77,8 @@ class HSlider : public Slider {
 	GDCLASS(HSlider, Slider);
 
 public:
-	HSlider()
-		: Slider(HORIZONTAL) { set_v_size_flags(0); }
+	HSlider() :
+			Slider(HORIZONTAL) { set_v_size_flags(0); }
 };
 
 class VSlider : public Slider {
@@ -82,8 +86,8 @@ class VSlider : public Slider {
 	GDCLASS(VSlider, Slider);
 
 public:
-	VSlider()
-		: Slider(VERTICAL) { set_h_size_flags(0); }
+	VSlider() :
+			Slider(VERTICAL) { set_h_size_flags(0); }
 };
 
 #endif // SLIDER_H

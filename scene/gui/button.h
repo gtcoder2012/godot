@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -53,14 +53,17 @@ private:
 	Ref<Texture> icon;
 	bool clip_text;
 	TextAlign align;
+	float _internal_margin[4];
 
 protected:
-	virtual Size2 get_minimum_size() const;
+	void _set_internal_margin(Margin p_margin, float p_value);
 	void _notification(int p_what);
 	static void _bind_methods();
 
 public:
 	//
+
+	virtual Size2 get_minimum_size() const;
 
 	void set_text(const String &p_text);
 	String get_text() const;

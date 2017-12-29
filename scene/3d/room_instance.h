@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -44,6 +44,9 @@
 
 */
 
+// FIXME: this will be removed, left for reference
+#if 0
+
 class Room : public VisualInstance {
 
 	GDCLASS(Room, VisualInstance);
@@ -68,7 +71,7 @@ public:
 		NOTIFICATION_AREA_CHANGED = 60
 	};
 
-	virtual Rect3 get_aabb() const;
+	virtual AABB get_aabb() const;
 	virtual PoolVector<Face3> get_faces(uint32_t p_usage_flags) const;
 
 	void set_room(const Ref<RoomBounds> &p_room);
@@ -77,5 +80,5 @@ public:
 	Room();
 	~Room();
 };
-
+#endif
 #endif // ROOM_INSTANCE_H

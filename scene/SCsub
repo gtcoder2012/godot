@@ -27,11 +27,10 @@ SConscript('2d/SCsub')
 SConscript('animation/SCsub')
 SConscript('audio/SCsub')
 SConscript('resources/SCsub')
-SConscript('io/SCsub')
 
 
 # Build it all as a library
-lib = env.Library("scene", env.scene_sources)
+lib = env.add_library("scene", env.scene_sources)
 env.Prepend(LIBS=[lib])
 
 Export('env')

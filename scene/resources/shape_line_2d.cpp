@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -76,7 +76,7 @@ Rect2 LineShape2D::get_rect() const {
 	Vector2 l1[2] = { point - get_normal().tangent() * 100, point + get_normal().tangent() * 100 };
 	Vector2 l2[2] = { point, point + get_normal() * 30 };
 	Rect2 rect;
-	rect.pos = l1[0];
+	rect.position = l1[0];
 	rect.expand_to(l1[1]);
 	rect.expand_to(l2[0]);
 	rect.expand_to(l2[1]);
@@ -95,8 +95,8 @@ void LineShape2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "d"), "set_d", "get_d");
 }
 
-LineShape2D::LineShape2D()
-	: Shape2D(Physics2DServer::get_singleton()->shape_create(Physics2DServer::SHAPE_LINE)) {
+LineShape2D::LineShape2D() :
+		Shape2D(Physics2DServer::get_singleton()->line_shape_create()) {
 
 	normal = Vector2(0, -1);
 	d = 0;

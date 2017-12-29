@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -34,51 +34,45 @@
 #include "scene/main/viewport.h"
 #include "servers/visual_server.h"
 
-void Node2D::edit_set_pivot(const Point2 &p_pivot) {
-}
+Dictionary Node2D::_edit_get_state() const {
 
-Point2 Node2D::edit_get_pivot() const {
-
-	return Point2();
-}
-bool Node2D::edit_has_pivot() const {
-
-	return false;
-}
-
-Variant Node2D::edit_get_state() const {
-
-	Array state;
-	state.push_back(get_position());
-	state.push_back(get_rotation());
-	state.push_back(get_scale());
+	Dictionary state;
+	state["position"] = get_position();
+	state["rotation"] = get_rotation();
+	state["scale"] = get_scale();
 
 	return state;
 }
-void Node2D::edit_set_state(const Variant &p_state) {
+void Node2D::_edit_set_state(const Dictionary &p_state) {
 
-	Array state = p_state;
-	ERR_FAIL_COND(state.size() != 3);
+	Dictionary state = p_state;
+	pos = state["position"];
+	angle = state["rotation"];
+	_scale = state["scale"];
 
-	pos = state[0];
-	angle = state[1];
-	_scale = state[2];
 	_update_transform();
 	_change_notify("rotation");
-	_change_notify("rotation_deg");
+	_change_notify("rotation_degrees");
 	_change_notify("scale");
 	_change_notify("position");
 }
 
-void Node2D::edit_set_rect(const Rect2 &p_edit_rect) {
+void Node2D::_edit_set_position(const Point2 &p_position) {
+	pos = p_position;
+}
 
-	Rect2 r = get_item_rect();
+Point2 Node2D::_edit_get_position() const {
+	return pos;
+}
+
+void Node2D::_edit_set_rect(const Rect2 &p_edit_rect) {
+	Rect2 r = _edit_get_rect();
 
 	Vector2 zero_offset;
 	if (r.size.x != 0)
-		zero_offset.x = -r.pos.x / r.size.x;
+		zero_offset.x = -r.position.x / r.size.x;
 	if (r.size.y != 0)
-		zero_offset.y = -r.pos.y / r.size.y;
+		zero_offset.y = -r.position.y / r.size.y;
 
 	Size2 new_scale(1, 1);
 
@@ -87,7 +81,7 @@ void Node2D::edit_set_rect(const Rect2 &p_edit_rect) {
 	if (r.size.y != 0)
 		new_scale.y = p_edit_rect.size.y / r.size.y;
 
-	Point2 new_pos = p_edit_rect.pos + p_edit_rect.size * zero_offset; //p_edit_rect.pos - r.pos;
+	Point2 new_pos = p_edit_rect.position + p_edit_rect.size * zero_offset; //p_edit_rect.pos - r.pos;
 
 	Transform2D postxf;
 	postxf.set_rotation_and_scale(angle, _scale);
@@ -101,12 +95,23 @@ void Node2D::edit_set_rect(const Rect2 &p_edit_rect) {
 	_change_notify("position");
 }
 
-void Node2D::edit_rotate(float p_rot) {
+bool Node2D::_edit_use_rect() const {
+	return true;
+}
 
-	angle += p_rot;
+void Node2D::_edit_set_rotation(float p_rotation) {
+	angle = p_rotation;
 	_update_transform();
 	_change_notify("rotation");
-	_change_notify("rotation_deg");
+	_change_notify("rotation_degrees");
+}
+
+float Node2D::_edit_get_rotation() const {
+	return angle;
+}
+
+bool Node2D::_edit_use_rotation() const {
+	return true;
 }
 
 void Node2D::_update_xform_values() {
@@ -147,20 +152,12 @@ void Node2D::set_rotation(float p_radians) {
 	angle = p_radians;
 	_update_transform();
 	_change_notify("rotation");
-	_change_notify("rotation_deg");
+	_change_notify("rotation_degrees");
 }
 
-void Node2D::set_rotation_in_degrees(float p_degrees) {
+void Node2D::set_rotation_degrees(float p_degrees) {
 
 	set_rotation(Math::deg2rad(p_degrees));
-}
-
-// Kept for compatibility after rename to set_rotd.
-// Could be removed after a couple releases.
-void Node2D::_set_rotd(float p_degrees) {
-
-	WARN_PRINT("Deprecated method Node2D._set_rotd(): This method was renamed to set_rotd. Please adapt your code accordingly, as the old method will be obsoleted.");
-	set_rotation_in_degrees(p_degrees);
 }
 
 void Node2D::set_scale(const Size2 &p_scale) {
@@ -182,23 +179,19 @@ Point2 Node2D::get_position() const {
 		((Node2D *)this)->_update_xform_values();
 	return pos;
 }
+
 float Node2D::get_rotation() const {
 	if (_xform_dirty)
 		((Node2D *)this)->_update_xform_values();
 
 	return angle;
 }
-float Node2D::get_rotation_in_degrees() const {
+
+float Node2D::get_rotation_degrees() const {
 
 	return Math::rad2deg(get_rotation());
 }
-// Kept for compatibility after rename to get_rotd.
-// Could be removed after a couple releases.
-float Node2D::_get_rotd() const {
 
-	WARN_PRINT("Deprecated method Node2D._get_rotd(): This method was renamed to get_rotd. Please adapt your code accordingly, as the old method will be obsoleted.");
-	return get_rotation_in_degrees();
-}
 Size2 Node2D::get_scale() const {
 	if (_xform_dirty)
 		((Node2D *)this)->_update_xform_values();
@@ -217,17 +210,6 @@ Transform2D Node2D::get_transform() const {
 	return _mat;
 }
 
-Rect2 Node2D::get_item_rect() const {
-
-	if (get_script_instance()) {
-		Variant::CallError err;
-		Rect2 r = get_script_instance()->call("_get_item_rect", NULL, 0, err);
-		if (err.error == Variant::CallError::CALL_OK)
-			return r;
-	}
-	return Rect2(Point2(-32, -32), Size2(64, 64));
-}
-
 void Node2D::rotate(float p_radians) {
 
 	set_rotation(get_rotation() + p_radians);
@@ -243,7 +225,7 @@ void Node2D::global_translate(const Vector2 &p_amount) {
 	set_global_position(get_global_position() + p_amount);
 }
 
-void Node2D::scale(const Size2 &p_amount) {
+void Node2D::apply_scale(const Size2 &p_amount) {
 
 	set_scale(get_scale() * p_amount);
 }
@@ -299,12 +281,12 @@ void Node2D::set_global_rotation(float p_radians) {
 	}
 }
 
-float Node2D::get_global_rotation_in_degrees() const {
+float Node2D::get_global_rotation_degrees() const {
 
 	return Math::rad2deg(get_global_rotation());
 }
 
-void Node2D::set_global_rotation_in_degrees(float p_degrees) {
+void Node2D::set_global_rotation_degrees(float p_degrees) {
 
 	set_global_rotation(Math::deg2rad(p_degrees));
 }
@@ -319,7 +301,7 @@ void Node2D::set_global_scale(const Size2 &p_scale) {
 	CanvasItem *pi = get_parent_item();
 	if (pi) {
 		const Size2 parent_global_scale = pi->get_global_transform().get_scale();
-		set_scale(p_scale - parent_global_scale);
+		set_scale(p_scale / parent_global_scale);
 	} else {
 		set_scale(p_scale);
 	}
@@ -379,7 +361,7 @@ Transform2D Node2D::get_relative_transform_to_parent(const Node *p_parent) const
 	if (p_parent == this)
 		return Transform2D();
 
-	Node2D *parent_2d = get_parent()->cast_to<Node2D>();
+	Node2D *parent_2d = Object::cast_to<Node2D>(get_parent());
 
 	ERR_FAIL_COND_V(!parent_2d, Transform2D());
 	if (p_parent == parent_2d)
@@ -398,20 +380,26 @@ float Node2D::get_angle_to(const Vector2 &p_pos) const {
 	return (get_global_transform().affine_inverse().xform(p_pos)).angle();
 }
 
+Point2 Node2D::to_local(Point2 p_global) const {
+
+	return get_global_transform().affine_inverse().xform(p_global);
+}
+
+Point2 Node2D::to_global(Point2 p_local) const {
+
+	return get_global_transform().xform(p_local);
+}
+
 void Node2D::_bind_methods() {
 
-	// TODO: Obsolete those two methods (old name) properly (GH-4397)
-	ClassDB::bind_method(D_METHOD("_get_rotd"), &Node2D::_get_rotd);
-	ClassDB::bind_method(D_METHOD("_set_rotd", "degrees"), &Node2D::_set_rotd);
-
-	ClassDB::bind_method(D_METHOD("set_position", "pos"), &Node2D::set_position);
+	ClassDB::bind_method(D_METHOD("set_position", "position"), &Node2D::set_position);
 	ClassDB::bind_method(D_METHOD("set_rotation", "radians"), &Node2D::set_rotation);
-	ClassDB::bind_method(D_METHOD("set_rotation_in_degrees", "degrees"), &Node2D::set_rotation_in_degrees);
+	ClassDB::bind_method(D_METHOD("set_rotation_degrees", "degrees"), &Node2D::set_rotation_degrees);
 	ClassDB::bind_method(D_METHOD("set_scale", "scale"), &Node2D::set_scale);
 
 	ClassDB::bind_method(D_METHOD("get_position"), &Node2D::get_position);
 	ClassDB::bind_method(D_METHOD("get_rotation"), &Node2D::get_rotation);
-	ClassDB::bind_method(D_METHOD("get_rotation_in_degrees"), &Node2D::get_rotation_in_degrees);
+	ClassDB::bind_method(D_METHOD("get_rotation_degrees"), &Node2D::get_rotation_degrees);
 	ClassDB::bind_method(D_METHOD("get_scale"), &Node2D::get_scale);
 
 	ClassDB::bind_method(D_METHOD("rotate", "radians"), &Node2D::rotate);
@@ -419,14 +407,14 @@ void Node2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("move_local_y", "delta", "scaled"), &Node2D::move_y, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("translate", "offset"), &Node2D::translate);
 	ClassDB::bind_method(D_METHOD("global_translate", "offset"), &Node2D::global_translate);
-	ClassDB::bind_method(D_METHOD("scale", "ratio"), &Node2D::scale);
+	ClassDB::bind_method(D_METHOD("apply_scale", "ratio"), &Node2D::apply_scale);
 
-	ClassDB::bind_method(D_METHOD("set_global_position", "pos"), &Node2D::set_global_position);
+	ClassDB::bind_method(D_METHOD("set_global_position", "position"), &Node2D::set_global_position);
 	ClassDB::bind_method(D_METHOD("get_global_position"), &Node2D::get_global_position);
 	ClassDB::bind_method(D_METHOD("set_global_rotation", "radians"), &Node2D::set_global_rotation);
 	ClassDB::bind_method(D_METHOD("get_global_rotation"), &Node2D::get_global_rotation);
-	ClassDB::bind_method(D_METHOD("set_global_rotation_in_degrees", "degrees"), &Node2D::set_global_rotation_in_degrees);
-	ClassDB::bind_method(D_METHOD("get_global_rotation_in_degrees"), &Node2D::get_global_rotation_in_degrees);
+	ClassDB::bind_method(D_METHOD("set_global_rotation_degrees", "degrees"), &Node2D::set_global_rotation_degrees);
+	ClassDB::bind_method(D_METHOD("get_global_rotation_degrees"), &Node2D::get_global_rotation_degrees);
 	ClassDB::bind_method(D_METHOD("set_global_scale", "scale"), &Node2D::set_global_scale);
 	ClassDB::bind_method(D_METHOD("get_global_scale"), &Node2D::get_global_scale);
 
@@ -436,26 +424,27 @@ void Node2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("look_at", "point"), &Node2D::look_at);
 	ClassDB::bind_method(D_METHOD("get_angle_to", "point"), &Node2D::get_angle_to);
 
+	ClassDB::bind_method(D_METHOD("to_local", "global_point"), &Node2D::to_local);
+	ClassDB::bind_method(D_METHOD("to_global", "local_point"), &Node2D::to_global);
+
 	ClassDB::bind_method(D_METHOD("set_z", "z"), &Node2D::set_z);
 	ClassDB::bind_method(D_METHOD("get_z"), &Node2D::get_z);
 
 	ClassDB::bind_method(D_METHOD("set_z_as_relative", "enable"), &Node2D::set_z_as_relative);
 	ClassDB::bind_method(D_METHOD("is_z_relative"), &Node2D::is_z_relative);
 
-	ClassDB::bind_method(D_METHOD("edit_set_pivot", "pivot"), &Node2D::edit_set_pivot);
-
 	ClassDB::bind_method(D_METHOD("get_relative_transform_to_parent", "parent"), &Node2D::get_relative_transform_to_parent);
 
 	ADD_GROUP("Transform", "");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::VECTOR2, "position"), "set_position", "get_position");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::REAL, "rotation", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR), "set_rotation", "get_rotation");
-	ADD_PROPERTYNZ(PropertyInfo(Variant::REAL, "rotation_deg", PROPERTY_HINT_RANGE, "-1440,1440,0.1", PROPERTY_USAGE_EDITOR), "set_rotation_in_degrees", "get_rotation_in_degrees");
+	ADD_PROPERTYNZ(PropertyInfo(Variant::REAL, "rotation_degrees", PROPERTY_HINT_RANGE, "-1440,1440,0.1", PROPERTY_USAGE_EDITOR), "set_rotation_degrees", "get_rotation_degrees");
 	ADD_PROPERTYNO(PropertyInfo(Variant::VECTOR2, "scale"), "set_scale", "get_scale");
 	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM2D, "transform", PROPERTY_HINT_NONE, "", 0), "set_transform", "get_transform");
 
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "global_position", PROPERTY_HINT_NONE, "", 0), "set_global_position", "get_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "global_rotation", PROPERTY_HINT_NONE, "", 0), "set_global_rotation", "get_global_rotation");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "global_rotation_deg", PROPERTY_HINT_NONE, "", 0), "set_global_rotation_in_degrees", "get_global_rotation_in_degrees");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "global_rotation_degrees", PROPERTY_HINT_NONE, "", 0), "set_global_rotation_degrees", "get_global_rotation_degrees");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "global_scale", PROPERTY_HINT_NONE, "", 0), "set_global_scale", "get_global_scale");
 	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM2D, "global_transform", PROPERTY_HINT_NONE, "", 0), "set_global_transform", "get_global_transform");
 

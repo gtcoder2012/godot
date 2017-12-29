@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -42,8 +42,10 @@ int AStar::get_available_point_id() const {
 }
 
 void AStar::add_point(int p_id, const Vector3 &p_pos, real_t p_weight_scale) {
+
 	ERR_FAIL_COND(p_id < 0);
 	ERR_FAIL_COND(p_weight_scale < 1);
+
 	if (!points.has(p_id)) {
 		Point *pt = memnew(Point);
 		pt->id = p_id;
@@ -58,18 +60,35 @@ void AStar::add_point(int p_id, const Vector3 &p_pos, real_t p_weight_scale) {
 	}
 }
 
-Vector3 AStar::get_point_pos(int p_id) const {
+Vector3 AStar::get_point_position(int p_id) const {
 
 	ERR_FAIL_COND_V(!points.has(p_id), Vector3());
 
 	return points[p_id]->pos;
 }
+
+void AStar::set_point_position(int p_id, const Vector3 &p_pos) {
+
+	ERR_FAIL_COND(!points.has(p_id));
+
+	points[p_id]->pos = p_pos;
+}
+
 real_t AStar::get_point_weight_scale(int p_id) const {
 
 	ERR_FAIL_COND_V(!points.has(p_id), 0);
 
 	return points[p_id]->weight_scale;
 }
+
+void AStar::set_point_weight_scale(int p_id, real_t p_weight_scale) {
+
+	ERR_FAIL_COND(!points.has(p_id));
+	ERR_FAIL_COND(p_weight_scale < 1);
+
+	points[p_id]->weight_scale = p_weight_scale;
+}
+
 void AStar::remove_point(int p_id) {
 
 	ERR_FAIL_COND(!points.has(p_id));
@@ -123,6 +142,38 @@ void AStar::disconnect_points(int p_id, int p_with_id) {
 	a->neighbours.erase(b);
 	b->neighbours.erase(a);
 }
+
+bool AStar::has_point(int p_id) const {
+
+	return points.has(p_id);
+}
+
+Array AStar::get_points() {
+
+	Array point_list;
+
+	for (const Map<int, Point *>::Element *E = points.front(); E; E = E->next()) {
+		point_list.push_back(E->key());
+	}
+
+	return point_list;
+}
+
+PoolVector<int> AStar::get_point_connections(int p_id) {
+
+	ERR_FAIL_COND_V(!points.has(p_id), PoolVector<int>());
+
+	PoolVector<int> point_list;
+
+	Point *p = points[p_id];
+
+	for (int i = 0; i < p->neighbours.size(); i++) {
+		point_list.push_back(p->neighbours[i]->id);
+	}
+
+	return point_list;
+}
+
 bool AStar::are_points_connected(int p_id, int p_with_id) const {
 
 	Segment s(p_id, p_with_id);
@@ -155,7 +206,8 @@ int AStar::get_closest_point(const Vector3 &p_point) const {
 
 	return closest_id;
 }
-Vector3 AStar::get_closest_pos_in_segment(const Vector3 &p_point) const {
+
+Vector3 AStar::get_closest_position_in_segment(const Vector3 &p_point) const {
 
 	real_t closest_dist = 1e20;
 	bool found = false;
@@ -206,15 +258,15 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 	while (!found_route) {
 
 		if (open_list.first() == NULL) {
-			//could not find path sadly
+			// No path found
 			break;
 		}
-		//check open list
+		// Check open list
 
 		SelfList<Point> *least_cost_point = NULL;
 		real_t least_cost = 1e30;
 
-		//this could be faster (cache previous results)
+		// TODO: Cache previous results
 		for (SelfList<Point> *E = open_list.first(); E; E = E->next()) {
 
 			Point *p = E->self();
@@ -230,7 +282,7 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 		}
 
 		Point *p = least_cost_point->self();
-		//open the neighbours for search
+		// Open the neighbours for search
 		int es = p->neighbours.size();
 
 		for (int i = 0; i < es; i++) {
@@ -240,7 +292,7 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 			real_t distance = _compute_cost(p->id, e->id) * e->weight_scale + p->distance;
 
 			if (e->last_pass == pass) {
-				//oh this was visited already, can we win the cost?
+				// Already visited, is this cheaper?
 
 				if (e->distance > distance) {
 
@@ -248,15 +300,15 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 					e->distance = distance;
 				}
 			} else {
-				//add to open neighbours
+				// Add to open neighbours
 
 				e->prev_point = p;
 				e->distance = distance;
-				e->last_pass = pass; //mark as used
+				e->last_pass = pass; // Mark as used
 				open_list.add(&e->list);
 
 				if (e == end_point) {
-					//oh my reached end! stop algorithm
+					// End reached; stop algorithm
 					found_route = true;
 					break;
 				}
@@ -269,7 +321,7 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 		open_list.remove(least_cost_point);
 	}
 
-	//clear the openf list
+	// Clear the openf list
 	while (open_list.first()) {
 		open_list.remove(open_list.first());
 	}
@@ -278,6 +330,7 @@ bool AStar::_solve(Point *begin_point, Point *end_point) {
 }
 
 float AStar::_estimate_cost(int p_from_id, int p_to_id) {
+
 	if (get_script_instance() && get_script_instance()->has_method(SceneStringNames::get_singleton()->_estimate_cost))
 		return get_script_instance()->call(SceneStringNames::get_singleton()->_estimate_cost, p_from_id, p_to_id);
 
@@ -285,6 +338,7 @@ float AStar::_estimate_cost(int p_from_id, int p_to_id) {
 }
 
 float AStar::_compute_cost(int p_from_id, int p_to_id) {
+
 	if (get_script_instance() && get_script_instance()->has_method(SceneStringNames::get_singleton()->_compute_cost))
 		return get_script_instance()->call(SceneStringNames::get_singleton()->_compute_cost, p_from_id, p_to_id);
 
@@ -315,9 +369,9 @@ PoolVector<Vector3> AStar::get_point_path(int p_from_id, int p_to_id) {
 	if (!found_route)
 		return PoolVector<Vector3>();
 
-	//midpoints
+	// Midpoints
 	Point *p = end_point;
-	int pc = 1; //begin point
+	int pc = 1; // Begin point
 	while (p != begin_point) {
 		pc++;
 		p = p->prev_point;
@@ -336,7 +390,7 @@ PoolVector<Vector3> AStar::get_point_path(int p_from_id, int p_to_id) {
 			p = p->prev_point;
 		}
 
-		w[0] = p->pos; //assign first
+		w[0] = p->pos; // Assign first
 	}
 
 	return path;
@@ -366,9 +420,9 @@ PoolVector<int> AStar::get_id_path(int p_from_id, int p_to_id) {
 	if (!found_route)
 		return PoolVector<int>();
 
-	//midpoints
+	// Midpoints
 	Point *p = end_point;
-	int pc = 1; //begin point
+	int pc = 1; // Begin point
 	while (p != begin_point) {
 		pc++;
 		p = p->prev_point;
@@ -387,7 +441,7 @@ PoolVector<int> AStar::get_id_path(int p_from_id, int p_to_id) {
 			p = p->prev_point;
 		}
 
-		w[0] = p->id; //assign first
+		w[0] = p->id; // Assign first
 	}
 
 	return path;
@@ -396,25 +450,31 @@ PoolVector<int> AStar::get_id_path(int p_from_id, int p_to_id) {
 void AStar::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_available_point_id"), &AStar::get_available_point_id);
-	ClassDB::bind_method(D_METHOD("add_point", "id", "pos", "weight_scale"), &AStar::add_point, DEFVAL(1.0));
-	ClassDB::bind_method(D_METHOD("get_point_pos", "id"), &AStar::get_point_pos);
+	ClassDB::bind_method(D_METHOD("add_point", "id", "position", "weight_scale"), &AStar::add_point, DEFVAL(1.0));
+	ClassDB::bind_method(D_METHOD("get_point_position", "id"), &AStar::get_point_position);
+	ClassDB::bind_method(D_METHOD("set_point_position", "id", "position"), &AStar::set_point_position);
 	ClassDB::bind_method(D_METHOD("get_point_weight_scale", "id"), &AStar::get_point_weight_scale);
+	ClassDB::bind_method(D_METHOD("set_point_weight_scale", "id", "weight_scale"), &AStar::set_point_weight_scale);
 	ClassDB::bind_method(D_METHOD("remove_point", "id"), &AStar::remove_point);
+	ClassDB::bind_method(D_METHOD("has_point", "id"), &AStar::has_point);
+	ClassDB::bind_method(D_METHOD("get_points"), &AStar::get_points);
 
-	ClassDB::bind_method(D_METHOD("connect_points", "id", "to_id"), &AStar::connect_points, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("get_point_connections", "id"), &AStar::get_point_connections);
+
+	ClassDB::bind_method(D_METHOD("connect_points", "id", "to_id", "bidirectional"), &AStar::connect_points, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("disconnect_points", "id", "to_id"), &AStar::disconnect_points);
 	ClassDB::bind_method(D_METHOD("are_points_connected", "id", "to_id"), &AStar::are_points_connected);
 
 	ClassDB::bind_method(D_METHOD("clear"), &AStar::clear);
 
-	ClassDB::bind_method(D_METHOD("get_closest_point", "to_pos"), &AStar::get_closest_point);
-	ClassDB::bind_method(D_METHOD("get_closest_pos_in_segment", "to_pos"), &AStar::get_closest_pos_in_segment);
+	ClassDB::bind_method(D_METHOD("get_closest_point", "to_position"), &AStar::get_closest_point);
+	ClassDB::bind_method(D_METHOD("get_closest_position_in_segment", "to_position"), &AStar::get_closest_position_in_segment);
 
 	ClassDB::bind_method(D_METHOD("get_point_path", "from_id", "to_id"), &AStar::get_point_path);
 	ClassDB::bind_method(D_METHOD("get_id_path", "from_id", "to_id"), &AStar::get_id_path);
 
-	BIND_VMETHOD(MethodInfo("_estimate_cost", PropertyInfo(Variant::INT, "from_id"), PropertyInfo(Variant::INT, "to_id")));
-	BIND_VMETHOD(MethodInfo("_compute_cost", PropertyInfo(Variant::INT, "from_id"), PropertyInfo(Variant::INT, "to_id")));
+	BIND_VMETHOD(MethodInfo(Variant::REAL, "_estimate_cost", PropertyInfo(Variant::INT, "from_id"), PropertyInfo(Variant::INT, "to_id")));
+	BIND_VMETHOD(MethodInfo(Variant::REAL, "_compute_cost", PropertyInfo(Variant::INT, "from_id"), PropertyInfo(Variant::INT, "to_id")));
 }
 
 AStar::AStar() {
@@ -425,4 +485,5 @@ AStar::AStar() {
 AStar::~AStar() {
 
 	pass = 1;
+	clear();
 }

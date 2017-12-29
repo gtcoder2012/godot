@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,11 +31,11 @@
 #define NODE_H
 
 #include "class_db.h"
-#include "global_config.h"
 #include "map.h"
+#include "node_path.h"
 #include "object.h"
-#include "path_db.h"
-#include "scene/main/scene_main_loop.h"
+#include "project_settings.h"
+#include "scene/main/scene_tree.h"
 #include "script_language.h"
 
 class Viewport;
@@ -58,14 +58,10 @@ public:
 		DUPLICATE_SIGNALS = 1,
 		DUPLICATE_GROUPS = 2,
 		DUPLICATE_SCRIPTS = 4,
-		DUPLICATE_USE_INSTANCING = 8
-	};
-
-	enum NetworkMode {
-
-		NETWORK_MODE_INHERIT,
-		NETWORK_MODE_MASTER,
-		NETWORK_MODE_SLAVE
+		DUPLICATE_USE_INSTANCING = 8,
+#ifdef TOOLS_ENABLED
+		DUPLICATE_FROM_EDITOR = 16,
+#endif
 	};
 
 	enum RPCMode {
@@ -122,17 +118,16 @@ private:
 		PauseMode pause_mode;
 		Node *pause_owner;
 
-		NetworkMode network_mode;
-		Node *network_owner;
+		int network_master;
 		Map<StringName, RPCMode> rpc_methods;
 		Map<StringName, RPCMode> rpc_properties;
 
 		// variables used to properly sort the node when processing, ignored otherwise
 		//should move all the stuff below to bits
-		bool fixed_process;
+		bool physics_process;
 		bool idle_process;
 
-		bool fixed_process_internal;
+		bool physics_process_internal;
 		bool idle_process_internal;
 
 		bool input;
@@ -173,12 +168,11 @@ private:
 	void _propagate_validate_owner();
 	void _print_stray_nodes();
 	void _propagate_pause_owner(Node *p_owner);
-	void _propagate_network_owner(Node *p_owner);
 	Array _get_node_and_resource(const NodePath &p_path);
 
 	void _duplicate_signals(const Node *p_original, Node *p_copy) const;
 	void _duplicate_and_reown(Node *p_new_parent, const Map<Node *, Node *> &p_reown_map) const;
-	Node *_duplicate(int p_flags) const;
+	Node *_duplicate(int p_flags, Map<const Node *, Node *> *r_duplimap = NULL) const;
 
 	Array _get_children() const;
 	Array _get_groups() const;
@@ -201,7 +195,6 @@ protected:
 	virtual void add_child_notify(Node *p_child);
 	virtual void remove_child_notify(Node *p_child);
 	virtual void move_child_notify(Node *p_child);
-	//void remove_and_delete_child(Node *p_child);
 
 	void _propagate_replace_owner(Node *p_owner, Node *p_by_owner);
 
@@ -221,10 +214,9 @@ public:
 		NOTIFICATION_EXIT_TREE = 11,
 		NOTIFICATION_MOVED_IN_PARENT = 12,
 		NOTIFICATION_READY = 13,
-		//NOTIFICATION_PARENT_DECONFIGURED =15, - it's confusing, it's going away
 		NOTIFICATION_PAUSED = 14,
 		NOTIFICATION_UNPAUSED = 15,
-		NOTIFICATION_FIXED_PROCESS = 16,
+		NOTIFICATION_PHYSICS_PROCESS = 16,
 		NOTIFICATION_PROCESS = 17,
 		NOTIFICATION_PARENTED = 18,
 		NOTIFICATION_UNPARENTED = 19,
@@ -234,7 +226,7 @@ public:
 		NOTIFICATION_PATH_CHANGED = 23,
 		NOTIFICATION_TRANSLATION_CHANGED = 24,
 		NOTIFICATION_INTERNAL_PROCESS = 25,
-		NOTIFICATION_INTERNAL_FIXED_PROCESS = 26,
+		NOTIFICATION_INTERNAL_PHYSICS_PROCESS = 26,
 
 	};
 
@@ -253,7 +245,7 @@ public:
 	Node *get_node(const NodePath &p_path) const;
 	Node *find_node(const String &p_mask, bool p_recursive = true, bool p_owned = true) const;
 	bool has_node_and_resource(const NodePath &p_path) const;
-	Node *get_node_and_resource(const NodePath &p_path, RES &r_res) const;
+	Node *get_node_and_resource(const NodePath &p_path, RES &r_res, Vector<StringName> &r_leftover_subpath, bool p_last_is_property = true) const;
 
 	Node *get_parent() const;
 	_FORCE_INLINE_ SceneTree *get_tree() const {
@@ -307,19 +299,21 @@ public:
 
 	void propagate_notification(int p_notification);
 
-	/* PROCESSING */
-	void set_fixed_process(bool p_process);
-	float get_fixed_process_delta_time() const;
-	bool is_fixed_processing() const;
+	void propagate_call(const StringName &p_method, const Array &p_args = Array(), const bool p_parent_first = false);
 
-	void set_process(bool p_process);
+	/* PROCESSING */
+	void set_physics_process(bool p_process);
+	float get_physics_process_delta_time() const;
+	bool is_physics_processing() const;
+
+	void set_process(bool p_idle_process);
 	float get_process_delta_time() const;
 	bool is_processing() const;
 
-	void set_fixed_process_internal(bool p_process);
-	bool is_fixed_processing_internal() const;
+	void set_physics_process_internal(bool p_process_internal);
+	bool is_physics_processing_internal() const;
 
-	void set_process_internal(bool p_process);
+	void set_process_internal(bool p_idle_process_internal);
 	bool is_processing_internal() const;
 
 	void set_process_input(bool p_enable);
@@ -335,6 +329,9 @@ public:
 
 	Node *duplicate(int p_flags = DUPLICATE_GROUPS | DUPLICATE_SIGNALS | DUPLICATE_SCRIPTS) const;
 	Node *duplicate_and_reown(const Map<Node *, Node *> &p_reown_map) const;
+#ifdef TOOLS_ENABLED
+	Node *duplicate_from_editor(Map<const Node *, Node *> &r_duplimap) const;
+#endif
 
 	//Node *clone_tree() const;
 
@@ -393,8 +390,8 @@ public:
 	bool is_displayed_folded() const;
 	/* NETWORK */
 
-	void set_network_mode(NetworkMode p_mode);
-	NetworkMode get_network_mode() const;
+	void set_network_master(int p_peer_id, bool p_recursive = true);
+	int get_network_master() const;
 	bool is_network_master() const;
 
 	void rpc_config(const StringName &p_method, RPCMode p_mode); // config a local method for RPC
@@ -414,12 +411,14 @@ public:
 
 	void rsetp(int p_peer_id, bool p_unreliable, const StringName &p_property, const Variant &p_value);
 
-	bool can_call_rpc(const StringName &p_method) const;
-	bool can_call_rset(const StringName &p_property) const;
+	bool can_call_rpc(const StringName &p_method, int p_from) const;
+	bool can_call_rset(const StringName &p_property, int p_from) const;
 
 	Node();
 	~Node();
 };
+
+VARIANT_ENUM_CAST(Node::DuplicateFlags);
 
 typedef Set<Node *, Node::Comparator> NodeSet;
 

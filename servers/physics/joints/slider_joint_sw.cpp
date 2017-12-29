@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -112,8 +112,10 @@ void SliderJointSW::initParams() {
 
 //-----------------------------------------------------------------------------
 
-SliderJointSW::SliderJointSW(BodySW *rbA, BodySW *rbB, const Transform &frameInA, const Transform &frameInB)
-	: JointSW(_arr, 2), m_frameInA(frameInA), m_frameInB(frameInB) {
+SliderJointSW::SliderJointSW(BodySW *rbA, BodySW *rbB, const Transform &frameInA, const Transform &frameInB) :
+		JointSW(_arr, 2),
+		m_frameInA(frameInA),
+		m_frameInB(frameInB) {
 
 	A = rbA;
 	B = rbB;

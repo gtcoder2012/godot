@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,13 +30,14 @@
 #ifndef CONFIG_FILE_H
 #define CONFIG_FILE_H
 
+#include "core/ordered_hash_map.h"
 #include "reference.h"
 
 class ConfigFile : public Reference {
 
 	GDCLASS(ConfigFile, Reference);
 
-	Map<String, Map<String, Variant> > values;
+	OrderedHashMap<String, OrderedHashMap<String, Variant> > values;
 
 	PoolStringArray _get_sections() const;
 	PoolStringArray _get_section_keys(const String &p_section) const;

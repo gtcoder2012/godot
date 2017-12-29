@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -37,8 +37,8 @@ class JointSW : public ConstraintSW {
 
 public:
 	virtual PhysicsServer::JointType get_type() const = 0;
-	_FORCE_INLINE_ JointSW(BodySW **p_body_ptr = NULL, int p_body_count = 0)
-		: ConstraintSW(p_body_ptr, p_body_count) {
+	_FORCE_INLINE_ JointSW(BodySW **p_body_ptr = NULL, int p_body_count = 0) :
+			ConstraintSW(p_body_ptr, p_body_count) {
 	}
 };
 

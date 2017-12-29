@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -37,12 +37,12 @@ bool PowerHaiku::UpdatePowerInfo() {
 	return false;
 }
 
-PowerState PowerHaiku::get_power_state() {
+OS::PowerState PowerHaiku::get_power_state() {
 	if (UpdatePowerInfo()) {
 		return power_state;
 	} else {
 		WARN_PRINT("Power management is not implemented on this platform, defaulting to POWERSTATE_UNKNOWN");
-		return POWERSTATE_UNKNOWN;
+		return OS::POWERSTATE_UNKNOWN;
 	}
 }
 
@@ -64,8 +64,10 @@ int PowerX11::get_power_percent_left() {
 	}
 }
 
-PowerHaiku::PowerHaiku()
-	: nsecs_left(-1), percent_left(-1), power_state(POWERSTATE_UNKNOWN) {
+PowerHaiku::PowerHaiku() :
+		nsecs_left(-1),
+		percent_left(-1),
+		power_state(OS::POWERSTATE_UNKNOWN) {
 }
 
 PowerHaiku::~PowerHaiku() {

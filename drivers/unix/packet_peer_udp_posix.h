@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -41,12 +41,12 @@ class PacketPeerUDPPosix : public PacketPeerUDP {
 		PACKET_BUFFER_SIZE = 65536
 	};
 
-	mutable RingBuffer<uint8_t> rb;
+	RingBuffer<uint8_t> rb;
 	uint8_t recv_buffer[PACKET_BUFFER_SIZE];
-	mutable uint8_t packet_buffer[PACKET_BUFFER_SIZE];
-	mutable IP_Address packet_ip;
-	mutable int packet_port;
-	mutable int queue_count;
+	uint8_t packet_buffer[PACKET_BUFFER_SIZE];
+	IP_Address packet_ip;
+	int packet_port;
+	int queue_count;
 	int sockfd;
 	bool sock_blocking;
 	IP::Type sock_type;
@@ -62,12 +62,12 @@ class PacketPeerUDPPosix : public PacketPeerUDP {
 
 public:
 	virtual int get_available_packet_count() const;
-	virtual Error get_packet(const uint8_t **r_buffer, int &r_buffer_size) const;
+	virtual Error get_packet(const uint8_t **r_buffer, int &r_buffer_size);
 	virtual Error put_packet(const uint8_t *p_buffer, int p_buffer_size);
 
 	virtual int get_max_packet_size() const;
 
-	virtual Error listen(int p_port, IP_Address p_bind_address = IP_Address("*"), int p_recv_buffer_size = 65536);
+	virtual Error listen(int p_port, const IP_Address &p_bind_address = IP_Address("*"), int p_recv_buffer_size = 65536);
 	virtual void close();
 	virtual Error wait();
 	virtual bool is_listening() const;

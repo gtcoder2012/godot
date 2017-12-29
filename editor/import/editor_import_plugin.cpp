@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -56,7 +56,7 @@ String EditorImportPlugin::get_preset_name(int p_idx) const {
 	return get_script_instance()->call("get_preset_name", p_idx);
 }
 
-int EditorImportPlugin::get_preset_count() {
+int EditorImportPlugin::get_preset_count() const {
 	ERR_FAIL_COND_V(!(get_script_instance() && get_script_instance()->has_method("get_preset_count")), 0);
 	return get_script_instance()->call("get_preset_count");
 }

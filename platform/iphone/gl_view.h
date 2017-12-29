@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -100,6 +100,8 @@
 - (void)destroyFramebuffer;
 
 - (void)audioRouteChangeListenerCallback:(NSNotification *)notification;
+- (void)keyboardOnScreen:(NSNotification *)notification;
+- (void)keyboardHidden:(NSNotification *)notification;
 
 @property NSTimeInterval animationInterval;
 @property(nonatomic, assign) BOOL useCADisplayLink;

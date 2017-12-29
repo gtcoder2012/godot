@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -80,6 +80,7 @@ private:
 	Vector<float> last_weights;
 	Plane last_tangent;
 
+	void _create_list_from_arrays(Array arr, List<Vertex> *r_vertex, List<int> *r_index, int &lformat);
 	void _create_list(const Ref<Mesh> &p_existing, int p_surface, List<Vertex> *r_vertex, List<int> *r_index, int &lformat);
 
 	//mikktspace callbacks
@@ -89,6 +90,8 @@ private:
 	static void mikktGetNormal(const SMikkTSpaceContext *pContext, float fvNormOut[], const int iFace, const int iVert);
 	static void mikktGetTexCoord(const SMikkTSpaceContext *pContext, float fvTexcOut[], const int iFace, const int iVert);
 	static void mikktSetTSpaceBasic(const SMikkTSpaceContext *pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert);
+	static void mikktSetTSpaceDefault(const SMikkTSpaceContext *pContext, const float fvTangent[], const float fvBiTangent[], const float fMagS, const float fMagT,
+			const tbool bIsOrientationPreserving, const int iFace, const int iVert);
 
 protected:
 	static void _bind_methods();
@@ -101,8 +104,8 @@ public:
 	void add_normal(const Vector3 &p_normal);
 	void add_tangent(const Plane &p_tangent);
 	void add_uv(const Vector2 &p_uv);
-	void add_uv2(const Vector2 &p_uv);
-	void add_bones(const Vector<int> &p_indices);
+	void add_uv2(const Vector2 &p_uv2);
+	void add_bones(const Vector<int> &p_bones);
 	void add_weights(const Vector<float> &p_weights);
 	void add_smooth_group(bool p_smooth);
 
@@ -123,9 +126,12 @@ public:
 
 	List<Vertex> &get_vertex_array() { return vertex_array; }
 
+	void create_from_triangle_arrays(const Array &p_arrays);
+	static Vector<Vertex> create_vertex_array_from_triangle_arrays(const Array &p_arrays);
+	Array commit_to_arrays();
 	void create_from(const Ref<Mesh> &p_existing, int p_surface);
 	void append_from(const Ref<Mesh> &p_existing, int p_surface, const Transform &p_xform);
-	Ref<Mesh> commit(const Ref<Mesh> &p_existing = Ref<Mesh>());
+	Ref<ArrayMesh> commit(const Ref<ArrayMesh> &p_existing = Ref<ArrayMesh>(), uint32_t p_flags = Mesh::ARRAY_COMPRESS_DEFAULT);
 
 	SurfaceTool();
 };

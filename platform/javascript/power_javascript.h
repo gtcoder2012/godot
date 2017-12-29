@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,13 +31,13 @@
 #ifndef PLATFORM_JAVASCRIPT_POWER_JAVASCRIPT_H_
 #define PLATFORM_JAVASCRIPT_POWER_JAVASCRIPT_H_
 
-#include "os/power.h"
+#include "os/os.h"
 
 class PowerJavascript {
 private:
 	int nsecs_left;
 	int percent_left;
-	PowerState power_state;
+	OS::PowerState power_state;
 
 	bool UpdatePowerInfo();
 
@@ -45,7 +45,7 @@ public:
 	PowerJavascript();
 	virtual ~PowerJavascript();
 
-	PowerState get_power_state();
+	OS::PowerState get_power_state();
 	int get_power_seconds_left();
 	int get_power_percent_left();
 };

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -56,7 +56,11 @@ public:
 		NOTIFICATION_WM_GO_BACK_REQUEST = 7,
 		NOTIFICATION_WM_UNFOCUS_REQUEST = 8,
 		NOTIFICATION_OS_MEMORY_WARNING = 9,
-		NOTIFICATION_TRANSLATION_CHANGED = 10,
+		// Note: NOTIFICATION_TRANSLATION_CHANGED and NOTIFICATION_WM_ABOUT used to have id=10 and id=11 but these
+		// conflict with NOTIFICATION_ENTER_TREE (id=10) and NOTIFICATION_EXIT_TREE (id=11), so id=90 and id=91
+		// fixes this issue.
+		NOTIFICATION_TRANSLATION_CHANGED = 90,
+		NOTIFICATION_WM_ABOUT = 91,
 	};
 
 	virtual void input_event(const Ref<InputEvent> &p_event);

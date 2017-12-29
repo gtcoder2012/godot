@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -33,7 +33,7 @@
 #include "math_2d.h"
 #include "rid.h"
 #include "scene/2d/canvas_item.h"
-#include "scene/gui/input_action.h"
+#include "scene/gui/shortcut.h"
 #include "scene/main/node.h"
 #include "scene/main/timer.h"
 #include "scene/resources/theme.h"
@@ -51,10 +51,15 @@ class Control : public CanvasItem {
 	OBJ_CATEGORY("GUI Nodes");
 
 public:
-	enum AnchorType {
-		ANCHOR_BEGIN,
-		ANCHOR_END,
-		ANCHOR_CENTER,
+	enum Anchor {
+
+		ANCHOR_BEGIN = 0,
+		ANCHOR_END = 1
+	};
+
+	enum GrowDirection {
+		GROW_DIRECTION_BEGIN,
+		GROW_DIRECTION_END
 	};
 
 	enum FocusMode {
@@ -67,7 +72,9 @@ public:
 
 		SIZE_FILL = 1,
 		SIZE_EXPAND = 2,
-		SIZE_EXPAND_FILL = SIZE_EXPAND | SIZE_FILL
+		SIZE_EXPAND_FILL = SIZE_EXPAND | SIZE_FILL,
+		SIZE_SHRINK_CENTER = 4, //ignored by expand or fill
+		SIZE_SHRINK_END = 8, //ignored by expand or fil
 
 	};
 
@@ -98,6 +105,32 @@ public:
 		CURSOR_MAX
 	};
 
+	enum LayoutPreset {
+		PRESET_TOP_LEFT,
+		PRESET_TOP_RIGHT,
+		PRESET_BOTTOM_LEFT,
+		PRESET_BOTTOM_RIGHT,
+		PRESET_CENTER_LEFT,
+		PRESET_CENTER_TOP,
+		PRESET_CENTER_RIGHT,
+		PRESET_CENTER_BOTTOM,
+		PRESET_CENTER,
+		PRESET_LEFT_WIDE,
+		PRESET_TOP_WIDE,
+		PRESET_RIGHT_WIDE,
+		PRESET_BOTTOM_WIDE,
+		PRESET_VCENTER_WIDE,
+		PRESET_HCENTER_WIDE,
+		PRESET_WIDE
+	};
+
+	enum LayoutPresetMode {
+		PRESET_MODE_MINSIZE,
+		PRESET_MODE_KEEP_WIDTH,
+		PRESET_MODE_KEEP_HEIGHT,
+		PRESET_MODE_KEEP_SIZE
+	};
+
 private:
 	struct CComparator {
 
@@ -115,11 +148,14 @@ private:
 		Size2 size_cache;
 
 		float margin[4];
-		AnchorType anchor[4];
+		float anchor[4];
 		FocusMode focus_mode;
+		GrowDirection h_grow;
+		GrowDirection v_grow;
 
 		float rotation;
 		Vector2 scale;
+		Vector2 pivot_offset;
 
 		bool pending_resize;
 
@@ -128,6 +164,8 @@ private:
 		float expand;
 		bool pending_min_size_update;
 		Point2 custom_minimum_size;
+
+		bool pass_on_modal_close_click;
 
 		MouseFilter mouse_filter;
 
@@ -155,6 +193,8 @@ private:
 		ObjectID modal_prev_focus_owner;
 
 		NodePath focus_neighbour[4];
+		NodePath focus_next;
+		NodePath focus_prev;
 
 		HashMap<StringName, Ref<Texture>, StringNameHasher> icon_override;
 		HashMap<StringName, Ref<Shader>, StringNameHasher> shader_override;
@@ -172,12 +212,12 @@ private:
 	void _window_find_focus_neighbour(const Vector2 &p_dir, Node *p_at, const Point2 *p_points, float p_min, float &r_closest_dist, Control **r_closest);
 	Control *_get_focus_neighbour(Margin p_margin, int p_count = 0);
 
-	void _set_anchor(Margin p_margin, AnchorType p_anchor);
+	void _set_anchor(Margin p_margin, float p_anchor);
 
 	float _get_parent_range(int p_idx) const;
 	float _get_range(int p_idx) const;
-	float _s2a(float p_val, AnchorType p_anchor, float p_range) const;
-	float _a2s(float p_val, AnchorType p_anchor, float p_range) const;
+	float _s2a(float p_val, float p_anchor, float p_range) const;
+	float _a2s(float p_val, float p_anchor, float p_range) const;
 	void _propagate_theme_changed(CanvasItem *p_at, Control *p_owner, bool p_assign = true);
 	void _theme_changed();
 
@@ -190,15 +230,13 @@ private:
 	void _size_changed();
 	String _get_tooltip() const;
 
-	// Deprecated, should be removed in a future version.
-	void _set_rotation_deg(float p_degrees);
-	float _get_rotation_deg() const;
-
 	void _ref_font(Ref<Font> p_sc);
 	void _unref_font(Ref<Font> p_sc);
 	void _font_changed();
 
 	void _update_canvas_item_transform();
+
+	Transform2D _get_internal_transform() const;
 
 	friend class Viewport;
 	void _modal_stack_remove();
@@ -235,10 +273,25 @@ public:
 
 	};
 
-	virtual Variant edit_get_state() const;
-	virtual void edit_set_state(const Variant &p_state);
-	virtual void edit_set_rect(const Rect2 &p_edit_rect);
-	virtual Size2 edit_get_minimum_size() const;
+	virtual Dictionary _edit_get_state() const;
+	virtual void _edit_set_state(const Dictionary &p_state);
+
+	virtual void _edit_set_position(const Point2 &p_position);
+	virtual Point2 _edit_get_position() const;
+
+	virtual void _edit_set_rect(const Rect2 &p_edit_rect);
+	virtual Rect2 _edit_get_rect() const;
+	virtual bool _edit_use_rect() const;
+
+	virtual void _edit_set_rotation(float p_rotation);
+	virtual float _edit_get_rotation() const;
+	virtual bool _edit_use_rotation() const;
+
+	virtual void _edit_set_pivot(const Point2 &p_pivot);
+	virtual Point2 _edit_get_pivot() const;
+	virtual bool _edit_use_pivot() const;
+
+	virtual Size2 _edit_get_minimum_size() const;
 
 	void accept_event();
 
@@ -263,40 +316,52 @@ public:
 
 	/* POSITIONING */
 
-	void set_anchor(Margin p_margin, AnchorType p_anchor, bool p_keep_margin = false);
-	void set_anchor_and_margin(Margin p_margin, AnchorType p_anchor, float p_pos);
+	void set_anchors_preset(LayoutPreset p_preset, bool p_keep_margin = false);
+	void set_margins_preset(LayoutPreset p_preset, LayoutPresetMode p_resize_mode = PRESET_MODE_MINSIZE, int p_margin = 0);
+	void set_anchors_and_margins_preset(LayoutPreset p_preset, LayoutPresetMode p_resize_mode = PRESET_MODE_MINSIZE, int p_margin = 0);
 
-	AnchorType get_anchor(Margin p_margin) const;
+	void set_anchor(Margin p_margin, float p_anchor, bool p_keep_margin = false, bool p_push_opposite_anchor = true);
+	float get_anchor(Margin p_margin) const;
 
 	void set_margin(Margin p_margin, float p_value);
+	float get_margin(Margin p_margin) const;
+
+	void set_anchor_and_margin(Margin p_margin, float p_anchor, float p_pos, bool p_push_opposite_anchor = true);
 
 	void set_begin(const Point2 &p_point); // helper
 	void set_end(const Point2 &p_point); // helper
 
-	float get_margin(Margin p_margin) const;
 	Point2 get_begin() const;
 	Point2 get_end() const;
 
 	void set_position(const Point2 &p_point);
-	void set_size(const Size2 &p_size);
 	void set_global_position(const Point2 &p_point);
-
 	Point2 get_position() const;
 	Point2 get_global_position() const;
+
+	void set_size(const Size2 &p_size);
 	Size2 get_size() const;
+
 	Rect2 get_rect() const;
 	Rect2 get_global_rect() const;
 	Rect2 get_window_rect() const; ///< use with care, as it blocks waiting for the visual server
 
 	void set_rotation(float p_radians);
-	void set_rotation_deg(float p_degrees);
+	void set_rotation_degrees(float p_degrees);
 	float get_rotation() const;
-	float get_rotation_deg() const;
+	float get_rotation_degrees() const;
+
+	void set_h_grow_direction(GrowDirection p_direction);
+	GrowDirection get_h_grow_direction() const;
+
+	void set_v_grow_direction(GrowDirection p_direction);
+	GrowDirection get_v_grow_direction() const;
+
+	void set_pivot_offset(const Vector2 &p_pivot);
+	Vector2 get_pivot_offset() const;
 
 	void set_scale(const Vector2 &p_scale);
 	Vector2 get_scale() const;
-
-	void set_area_as_parent_rect(int p_margin = 0);
 
 	void show_modal(bool p_exclusive = false);
 
@@ -328,10 +393,18 @@ public:
 	void set_focus_neighbour(Margin p_margin, const NodePath &p_neighbour);
 	NodePath get_focus_neighbour(Margin p_margin) const;
 
+	void set_focus_next(const NodePath &p_next);
+	NodePath get_focus_next() const;
+	void set_focus_previous(const NodePath &p_prev);
+	NodePath get_focus_previous() const;
+
 	Control *get_focus_owner() const;
 
 	void set_mouse_filter(MouseFilter p_filter);
 	MouseFilter get_mouse_filter() const;
+
+	void set_pass_on_modal_close_click(bool p_pass_on);
+	bool pass_on_modal_close_click() const;
 
 	/* SKINNING */
 
@@ -374,7 +447,6 @@ public:
 	CursorShape get_default_cursor_shape() const;
 	virtual CursorShape get_cursor_shape(const Point2 &p_pos = Point2i()) const;
 
-	virtual Rect2 get_item_rect() const;
 	virtual Transform2D get_transform() const;
 
 	bool is_toplevel_control() const;
@@ -404,10 +476,13 @@ public:
 	~Control();
 };
 
-VARIANT_ENUM_CAST(Control::AnchorType);
 VARIANT_ENUM_CAST(Control::FocusMode);
 VARIANT_ENUM_CAST(Control::SizeFlags);
 VARIANT_ENUM_CAST(Control::CursorShape);
+VARIANT_ENUM_CAST(Control::LayoutPreset);
+VARIANT_ENUM_CAST(Control::LayoutPresetMode);
 VARIANT_ENUM_CAST(Control::MouseFilter);
+VARIANT_ENUM_CAST(Control::GrowDirection);
+VARIANT_ENUM_CAST(Control::Anchor);
 
 #endif

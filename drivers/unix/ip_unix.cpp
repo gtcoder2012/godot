@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -100,6 +100,7 @@ IP_Address IP_Unix::_resolve_hostname(const String &p_hostname, Type p_type) {
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_flags = AI_ADDRCONFIG;
 	};
+	hints.ai_flags &= !AI_NUMERICHOST;
 
 	int s = getaddrinfo(p_hostname.utf8().get_data(), NULL, &hints, &result);
 	if (s != 0) {
@@ -148,10 +149,7 @@ void IP_Unix::get_local_addresses(List<IP_Address> *r_addresses) const {
 	while (true) {
 
 		addrs = (IP_ADAPTER_ADDRESSES *)memalloc(buf_size);
-		int err = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST |
-														  GAA_FLAG_SKIP_MULTICAST |
-														  GAA_FLAG_SKIP_DNS_SERVER |
-														  GAA_FLAG_SKIP_FRIENDLY_NAME,
+		int err = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_FRIENDLY_NAME,
 				NULL, addrs, &buf_size);
 		if (err == NO_ERROR) {
 			break;

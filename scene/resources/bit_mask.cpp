@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -38,7 +38,7 @@ void BitMap::create(const Size2 &p_size) {
 	width = p_size.width;
 	height = p_size.height;
 	bitmask.resize(((width * height) / 8) + 1);
-	zeromem(bitmask.ptr(), bitmask.size());
+	zeromem(bitmask.ptrw(), bitmask.size());
 }
 
 void BitMap::create_from_image_alpha(const Ref<Image> &p_image) {
@@ -51,7 +51,7 @@ void BitMap::create_from_image_alpha(const Ref<Image> &p_image) {
 	create(Size2(img->get_width(), img->get_height()));
 
 	PoolVector<uint8_t>::Read r = img->get_data().read();
-	uint8_t *w = bitmask.ptr();
+	uint8_t *w = bitmask.ptrw();
 
 	for (int i = 0; i < width * height; i++) {
 
@@ -65,11 +65,11 @@ void BitMap::create_from_image_alpha(const Ref<Image> &p_image) {
 void BitMap::set_bit_rect(const Rect2 &p_rect, bool p_value) {
 
 	Rect2i current = Rect2i(0, 0, width, height).clip(p_rect);
-	uint8_t *data = bitmask.ptr();
+	uint8_t *data = bitmask.ptrw();
 
-	for (int i = current.pos.x; i < current.pos.x + current.size.x; i++) {
+	for (int i = current.position.x; i < current.position.x + current.size.x; i++) {
 
-		for (int j = current.pos.y; j < current.pos.y + current.size.y; j++) {
+		for (int j = current.position.y; j < current.position.y + current.size.y; j++) {
 
 			int ofs = width * j + i;
 			int bbyte = ofs / 8;
@@ -172,8 +172,8 @@ void BitMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("create", "size"), &BitMap::create);
 	ClassDB::bind_method(D_METHOD("create_from_image_alpha", "image"), &BitMap::create_from_image_alpha);
 
-	ClassDB::bind_method(D_METHOD("set_bit", "pos", "bit"), &BitMap::set_bit);
-	ClassDB::bind_method(D_METHOD("get_bit", "pos"), &BitMap::get_bit);
+	ClassDB::bind_method(D_METHOD("set_bit", "position", "bit"), &BitMap::set_bit);
+	ClassDB::bind_method(D_METHOD("get_bit", "position"), &BitMap::get_bit);
 
 	ClassDB::bind_method(D_METHOD("set_bit_rect", "p_rect", "bit"), &BitMap::set_bit_rect);
 	ClassDB::bind_method(D_METHOD("get_true_bit_count"), &BitMap::get_true_bit_count);

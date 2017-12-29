@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -35,7 +35,6 @@
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-
 	int first_arg = 1;
 	const char *dbg_arg = "-NSDocumentRevisionsDebugMode";
 	printf("arguments\n");
@@ -73,6 +72,13 @@ int main(int argc, char **argv) {
 			free(pathinfo);
 		}
 	}
+
+#ifdef DEBUG_ENABLED
+	// lets report the path we made current after all that
+	char cwd[4096];
+	getcwd(cwd, 4096);
+	printf("Current path: %s\n", cwd);
+#endif
 
 	OS_OSX os;
 

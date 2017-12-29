@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,6 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "path_2d.h"
+
+#include "engine.h"
 #include "scene/scene_string_names.h"
 
 void Path2D::_notification(int p_what) {
@@ -35,13 +37,13 @@ void Path2D::_notification(int p_what) {
 	if (p_what == NOTIFICATION_DRAW && curve.is_valid()) {
 		//draw the curve!!
 
-		if (!get_tree()->is_editor_hint() && !get_tree()->is_debugging_navigation_hint()) {
+		if (!Engine::get_singleton()->is_editor_hint() && !get_tree()->is_debugging_navigation_hint()) {
 			return;
 		}
 
 		for (int i = 0; i < curve->get_point_count(); i++) {
 
-			Vector2 prev_p = curve->get_point_pos(i);
+			Vector2 prev_p = curve->get_point_position(i);
 
 			for (int j = 1; j <= 8; j++) {
 
@@ -56,7 +58,7 @@ void Path2D::_notification(int p_what) {
 
 void Path2D::_curve_changed() {
 
-	if (is_inside_tree() && get_tree()->is_editor_hint())
+	if (is_inside_tree() && Engine::get_singleton()->is_editor_hint())
 		update();
 }
 
@@ -82,8 +84,8 @@ Ref<Curve2D> Path2D::get_curve() const {
 
 void Path2D::_bind_methods() {
 
-	ClassDB::bind_method(D_METHOD("set_curve", "curve:Curve2D"), &Path2D::set_curve);
-	ClassDB::bind_method(D_METHOD("get_curve:Curve2D", "curve"), &Path2D::get_curve);
+	ClassDB::bind_method(D_METHOD("set_curve", "curve"), &Path2D::set_curve);
+	ClassDB::bind_method(D_METHOD("get_curve"), &Path2D::get_curve);
 	ClassDB::bind_method(D_METHOD("_curve_changed"), &Path2D::_curve_changed);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "curve", PROPERTY_HINT_RESOURCE_TYPE, "Curve2D"), "set_curve", "get_curve");
@@ -105,20 +107,51 @@ void PathFollow2D::_update_transform() {
 	if (!c.is_valid())
 		return;
 
-	float o = offset;
+	float path_length = c->get_baked_length();
+	float bounded_offset = offset;
 	if (loop)
-		o = Math::fposmod(o, c->get_baked_length());
+		bounded_offset = Math::fposmod(bounded_offset, path_length);
+	else
+		bounded_offset = CLAMP(bounded_offset, 0, path_length);
 
-	Vector2 pos = c->interpolate_baked(o, cubic);
+	Vector2 pos = c->interpolate_baked(bounded_offset, cubic);
 
 	if (rotate) {
+		float ahead = bounded_offset + lookahead;
 
-		Vector2 n = (c->interpolate_baked(o + lookahead, cubic) - pos).normalized();
-		Vector2 t = -n.tangent();
-		pos += n * h_offset;
-		pos += t * v_offset;
+		if (loop && ahead >= path_length) {
+			// If our lookahead will loop, we need to check if the path is closed.
+			int point_count = c->get_point_count();
+			if (point_count > 0) {
+				Vector2 start_point = c->get_point_position(0);
+				Vector2 end_point = c->get_point_position(point_count - 1);
+				if (start_point == end_point) {
+					// Since the path is closed we want to 'smooth off'
+					// the corner at the start/end.
+					// So we wrap the lookahead back round.
+					ahead = Math::fmod(ahead, path_length);
+				}
+			}
+		}
 
-		set_rotation(t.angle());
+		Vector2 ahead_pos = c->interpolate_baked(ahead, cubic);
+
+		Vector2 tangent_to_curve;
+		if (ahead_pos == pos) {
+			// This will happen at the end of non-looping or non-closed paths.
+			// We'll try a look behind instead, in order to get a meaningful angle.
+			tangent_to_curve =
+					(pos - c->interpolate_baked(bounded_offset - lookahead, cubic)).normalized();
+		} else {
+			tangent_to_curve = (ahead_pos - pos).normalized();
+		}
+
+		Vector2 normal_of_curve = -tangent_to_curve.tangent();
+
+		pos += tangent_to_curve * h_offset;
+		pos += normal_of_curve * v_offset;
+
+		set_rotation(tangent_to_curve.angle());
 
 	} else {
 
@@ -135,13 +168,9 @@ void PathFollow2D::_notification(int p_what) {
 
 		case NOTIFICATION_ENTER_TREE: {
 
-			Node *parent = get_parent();
-			if (parent) {
-
-				path = parent->cast_to<Path2D>();
-				if (path) {
-					_update_transform();
-				}
+			path = Object::cast_to<Path2D>(get_parent());
+			if (path) {
+				_update_transform();
 			}
 
 		} break;
@@ -229,7 +258,7 @@ String PathFollow2D::get_configuration_warning() const {
 	if (!is_visible_in_tree() || !is_inside_tree())
 		return String();
 
-	if (!get_parent() || !get_parent()->cast_to<Path2D>()) {
+	if (!Object::cast_to<Path2D>(get_parent())) {
 		return TTR("PathFollow2D only works when set as a child of a Path2D node.");
 	}
 

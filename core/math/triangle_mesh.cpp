@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -44,7 +44,7 @@ int TriangleMesh::_create_bvh(BVH *p_bvh, BVH **p_bb, int p_from, int p_size, in
 		return -1;
 	}
 
-	Rect3 aabb;
+	AABB aabb;
 	aabb = p_bb[p_from]->aabb;
 	for (int i = 1; i < p_size; i++) {
 
@@ -79,7 +79,7 @@ int TriangleMesh::_create_bvh(BVH *p_bvh, BVH **p_bb, int p_from, int p_size, in
 	int index = max_alloc++;
 	BVH *_new = &p_bvh[index];
 	_new->aabb = aabb;
-	_new->center = aabb.pos + aabb.size * 0.5;
+	_new->center = aabb.position + aabb.size * 0.5;
 	_new->face_index = -1;
 	_new->left = left;
 	_new->right = right;
@@ -117,7 +117,7 @@ void TriangleMesh::create(const PoolVector<Vector3> &p_faces) {
 			for (int j = 0; j < 3; j++) {
 
 				int vidx = -1;
-				Vector3 vs = v[j].snapped(0.0001);
+				Vector3 vs = v[j].snapped(Vector3(0.0001, 0.0001, 0.0001));
 				Map<Vector3, int>::Element *E = db.find(vs);
 				if (E) {
 					vidx = E->get();
@@ -128,7 +128,7 @@ void TriangleMesh::create(const PoolVector<Vector3> &p_faces) {
 
 				f.indices[j] = vidx;
 				if (j == 0)
-					bw[i].aabb.pos = vs;
+					bw[i].aabb.position = vs;
 				else
 					bw[i].aabb.expand_to(vs);
 			}
@@ -138,7 +138,7 @@ void TriangleMesh::create(const PoolVector<Vector3> &p_faces) {
 			bw[i].left = -1;
 			bw[i].right = -1;
 			bw[i].face_index = i;
-			bw[i].center = bw[i].aabb.pos + bw[i].aabb.size * 0.5;
+			bw[i].center = bw[i].aabb.position + bw[i].aabb.size * 0.5;
 		}
 
 		vertices.resize(db.size());
@@ -158,7 +158,7 @@ void TriangleMesh::create(const PoolVector<Vector3> &p_faces) {
 
 	max_depth = 0;
 	int max_alloc = fc;
-	int max = _create_bvh(bw.ptr(), bwp.ptr(), 0, fc, 1, max_depth, max_alloc);
+	_create_bvh(bw.ptr(), bwp.ptr(), 0, fc, 1, max_depth, max_alloc);
 
 	bw = PoolVector<BVH>::Write(); //clearup
 	bvh.resize(max_alloc); //resize back
@@ -166,7 +166,7 @@ void TriangleMesh::create(const PoolVector<Vector3> &p_faces) {
 	valid = true;
 }
 
-Vector3 TriangleMesh::get_area_normal(const Rect3 &p_aabb) const {
+Vector3 TriangleMesh::get_area_normal(const AABB &p_aabb) const {
 
 	uint32_t *stack = (uint32_t *)alloca(sizeof(int) * max_depth);
 

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -35,7 +35,9 @@
 #include "scene/gui/tab_container.h"
 #include "scene/gui/tree.h"
 
+class EditorFileDialog;
 class EditorFileSystemDirectory;
+class EditorNode;
 
 class DependencyEditor : public AcceptDialog {
 	GDCLASS(DependencyEditor, AcceptDialog);
@@ -71,12 +73,25 @@ class DependencyEditorOwners : public AcceptDialog {
 	GDCLASS(DependencyEditorOwners, AcceptDialog);
 
 	ItemList *owners;
+	PopupMenu *file_options;
+	EditorNode *editor;
 	String editing;
+
 	void _fill_owners(EditorFileSystemDirectory *efsd);
+
+	static void _bind_methods();
+	void _list_rmb_select(int p_item, const Vector2 &p_pos);
+	void _select_file(int p_idx);
+	void _file_option(int p_option);
+
+private:
+	enum FileMenu {
+		FILE_OPEN
+	};
 
 public:
 	void show(const String &p_path);
-	DependencyEditorOwners();
+	DependencyEditorOwners(EditorNode *p_editor);
 };
 
 class DependencyRemoveDialog : public ConfirmationDialog {
@@ -84,14 +99,33 @@ class DependencyRemoveDialog : public ConfirmationDialog {
 
 	Label *text;
 	Tree *owners;
-	bool exist;
-	Map<String, TreeItem *> files;
-	void _fill_owners(EditorFileSystemDirectory *efsd);
+
+	Map<String, String> all_remove_files;
+	Vector<String> to_delete;
+
+	struct RemovedDependency {
+		String file;
+		String file_type;
+		String dependency;
+		String dependency_folder;
+
+		bool operator<(const RemovedDependency &p_other) const {
+			if (dependency_folder.empty() != p_other.dependency_folder.empty()) {
+				return p_other.dependency_folder.empty();
+			} else {
+				return dependency < p_other.dependency;
+			}
+		}
+	};
+
+	void _find_files_in_removed_folder(EditorFileSystemDirectory *efsd, const String &p_folder);
+	void _find_all_removed_dependencies(EditorFileSystemDirectory *efsd, Vector<RemovedDependency> &p_removed);
+	void _build_removed_dependency_tree(const Vector<RemovedDependency> &p_removed);
 
 	void ok_pressed();
 
 public:
-	void show(const Vector<String> &to_erase);
+	void show(const Vector<String> &p_folders, const Vector<String> &p_files);
 	DependencyRemoveDialog();
 };
 
@@ -106,7 +140,7 @@ class DependencyErrorDialog : public ConfirmationDialog {
 	void custom_action(const String &);
 
 public:
-	void show(const String &p_for, const Vector<String> &report);
+	void show(const String &p_for_file, const Vector<String> &report);
 	DependencyErrorDialog();
 };
 

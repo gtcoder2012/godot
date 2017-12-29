@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -106,8 +106,8 @@ void ConcavePolygonShape::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_faces"), &ConcavePolygonShape::get_faces);
 }
 
-ConcavePolygonShape::ConcavePolygonShape()
-	: Shape(PhysicsServer::get_singleton()->shape_create(PhysicsServer::SHAPE_CONCAVE_POLYGON)) {
+ConcavePolygonShape::ConcavePolygonShape() :
+		Shape(PhysicsServer::get_singleton()->shape_create(PhysicsServer::SHAPE_CONCAVE_POLYGON)) {
 
 	//set_planes(Vector3(1,1,1));
 }

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -81,8 +81,8 @@ struct Vector3 {
 
 	_FORCE_INLINE_ void zero();
 
-	void snap(real_t p_val);
-	Vector3 snapped(real_t p_val) const;
+	void snap(Vector3 p_val);
+	Vector3 snapped(Vector3 p_val) const;
 
 	void rotate(const Vector3 &p_axis, real_t p_phi);
 	Vector3 rotated(const Vector3 &p_axis, real_t p_phi) const;
@@ -100,6 +100,7 @@ struct Vector3 {
 
 	_FORCE_INLINE_ Vector3 abs() const;
 	_FORCE_INLINE_ Vector3 floor() const;
+	_FORCE_INLINE_ Vector3 sign() const;
 	_FORCE_INLINE_ Vector3 ceil() const;
 
 	_FORCE_INLINE_ real_t distance_to(const Vector3 &p_b) const;
@@ -107,9 +108,9 @@ struct Vector3 {
 
 	_FORCE_INLINE_ real_t angle_to(const Vector3 &p_b) const;
 
-	_FORCE_INLINE_ Vector3 slide(const Vector3 &p_vec) const;
-	_FORCE_INLINE_ Vector3 bounce(const Vector3 &p_vec) const;
-	_FORCE_INLINE_ Vector3 reflect(const Vector3 &p_vec) const;
+	_FORCE_INLINE_ Vector3 slide(const Vector3 &p_normal) const;
+	_FORCE_INLINE_ Vector3 bounce(const Vector3 &p_normal) const;
+	_FORCE_INLINE_ Vector3 reflect(const Vector3 &p_normal) const;
 
 	/* Operators */
 
@@ -185,6 +186,11 @@ Basis Vector3::to_diagonal_matrix() const {
 Vector3 Vector3::abs() const {
 
 	return Vector3(Math::abs(x), Math::abs(y), Math::abs(z));
+}
+
+Vector3 Vector3::sign() const {
+
+	return Vector3(SGN(x), SGN(y), SGN(z));
 }
 
 Vector3 Vector3::floor() const {
@@ -404,22 +410,22 @@ void Vector3::zero() {
 }
 
 // slide returns the component of the vector along the given plane, specified by its normal vector.
-Vector3 Vector3::slide(const Vector3 &p_n) const {
+Vector3 Vector3::slide(const Vector3 &p_normal) const {
 #ifdef MATH_CHECKS
-	ERR_FAIL_COND_V(p_n.is_normalized() == false, Vector3());
+	ERR_FAIL_COND_V(p_normal.is_normalized() == false, Vector3());
 #endif
-	return *this - p_n * this->dot(p_n);
+	return *this - p_normal * this->dot(p_normal);
 }
 
-Vector3 Vector3::bounce(const Vector3 &p_n) const {
-	return -reflect(p_n);
+Vector3 Vector3::bounce(const Vector3 &p_normal) const {
+	return -reflect(p_normal);
 }
 
-Vector3 Vector3::reflect(const Vector3 &p_n) const {
+Vector3 Vector3::reflect(const Vector3 &p_normal) const {
 #ifdef MATH_CHECKS
-	ERR_FAIL_COND_V(p_n.is_normalized() == false, Vector3());
+	ERR_FAIL_COND_V(p_normal.is_normalized() == false, Vector3());
 #endif
-	return 2.0 * p_n * this->dot(p_n) - *this;
+	return 2.0 * p_normal * this->dot(p_normal) - *this;
 }
 
 #endif

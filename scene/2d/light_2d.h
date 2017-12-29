@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -48,6 +48,7 @@ public:
 		SHADOW_FILTER_NONE,
 		SHADOW_FILTER_PCF3,
 		SHADOW_FILTER_PCF5,
+		SHADOW_FILTER_PCF7,
 		SHADOW_FILTER_PCF9,
 		SHADOW_FILTER_PCF13,
 	};
@@ -69,6 +70,7 @@ private:
 	int item_mask;
 	int item_shadow_mask;
 	int shadow_buffer_size;
+	float shadow_smooth;
 	float shadow_gradient_length;
 	Mode mode;
 	Ref<Texture> texture;
@@ -82,9 +84,10 @@ protected:
 	static void _bind_methods();
 
 public:
-	virtual void edit_set_pivot(const Point2 &p_pivot);
-	virtual Point2 edit_get_pivot() const;
-	virtual bool edit_has_pivot() const;
+	virtual void _edit_set_pivot(const Point2 &p_pivot);
+	virtual Point2 _edit_get_pivot() const;
+	virtual bool _edit_use_pivot() const;
+	virtual Rect2 _edit_get_rect() const;
 
 	void set_enabled(bool p_enabled);
 	bool is_enabled() const;
@@ -146,7 +149,8 @@ public:
 	void set_shadow_color(const Color &p_shadow_color);
 	Color get_shadow_color() const;
 
-	virtual Rect2 get_item_rect() const;
+	void set_shadow_smooth(float p_amount);
+	float get_shadow_smooth() const;
 
 	String get_configuration_warning() const;
 

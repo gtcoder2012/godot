@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -82,7 +82,25 @@ void print_line(String p_string) {
 	PrintHandlerList *l = print_handler_list;
 	while (l) {
 
-		l->printfunc(l->userdata, p_string);
+		l->printfunc(l->userdata, p_string, false);
+		l = l->next;
+	}
+
+	_global_unlock();
+}
+
+void print_error(String p_string) {
+
+	if (!_print_error_enabled)
+		return;
+
+	OS::get_singleton()->printerr("%s\n", p_string.utf8().get_data());
+
+	_global_lock();
+	PrintHandlerList *l = print_handler_list;
+	while (l) {
+
+		l->printfunc(l->userdata, p_string, true);
 		l = l->next;
 	}
 

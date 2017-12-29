@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -36,12 +36,12 @@ bool PowerJavascript::UpdatePowerInfo() {
 	return false;
 }
 
-PowerState PowerJavascript::get_power_state() {
+OS::PowerState PowerJavascript::get_power_state() {
 	if (UpdatePowerInfo()) {
 		return power_state;
 	} else {
 		WARN_PRINT("Power management is not implemented on this platform, defaulting to POWERSTATE_UNKNOWN");
-		return POWERSTATE_UNKNOWN;
+		return OS::POWERSTATE_UNKNOWN;
 	}
 }
 
@@ -63,8 +63,10 @@ int PowerJavascript::get_power_percent_left() {
 	}
 }
 
-PowerJavascript::PowerJavascript()
-	: nsecs_left(-1), percent_left(-1), power_state(POWERSTATE_UNKNOWN) {
+PowerJavascript::PowerJavascript() :
+		nsecs_left(-1),
+		percent_left(-1),
+		power_state(OS::POWERSTATE_UNKNOWN) {
 }
 
 PowerJavascript::~PowerJavascript() {

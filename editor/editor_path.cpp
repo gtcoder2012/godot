@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -63,7 +63,7 @@ void EditorPath::_add_children_to_popup(Object *p_obj, int p_depth) {
 		int index = popup->get_item_count();
 		popup->add_icon_item(icon, E->get().name.capitalize(), objects.size());
 		popup->set_item_h_offset(index, p_depth * 10 * EDSCALE);
-		objects.push_back(obj->get_instance_ID());
+		objects.push_back(obj->get_instance_id());
 
 		_add_children_to_popup(obj, p_depth + 1);
 	}
@@ -139,9 +139,9 @@ void EditorPath::_notification(int p_what) {
 					if (left < 0)
 						continue;
 					String name;
-					if (obj->cast_to<Resource>()) {
+					if (Object::cast_to<Resource>(obj)) {
 
-						Resource *r = obj->cast_to<Resource>();
+						Resource *r = Object::cast_to<Resource>(obj);
 						if (r->get_path().is_resource_file())
 							name = r->get_path().get_file();
 						else
@@ -149,18 +149,18 @@ void EditorPath::_notification(int p_what) {
 
 						if (name == "")
 							name = r->get_class();
-					} else if (obj->cast_to<Node>()) {
-
-						name = obj->cast_to<Node>()->get_name();
-					} else if (obj->cast_to<Resource>() && obj->cast_to<Resource>()->get_name() != "") {
-						name = obj->cast_to<Resource>()->get_name();
-					} else {
+					} else if (obj->is_class("ScriptEditorDebuggerInspectedObject"))
+						name = obj->call("get_title");
+					else if (Object::cast_to<Node>(obj))
+						name = Object::cast_to<Node>(obj)->get_name();
+					else if (Object::cast_to<Resource>(obj) && Object::cast_to<Resource>(obj)->get_name() != "")
+						name = Object::cast_to<Resource>(obj)->get_name();
+					else
 						name = obj->get_class();
-					}
 
 					set_tooltip(obj->get_class());
 
-					label_font->draw(ci, Point2i(ofs, (size.height - label_font->get_height()) / 2 + label_font->get_ascent()), name, Color(1, 1, 1), left);
+					label_font->draw(ci, Point2i(ofs, (size.height - label_font->get_height()) / 2 + label_font->get_ascent()), name, get_color("font_color", "Label"), left);
 				} else {
 					//add arrow
 

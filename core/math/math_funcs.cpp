@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -28,15 +28,12 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "math_funcs.h"
+
 #include "core/os/os.h"
 
 pcg32_random_t Math::default_pcg = { 12047754176567800795ULL, PCG_DEFAULT_INC_64 };
 
 #define PHI 0x9e3779b9
-
-#if 0
-static uint32_t Q[4096];
-#endif
 
 // TODO: we should eventually expose pcg.inc too
 uint32_t Math::rand_from_seed(uint64_t *seed) {
@@ -178,4 +175,19 @@ float Math::random(float from, float to) {
 	unsigned int r = Math::rand();
 	float ret = (float)r / (float)RANDOM_MAX;
 	return (ret) * (to - from) + from;
+}
+
+int Math::wrapi(int value, int min, int max) {
+	--max;
+	int rng = max - min + 1;
+	value = ((value - min) % rng);
+	if (value < 0)
+		return max + 1 + value;
+	else
+		return min + value;
+}
+
+float Math::wrapf(float value, float min, float max) {
+	float rng = max - min;
+	return min + (value - min) - (rng * floor((value - min) / rng));
 }

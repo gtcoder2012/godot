@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,20 +30,20 @@
 #include "resource_preloader_editor_plugin.h"
 
 #include "editor/editor_settings.h"
-#include "global_config.h"
 #include "io/resource_loader.h"
+#include "project_settings.h"
 
 void ResourcePreloaderEditor::_gui_input(Ref<InputEvent> p_event) {
 }
 
 void ResourcePreloaderEditor::_notification(int p_what) {
 
-	if (p_what == NOTIFICATION_FIXED_PROCESS) {
+	if (p_what == NOTIFICATION_PHYSICS_PROCESS) {
 	}
 
 	if (p_what == NOTIFICATION_ENTER_TREE) {
 		load->set_icon(get_icon("Folder", "EditorIcons"));
-		_delete->set_icon(get_icon("Del", "EditorIcons"));
+		_delete->set_icon(get_icon("Remove", "EditorIcons"));
 	}
 
 	if (p_what == NOTIFICATION_READY) {
@@ -157,7 +157,6 @@ void ResourcePreloaderEditor::_paste_pressed() {
 	if (!r.is_valid()) {
 		dialog->set_text(TTR("Resource clipboard is empty!"));
 		dialog->set_title(TTR("Error!"));
-		//dialog->get_cancel()->set_text("Close");
 		dialog->get_ok()->set_text(TTR("Close"));
 		dialog->popup_centered_minsize();
 		return; ///beh should show an error i guess
@@ -249,13 +248,13 @@ void ResourcePreloaderEditor::edit(ResourcePreloader *p_preloader) {
 	} else {
 
 		hide();
-		set_fixed_process(false);
+		set_physics_process(false);
 	}
 }
 
 Variant ResourcePreloaderEditor::get_drag_data_fw(const Point2 &p_point, Control *p_from) {
 
-	TreeItem *ti = tree->get_item_at_pos(p_point);
+	TreeItem *ti = tree->get_item_at_position(p_point);
 	if (!ti)
 		return Variant();
 
@@ -362,7 +361,7 @@ void ResourcePreloaderEditor::_bind_methods() {
 
 ResourcePreloaderEditor::ResourcePreloaderEditor() {
 
-	//add_style_override("panel", get_stylebox("panel","Panel"));
+	//add_style_override("panel", EditorNode::get_singleton()->get_gui_base()->get_stylebox("panel","Panel"));
 
 	VBoxContainer *vbc = memnew(VBoxContainer);
 	add_child(vbc);
@@ -410,7 +409,7 @@ ResourcePreloaderEditor::ResourcePreloaderEditor() {
 void ResourcePreloaderEditorPlugin::edit(Object *p_object) {
 
 	preloader_editor->set_undo_redo(&get_undo_redo());
-	ResourcePreloader *s = p_object->cast_to<ResourcePreloader>();
+	ResourcePreloader *s = Object::cast_to<ResourcePreloader>(p_object);
 	if (!s)
 		return;
 
@@ -445,7 +444,7 @@ ResourcePreloaderEditorPlugin::ResourcePreloaderEditorPlugin(EditorNode *p_node)
 	preloader_editor = memnew(ResourcePreloaderEditor);
 	preloader_editor->set_custom_minimum_size(Size2(0, 250));
 
-	button = editor->add_bottom_panel_item("ResourcePreloader", preloader_editor);
+	button = editor->add_bottom_panel_item(TTR("ResourcePreloader"), preloader_editor);
 	button->hide();
 
 	//preloader_editor->set_anchor( MARGIN_TOP, Control::ANCHOR_END);

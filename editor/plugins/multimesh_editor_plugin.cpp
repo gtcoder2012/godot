@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -77,7 +77,7 @@ void MultiMeshEditor::_populate() {
 			return;
 		}
 
-		MeshInstance *ms_instance = ms_node->cast_to<MeshInstance>();
+		MeshInstance *ms_instance = Object::cast_to<MeshInstance>(ms_node);
 
 		if (!ms_instance) {
 
@@ -112,7 +112,7 @@ void MultiMeshEditor::_populate() {
 		return;
 	}
 
-	GeometryInstance *ss_instance = ss_node->cast_to<MeshInstance>();
+	GeometryInstance *ss_instance = Object::cast_to<MeshInstance>(ss_node);
 
 	if (!ss_instance) {
 
@@ -144,22 +144,7 @@ void MultiMeshEditor::_populate() {
 	}
 
 	w = PoolVector<Face3>::Write();
-#if 0
-	node->get_multimesh()->set_instance_count(populate_amount->get_val());
-	node->populate_parent(populate_rotate_random->get_val(),populate_tilt_random->get_val(),populate_scale_random->get_val(),populate_scale->get_val());
 
-
-	ERR_EXPLAIN("Parent is not of type VisualInstance.");
-	ERR_FAIL_COND(!get_parent() || !get_parent()->is_type("VisualInstance"));
-
-	ERR_EXPLAIN("Multimesh not present.");
-	ERR_FAIL_COND(multimesh.is_null());
-
-	VisualInstance *vi = get_parent()->cast_to<VisualInstance>();
-	ERR_EXPLAIN("Parent is not of type VisualInstance, can't be populated.");
-	ERR_FAIL_COND(!vi);
-
-#endif
 	PoolVector<Face3> faces = geometry;
 	ERR_EXPLAIN(TTR("Parent has no solid faces to populate."));
 	int facecount = faces.size();
@@ -381,7 +366,7 @@ MultiMeshEditor::MultiMeshEditor() {
 	populate_amount = memnew(SpinBox);
 	populate_amount->set_anchor(MARGIN_RIGHT, ANCHOR_END);
 	populate_amount->set_begin(Point2(20, 232));
-	populate_amount->set_end(Point2(5, 237));
+	populate_amount->set_end(Point2(-5, 237));
 	populate_amount->set_min(1);
 	populate_amount->set_max(65536);
 	populate_amount->set_value(128);
@@ -402,7 +387,7 @@ MultiMeshEditor::MultiMeshEditor() {
 
 void MultiMeshEditorPlugin::edit(Object *p_object) {
 
-	multimesh_editor->edit(p_object->cast_to<MultiMeshInstance>());
+	multimesh_editor->edit(Object::cast_to<MultiMeshInstance>(p_object));
 }
 
 bool MultiMeshEditorPlugin::handles(Object *p_object) const {

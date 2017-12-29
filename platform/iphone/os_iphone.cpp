@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -35,17 +35,18 @@
 #include "servers/visual/visual_server_raster.h"
 //#include "servers/visual/visual_server_wrap_mt.h"
 
-#include "audio_driver_iphone.h"
 #include "main/main.h"
 
-#include "core/global_config.h"
 #include "core/io/file_access_pack.h"
 #include "core/os/dir_access.h"
 #include "core/os/file_access.h"
+#include "core/project_settings.h"
+#include "drivers/unix/syslog_logger.h"
 
 #include "sem_iphone.h"
 
 #include "ios.h"
+#include <dlfcn.h>
 
 int OSIPhone::get_video_driver_count() const {
 
@@ -54,17 +55,12 @@ int OSIPhone::get_video_driver_count() const {
 
 const char *OSIPhone::get_video_driver_name(int p_driver) const {
 
-	return "GLES2";
+	return "GLES3";
 };
 
 OSIPhone *OSIPhone::get_singleton() {
 
 	return (OSIPhone *)OS::get_singleton();
-};
-
-OS::VideoMode OSIPhone::get_default_video_mode() const {
-
-	return video_mode;
 };
 
 uint8_t OSIPhone::get_orientations() const {
@@ -83,12 +79,12 @@ void OSIPhone::set_data_dir(String p_dir) {
 	memdelete(da);
 };
 
-void OSIPhone::set_unique_ID(String p_ID) {
+void OSIPhone::set_unique_id(String p_ID) {
 
 	unique_ID = p_ID;
 };
 
-String OSIPhone::get_unique_ID() const {
+String OSIPhone::get_unique_id() const {
 
 	return unique_ID;
 };
@@ -97,6 +93,8 @@ void OSIPhone::initialize_core() {
 
 	OS_Unix::initialize_core();
 	SemaphoreIphone::make_default();
+
+	set_data_dir(data_dir);
 };
 
 void OSIPhone::initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver) {
@@ -109,7 +107,6 @@ void OSIPhone::initialize(const VideoMode &p_desired, int p_video_driver, int p_
 
 	RasterizerGLES3::register_config();
 	RasterizerGLES3::make_current();
-	RasterizerStorageGLES3::system_fbo = gl_view_base_fb;
 
 	visual_server = memnew(VisualServerRaster());
 	/*
@@ -120,46 +117,33 @@ void OSIPhone::initialize(const VideoMode &p_desired, int p_video_driver, int p_
 	*/
 
 	visual_server->init();
-	visual_server->cursor_set_visible(false, 0);
+	//visual_server->cursor_set_visible(false, 0);
 
-	audio_driver = memnew(AudioDriverIphone);
-	audio_driver->set_singleton();
-	audio_driver->init();
+	// reset this to what it should be, it will have been set to 0 after visual_server->init() is called
+	RasterizerStorageGLES3::system_fbo = gl_view_base_fb;
 
-	// init physics servers
-	physics_server = memnew(PhysicsServerSW);
-	physics_server->init();
-	//physics_2d_server = memnew( Physics2DServerSW );
-	physics_2d_server = Physics2DServerWrapMT::init_server<Physics2DServerSW>();
-	physics_2d_server->init();
+	AudioDriverManager::add_driver(&audio_driver);
+	AudioDriverManager::initialize(p_audio_driver);
 
 	input = memnew(InputDefault);
 
-/*
-#ifdef IOS_SCORELOOP_ENABLED
-	scoreloop = memnew(ScoreloopIOS);
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("Scoreloop", scoreloop));
-	scoreloop->connect();
-#endif
-	*/
-
 #ifdef GAME_CENTER_ENABLED
 	game_center = memnew(GameCenter);
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("GameCenter", game_center));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("GameCenter", game_center));
 	game_center->connect();
 #endif
 
 #ifdef STOREKIT_ENABLED
 	store_kit = memnew(InAppStore);
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("InAppStore", store_kit));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("InAppStore", store_kit));
 #endif
 
 #ifdef ICLOUD_ENABLED
 	icloud = memnew(ICloud);
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("ICloud", icloud));
-//icloud->connect();
+	Engine::get_singleton()->add_singleton(Engine::Singleton("ICloud", icloud));
+	//icloud->connect();
 #endif
-	GlobalConfig::get_singleton()->add_singleton(GlobalConfig::Singleton("iOS", memnew(iOS)));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("iOS", memnew(iOS)));
 };
 
 MainLoop *OSIPhone::get_main_loop() const {
@@ -212,7 +196,7 @@ void OSIPhone::mouse_button(int p_idx, int p_x, int p_y, bool p_pressed, bool p_
 
 		ev->set_index(p_idx);
 		ev->set_pressed(p_pressed);
-		ev->set_pos(Vector2(p_x, p_y));
+		ev->set_position(Vector2(p_x, p_y));
 		queue_event(ev);
 	};
 
@@ -222,15 +206,13 @@ void OSIPhone::mouse_button(int p_idx, int p_x, int p_y, bool p_pressed, bool p_
 
 		Ref<InputEventMouseButton> ev;
 		ev.instance();
-		// swaped it for tilted screen
-		//ev->get_pos().x = ev.mouse_button.global_x = video_mode.height - p_y;
-		//ev->get_pos().y = ev.mouse_button.global_y = p_x;
-		ev->set_pos(Vector2(video_mode.height - p_y, p_x));
-		ev->set_global_pos(Vector2(video_mode.height - p_y, p_x));
+
+		ev->set_position(Vector2(p_x, p_y));
+		ev->set_global_position(Vector2(p_x, p_y));
 
 		//mouse_list.pressed[p_idx] = p_pressed;
 
-		input->set_mouse_position(ev->get_pos());
+		input->set_mouse_position(ev->get_position());
 		ev->set_button_index(BUTTON_LEFT);
 		ev->set_doubleclick(p_doubleclick);
 		ev->set_pressed(p_pressed);
@@ -246,7 +228,7 @@ void OSIPhone::mouse_move(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_
 		Ref<InputEventScreenDrag> ev;
 		ev.instance();
 		ev->set_index(p_idx);
-		ev->set_pos(Vector2(p_x, p_y));
+		ev->set_position(Vector2(p_x, p_y));
 		ev->set_relative(Vector2(p_x - p_prev_x, p_y - p_prev_y));
 		queue_event(ev);
 	};
@@ -255,11 +237,11 @@ void OSIPhone::mouse_move(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_
 		Ref<InputEventMouseMotion> ev;
 		ev.instance();
 
-		ev->set_pos(Vector2(p_x, p_y));
-		ev->set_global_pos(Vector2(p_x, p_y));
+		ev->set_position(Vector2(p_x, p_y));
+		ev->set_global_position(Vector2(p_x, p_y));
 		ev->set_relative(Vector2(p_x - p_prev_x, p_y - p_prev_y));
 
-		input->set_mouse_position(ev->get_pos());
+		input->set_mouse_position(ev->get_position());
 		ev->set_speed(input->get_last_mouse_speed());
 		ev->set_button_mask(BUTTON_LEFT); // pressed
 
@@ -374,12 +356,6 @@ void OSIPhone::finalize() {
 	memdelete(visual_server);
 	//	memdelete(rasterizer);
 
-	physics_server->finish();
-	memdelete(physics_server);
-
-	physics_2d_server->finish();
-	memdelete(physics_2d_server);
-
 	memdelete(input);
 };
 
@@ -410,6 +386,37 @@ void OSIPhone::alert(const String &p_alert, const String &p_title) {
 	iOS::alert(utf8_alert.get_data(), utf8_title.get_data());
 }
 
+Error OSIPhone::open_dynamic_library(const String p_path, void *&p_library_handle, bool p_also_set_library_path) {
+	if (p_path.length() == 0) {
+		p_library_handle = RTLD_SELF;
+		return OK;
+	}
+	return OS_Unix::open_dynamic_library(p_path, p_library_handle, p_also_set_library_path);
+}
+
+Error OSIPhone::close_dynamic_library(void *p_library_handle) {
+	if (p_library_handle == RTLD_SELF) {
+		return OK;
+	}
+	return OS_Unix::close_dynamic_library(p_library_handle);
+}
+
+HashMap<String, void *> OSIPhone::dynamic_symbol_lookup_table;
+void register_dynamic_symbol(char *name, void *address) {
+	OSIPhone::dynamic_symbol_lookup_table[String(name)] = address;
+}
+
+Error OSIPhone::get_dynamic_library_symbol_handle(void *p_library_handle, const String p_name, void *&p_symbol_handle, bool p_optional) {
+	if (p_library_handle == RTLD_SELF) {
+		void **ptr = OSIPhone::dynamic_symbol_lookup_table.getptr(p_name);
+		if (ptr) {
+			p_symbol_handle = *ptr;
+			return OK;
+		}
+	}
+	return OS_Unix::get_dynamic_library_symbol_handle(p_library_handle, p_name, p_symbol_handle, p_optional);
+}
+
 void OSIPhone::set_video_mode(const VideoMode &p_video_mode, int p_screen) {
 
 	video_mode = p_video_mode;
@@ -434,7 +441,8 @@ bool OSIPhone::can_draw() const {
 
 int OSIPhone::set_base_framebuffer(int p_fb) {
 
-	RasterizerStorageGLES3::system_fbo = gl_view_base_fb;
+	// gl_view_base_fb has not been updated yet
+	RasterizerStorageGLES3::system_fbo = p_fb;
 
 	return 0;
 };
@@ -456,6 +464,14 @@ void OSIPhone::hide_virtual_keyboard() {
 	_hide_keyboard();
 };
 
+void OSIPhone::set_virtual_keyboard_height(int p_height) {
+	virtual_keyboard_height = p_height;
+}
+
+int OSIPhone::get_virtual_keyboard_height() const {
+	return virtual_keyboard_height;
+}
+
 Error OSIPhone::shell_open(String p_uri) {
 	return _shell_open(p_uri);
 };
@@ -469,7 +485,7 @@ void OSIPhone::set_cursor_shape(CursorShape p_shape){
 
 };
 
-String OSIPhone::get_data_dir() const {
+String OSIPhone::get_user_data_dir() const {
 
 	return data_dir;
 };
@@ -508,7 +524,7 @@ Error OSIPhone::native_video_play(String p_path, float p_volume, String p_audio_
 	FileAccess *f = FileAccess::open(p_path, FileAccess::READ);
 	bool exists = f && f->is_open();
 
-	String tempFile = get_data_dir();
+	String tempFile = get_user_data_dir();
 	if (!exists)
 		return FAILED;
 
@@ -517,10 +533,10 @@ Error OSIPhone::native_video_play(String p_path, float p_volume, String p_audio_
 			print("Unable to play %S using the native player as it resides in a .pck file\n", p_path.c_str());
 			return ERR_INVALID_PARAMETER;
 		} else {
-			p_path = p_path.replace("res:/", GlobalConfig::get_singleton()->get_resource_path());
+			p_path = p_path.replace("res:/", ProjectSettings::get_singleton()->get_resource_path());
 		}
 	} else if (p_path.begins_with("user://"))
-		p_path = p_path.replace("user:/", get_data_dir());
+		p_path = p_path.replace("user:/", get_user_data_dir());
 
 	memdelete(f);
 
@@ -552,7 +568,41 @@ void OSIPhone::native_video_stop() {
 		_stop_video();
 }
 
-OSIPhone::OSIPhone(int width, int height) {
+bool OSIPhone::_check_internal_feature_support(const String &p_feature) {
+
+	return p_feature == "mobile" || p_feature == "etc" || p_feature == "pvrtc" || p_feature == "etc2";
+}
+
+// Initialization order between compilation units is not guaranteed,
+// so we use this as a hack to ensure certain code is called before
+// everything else, but after all units are initialized.
+typedef void (*init_callback)();
+static init_callback *ios_init_callbacks = NULL;
+static int ios_init_callbacks_count = 0;
+static int ios_init_callbacks_capacity = 0;
+
+void add_ios_init_callback(init_callback cb) {
+	if (ios_init_callbacks_count == ios_init_callbacks_capacity) {
+		void *new_ptr = realloc(ios_init_callbacks, sizeof(cb) * 32);
+		if (new_ptr) {
+			ios_init_callbacks = (init_callback *)(new_ptr);
+			ios_init_callbacks_capacity += 32;
+		}
+	}
+	if (ios_init_callbacks_capacity > ios_init_callbacks_count) {
+		ios_init_callbacks[ios_init_callbacks_count] = cb;
+		++ios_init_callbacks_count;
+	}
+}
+
+OSIPhone::OSIPhone(int width, int height, String p_data_dir) {
+	for (int i = 0; i < ios_init_callbacks_count; ++i) {
+		ios_init_callbacks[i]();
+	}
+	free(ios_init_callbacks);
+	ios_init_callbacks = NULL;
+	ios_init_callbacks_count = 0;
+	ios_init_callbacks_capacity = 0;
 
 	main_loop = NULL;
 	visual_server = NULL;
@@ -564,6 +614,19 @@ OSIPhone::OSIPhone(int width, int height) {
 	vm.resizable = false;
 	set_video_mode(vm);
 	event_count = 0;
+	virtual_keyboard_height = 0;
+
+	// can't call set_data_dir from here, since it requires DirAccess
+	// which is initialized in initialize_core
+	data_dir = p_data_dir;
+
+	Vector<Logger *> loggers;
+	loggers.push_back(memnew(SyslogLogger));
+#ifdef DEBUG_ENABLED
+	// it seems iOS app's stdout/stderr is only obtainable if you launch it from Xcode
+	loggers.push_back(memnew(StdLogger));
+#endif
+	_set_logger(memnew(CompositeLogger(loggers)));
 };
 
 OSIPhone::~OSIPhone() {

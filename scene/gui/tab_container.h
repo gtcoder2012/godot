@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -54,12 +54,13 @@ private:
 	bool tabs_visible;
 	bool buttons_visible_cache;
 	TabAlign align;
-	Control *_get_tab(int idx) const;
+	Control *_get_tab(int p_idx) const;
 	int _get_top_margin() const;
 	Popup *popup;
 
 	Vector<Control *> _get_tabs() const;
 	int _get_tab_width(int p_index) const;
+	void _on_theme_changed();
 
 protected:
 	void _child_renamed_callback();

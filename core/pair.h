@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -37,11 +37,21 @@ struct Pair {
 	S second;
 
 	Pair() {}
-	Pair(F p_first, S p_second) {
-		first = p_first;
-		second = p_second;
+	Pair(F p_first, const S &p_second) :
+			first(p_first),
+			second(p_second) {
 	}
 };
+
+template <class F, class S>
+bool operator==(const Pair<F, S> &pair, const Pair<F, S> &other) {
+	return (pair.first == other.first) && (pair.second == other.second);
+}
+
+template <class F, class S>
+bool operator!=(const Pair<F, S> &pair, const Pair<F, S> &other) {
+	return (pair.first != other.first) || (pair.second != other.second);
+}
 
 template <class F, class S>
 struct PairSort {

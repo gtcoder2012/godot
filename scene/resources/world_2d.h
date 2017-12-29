@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,7 +30,7 @@
 #ifndef WORLD_2D_H
 #define WORLD_2D_H
 
-#include "global_config.h"
+#include "project_settings.h"
 #include "resource.h"
 #include "servers/physics_2d_server.h"
 
@@ -44,7 +44,6 @@ class World2D : public Resource {
 
 	RID canvas;
 	RID space;
-	RID sound_space;
 
 	SpatialIndexer2D *indexer;
 
@@ -66,9 +65,10 @@ protected:
 public:
 	RID get_canvas();
 	RID get_space();
-	RID get_sound_space();
 
 	Physics2DDirectSpaceState *get_direct_space_state();
+
+	void get_viewport_list(List<Viewport *> *r_viewports);
 
 	World2D();
 	~World2D();

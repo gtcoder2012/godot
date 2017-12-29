@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -38,7 +38,7 @@ void GIProbeEditorPlugin::_bake() {
 
 void GIProbeEditorPlugin::edit(Object *p_object) {
 
-	GIProbe *s = p_object->cast_to<GIProbe>();
+	GIProbe *s = Object::cast_to<GIProbe>(p_object);
 	if (!s)
 		return;
 
@@ -60,6 +60,27 @@ void GIProbeEditorPlugin::make_visible(bool p_visible) {
 	}
 }
 
+EditorProgress *GIProbeEditorPlugin::tmp_progress = NULL;
+
+void GIProbeEditorPlugin::bake_func_begin(int p_steps) {
+
+	ERR_FAIL_COND(tmp_progress != NULL);
+
+	tmp_progress = memnew(EditorProgress("bake_gi", TTR("Bake GI Probe"), p_steps));
+}
+
+void GIProbeEditorPlugin::bake_func_step(int p_step, const String &p_description) {
+
+	ERR_FAIL_COND(tmp_progress == NULL);
+	tmp_progress->step(p_description, p_step);
+}
+
+void GIProbeEditorPlugin::bake_func_end() {
+	ERR_FAIL_COND(tmp_progress == NULL);
+	memdelete(tmp_progress);
+	tmp_progress = NULL;
+}
+
 void GIProbeEditorPlugin::_bind_methods() {
 
 	ClassDB::bind_method("_bake", &GIProbeEditorPlugin::_bake);
@@ -69,11 +90,16 @@ GIProbeEditorPlugin::GIProbeEditorPlugin(EditorNode *p_node) {
 
 	editor = p_node;
 	bake = memnew(Button);
-	bake->set_icon(editor->get_gui_base()->get_icon("BakedLight", "EditorIcons"));
+	bake->set_icon(editor->get_gui_base()->get_icon("Bake", "EditorIcons"));
+	bake->set_text(TTR("Bake GI Probe"));
 	bake->hide();
 	bake->connect("pressed", this, "_bake");
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, bake);
 	gi_probe = NULL;
+
+	GIProbe::bake_begin_function = bake_func_begin;
+	GIProbe::bake_step_function = bake_func_step;
+	GIProbe::bake_end_function = bake_func_end;
 }
 
 GIProbeEditorPlugin::~GIProbeEditorPlugin() {

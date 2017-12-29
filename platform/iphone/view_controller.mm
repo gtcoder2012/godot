@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -42,7 +42,7 @@ int add_path(int p_argc, char **p_args) {
 	if (!str)
 		return p_argc;
 
-	p_args[p_argc++] = "-path";
+	p_args[p_argc++] = "--path";
 	[str retain]; // memory leak lol (maybe make it static here and delete it in ViewController destructor? @todo
 	p_args[p_argc++] = (char *)[str cString];
 	p_args[p_argc] = NULL;

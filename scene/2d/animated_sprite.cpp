@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,7 +30,8 @@
 #include "animated_sprite.h"
 #include "os/os.h"
 #include "scene/scene_string_names.h"
-#include "scene/scene_string_names.h"
+
+#define NORMAL_SUFFIX "_normal"
 
 ////////////////////////////
 
@@ -82,6 +83,7 @@ void SpriteFrames::add_animation(const StringName &p_anim) {
 	ERR_FAIL_COND(animations.has(p_anim));
 
 	animations[p_anim] = Anim();
+	animations[p_anim].normal_name = String(p_anim) + NORMAL_SUFFIX;
 }
 
 bool SpriteFrames::has_animation(const StringName &p_anim) const {
@@ -101,6 +103,7 @@ void SpriteFrames::rename_animation(const StringName &p_prev, const StringName &
 	Anim anim = animations[p_prev];
 	animations.erase(p_prev);
 	animations[p_next] = anim;
+	animations[p_next].normal_name = String(p_next) + NORMAL_SUFFIX;
 }
 
 Vector<String> SpriteFrames::_get_animation_list() const {
@@ -220,7 +223,7 @@ void SpriteFrames::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_animation_loop", "anim", "loop"), &SpriteFrames::set_animation_loop);
 	ClassDB::bind_method(D_METHOD("get_animation_loop", "anim"), &SpriteFrames::get_animation_loop);
 
-	ClassDB::bind_method(D_METHOD("add_frame", "anim", "frame", "atpos"), &SpriteFrames::add_frame, DEFVAL(-1));
+	ClassDB::bind_method(D_METHOD("add_frame", "anim", "frame", "at_position"), &SpriteFrames::add_frame, DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("get_frame_count", "anim"), &SpriteFrames::get_frame_count);
 	ClassDB::bind_method(D_METHOD("get_frame", "anim", "idx"), &SpriteFrames::get_frame);
 	ClassDB::bind_method(D_METHOD("set_frame", "anim", "idx", "txt"), &SpriteFrames::set_frame);
@@ -244,16 +247,16 @@ SpriteFrames::SpriteFrames() {
 	add_animation(SceneStringNames::get_singleton()->_default);
 }
 
-void AnimatedSprite::edit_set_pivot(const Point2 &p_pivot) {
+void AnimatedSprite::_edit_set_pivot(const Point2 &p_pivot) {
 
 	set_offset(p_pivot);
 }
 
-Point2 AnimatedSprite::edit_get_pivot() const {
+Point2 AnimatedSprite::_edit_get_pivot() const {
 
 	return get_offset();
 }
-bool AnimatedSprite::edit_has_pivot() const {
+bool AnimatedSprite::_edit_use_pivot() const {
 
 	return true;
 }
@@ -295,10 +298,8 @@ void AnimatedSprite::_validate_property(PropertyInfo &property) const {
 
 		property.hint = PROPERTY_HINT_SPRITE_FRAME;
 
-		if (frames->has_animation(animation)) {
+		if (frames->has_animation(animation) && frames->get_frame_count(animation) > 1) {
 			property.hint_string = "0," + itos(frames->get_frame_count(animation) - 1) + ",1";
-		} else {
-			property.hint_string = "0,0,0";
 		}
 	}
 }
@@ -343,6 +344,7 @@ void AnimatedSprite::_notification(int p_what) {
 
 					update();
 					_change_notify("frame");
+					emit_signal(SceneStringNames::get_singleton()->frame_changed);
 				}
 
 				float to_process = MIN(timeout, remaining);
@@ -353,35 +355,20 @@ void AnimatedSprite::_notification(int p_what) {
 
 		case NOTIFICATION_DRAW: {
 
-			if (frames.is_null()) {
-				print_line("no draw no faemos");
+			if (frames.is_null())
 				return;
-			}
-
-			if (frame < 0) {
-				print_line("no draw frame <0");
+			if (frame < 0)
 				return;
-			}
-
-			if (!frames->has_animation(animation)) {
-				print_line("no draw no anim: " + String(animation));
+			if (!frames->has_animation(animation))
 				return;
-			}
 
 			Ref<Texture> texture = frames->get_frame(animation, frame);
-			if (texture.is_null()) {
-				print_line("no draw texture is null");
+			if (texture.is_null())
 				return;
-			}
 
-			//print_line("DECIDED TO DRAW");
+			Ref<Texture> normal = frames->get_normal_frame(animation, frame);
 
 			RID ci = get_canvas_item();
-
-			/*
-			texture->draw(ci,Point2());
-			break;
-			*/
 
 			Size2i s;
 			s = texture->get_size();
@@ -399,9 +386,7 @@ void AnimatedSprite::_notification(int p_what) {
 			if (vflip)
 				dst_rect.size.y = -dst_rect.size.y;
 
-			//texture->draw_rect(ci,dst_rect,false,modulate);
-			texture->draw_rect_region(ci, dst_rect, Rect2(Vector2(), texture->get_size()));
-			//VisualServer::get_singleton()->canvas_item_add_texture_rect_region(ci,dst_rect,texture->get_rid(),src_rect,modulate);
+			texture->draw_rect_region(ci, dst_rect, Rect2(Vector2(), texture->get_size()), Color(1, 1, 1), false, normal);
 
 		} break;
 	}
@@ -505,17 +490,17 @@ bool AnimatedSprite::is_flipped_v() const {
 	return vflip;
 }
 
-Rect2 AnimatedSprite::get_item_rect() const {
+Rect2 AnimatedSprite::_edit_get_rect() const {
 
 	if (!frames.is_valid() || !frames->has_animation(animation) || frame < 0 || frame >= frames->get_frame_count(animation)) {
-		return Node2D::get_item_rect();
+		return Node2D::_edit_get_rect();
 	}
 
 	Ref<Texture> t;
 	if (animation)
 		t = frames->get_frame(animation, frame);
 	if (t.is_null())
-		return Node2D::get_item_rect();
+		return Node2D::_edit_get_rect();
 	Size2i s = t->get_size();
 
 	Point2 ofs = offset;
@@ -564,7 +549,7 @@ void AnimatedSprite::stop() {
 
 bool AnimatedSprite::is_playing() const {
 
-	return is_processing();
+	return playing;
 }
 
 void AnimatedSprite::_reset_timeout() {
@@ -611,8 +596,8 @@ String AnimatedSprite::get_configuration_warning() const {
 
 void AnimatedSprite::_bind_methods() {
 
-	ClassDB::bind_method(D_METHOD("set_sprite_frames", "sprite_frames:SpriteFrames"), &AnimatedSprite::set_sprite_frames);
-	ClassDB::bind_method(D_METHOD("get_sprite_frames:SpriteFrames"), &AnimatedSprite::get_sprite_frames);
+	ClassDB::bind_method(D_METHOD("set_sprite_frames", "sprite_frames"), &AnimatedSprite::set_sprite_frames);
+	ClassDB::bind_method(D_METHOD("get_sprite_frames"), &AnimatedSprite::get_sprite_frames);
 
 	ClassDB::bind_method(D_METHOD("set_animation", "animation"), &AnimatedSprite::set_animation);
 	ClassDB::bind_method(D_METHOD("get_animation"), &AnimatedSprite::get_animation);

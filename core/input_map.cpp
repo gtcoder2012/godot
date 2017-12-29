@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -29,8 +29,8 @@
 /*************************************************************************/
 #include "input_map.h"
 
-#include "global_config.h"
 #include "os/keyboard.h"
+#include "project_settings.h"
 
 InputMap *InputMap::singleton = NULL;
 
@@ -189,7 +189,7 @@ void InputMap::load_from_globals() {
 	input_map.clear();
 
 	List<PropertyInfo> pinfo;
-	GlobalConfig::get_singleton()->get_property_list(&pinfo);
+	ProjectSettings::get_singleton()->get_property_list(&pinfo);
 
 	for (List<PropertyInfo>::Element *E = pinfo.front(); E; E = E->next()) {
 		const PropertyInfo &pi = E->get();
@@ -201,7 +201,7 @@ void InputMap::load_from_globals() {
 
 		add_action(name);
 
-		Array va = GlobalConfig::get_singleton()->get(pi.name);
+		Array va = ProjectSettings::get_singleton()->get(pi.name);
 
 		for (int i = 0; i < va.size(); i++) {
 
@@ -219,11 +219,11 @@ void InputMap::load_default() {
 
 	add_action("ui_accept");
 	key.instance();
-	key->set_scancode(KEY_RETURN);
+	key->set_scancode(KEY_ENTER);
 	action_add_event("ui_accept", key);
 
 	key.instance();
-	key->set_scancode(KEY_ENTER);
+	key->set_scancode(KEY_KP_ENTER);
 	action_add_event("ui_accept", key);
 
 	key.instance();
@@ -281,7 +281,7 @@ void InputMap::load_default() {
 	key->set_scancode(KEY_PAGEDOWN);
 	action_add_event("ui_page_down", key);
 
-	//set("display/handheld/orientation", "landscape");
+	//set("display/window/handheld/orientation", "landscape");
 }
 
 InputMap::InputMap() {

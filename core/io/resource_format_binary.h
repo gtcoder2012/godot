@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -36,15 +36,15 @@
 
 class ResourceInteractiveLoaderBinary : public ResourceInteractiveLoader {
 
+	bool translation_remapped;
 	String local_path;
 	String res_path;
 	String type;
 	Ref<Resource> resource;
+	uint32_t ver_format;
 
 	FileAccess *f;
 
-	bool endian_swap;
-	bool use_real64;
 	uint64_t importmd_ofs;
 
 	Vector<char> str_buf;
@@ -55,19 +55,19 @@ class ResourceInteractiveLoaderBinary : public ResourceInteractiveLoader {
 
 	StringName _get_string();
 
-	struct ExtResoucre {
+	struct ExtResource {
 		String path;
 		String type;
 	};
 
-	Vector<ExtResoucre> external_resources;
+	Vector<ExtResource> external_resources;
 
-	struct IntResoucre {
+	struct IntResource {
 		String path;
 		uint64_t offset;
 	};
 
-	Vector<IntResoucre> internal_resources;
+	Vector<IntResource> internal_resources;
 
 	String get_unicode_string();
 	void _advance_padding(uint32_t p_len);
@@ -87,6 +87,7 @@ public:
 	virtual Error poll();
 	virtual int get_stage() const;
 	virtual int get_stage_count() const;
+	virtual void set_translation_remapped(bool p_remapped);
 
 	void set_remaps(const Map<String, String> &p_remaps) { remaps = p_remaps; }
 	void open(FileAccess *p_f);
@@ -99,7 +100,7 @@ public:
 
 class ResourceFormatLoaderBinary : public ResourceFormatLoader {
 public:
-	virtual Ref<ResourceInteractiveLoader> load_interactive(const String &p_path, Error *r_error = NULL);
+	virtual Ref<ResourceInteractiveLoader> load_interactive(const String &p_path, const String &p_original_path = "", Error *r_error = NULL);
 	virtual void get_recognized_extensions_for_type(const String &p_type, List<String> *p_extensions) const;
 	virtual void get_recognized_extensions(List<String> *p_extensions) const;
 	virtual bool handles_type(const String &p_type) const;
@@ -139,14 +140,15 @@ class ResourceFormatSaverBinaryInstance {
 		List<Property> properties;
 	};
 
-	void _pad_buffer(int p_bytes);
-	void write_variant(const Variant &p_property, const PropertyInfo &p_hint = PropertyInfo());
+	static void _pad_buffer(FileAccess *f, int p_bytes);
+	void _write_variant(const Variant &p_property, const PropertyInfo &p_hint = PropertyInfo());
 	void _find_resources(const Variant &p_variant, bool p_main = false);
-	void save_unicode_string(const String &p_string);
+	static void save_unicode_string(FileAccess *f, const String &p_string, bool p_bit_on_len = false);
 	int get_string_index(const String &p_string);
 
 public:
 	Error save(const String &p_path, const RES &p_resource, uint32_t p_flags = 0);
+	static void write_variant(FileAccess *f, const Variant &p_property, Set<RES> &resource_set, Map<RES, int> &external_resources, Map<StringName, int> &string_map, const PropertyInfo &p_hint = PropertyInfo());
 };
 
 class ResourceFormatSaverBinary : public ResourceFormatSaver {

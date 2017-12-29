@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -31,6 +31,7 @@
 #define EDITOR_DATA_H
 
 #include "editor/editor_plugin.h"
+#include "editor/plugins/script_editor_plugin.h"
 #include "list.h"
 #include "pair.h"
 #include "scene/resources/texture.h"
@@ -73,7 +74,7 @@ class EditorHistory {
 	void _add_object(ObjectID p_object, const String &p_property, int p_level_change);
 
 public:
-	bool is_at_begining() const;
+	bool is_at_beginning() const;
 	bool is_at_end() const;
 
 	void add_object(ObjectID p_object);
@@ -109,6 +110,17 @@ public:
 		Ref<Texture> icon;
 	};
 
+	struct EditedScene {
+		Node *root;
+		Dictionary editor_states;
+		List<Node *> selection;
+		Vector<EditorHistory::History> history_stored;
+		int history_current;
+		Dictionary custom_state;
+		uint64_t version;
+		NodePath live_edit_root;
+	};
+
 private:
 	Vector<EditorPlugin *> editor_plugins;
 
@@ -123,17 +135,6 @@ private:
 	UndoRedo undo_redo;
 
 	void _cleanup_history();
-
-	struct EditedScene {
-		Node *root;
-		Dictionary editor_states;
-		List<Node *> selection;
-		Vector<EditorHistory::History> history_stored;
-		int history_current;
-		Dictionary custom_state;
-		uint64_t version;
-		NodePath live_edit_root;
-	};
 
 	Vector<EditedScene> edited_scene;
 	int current_edited_scene;
@@ -180,9 +181,11 @@ public:
 	int get_edited_scene() const;
 	Node *get_edited_scene_root(int p_idx = -1);
 	int get_edited_scene_count() const;
+	Vector<EditedScene> get_edited_scenes() const;
 	String get_scene_title(int p_idx) const;
 	String get_scene_path(int p_idx) const;
 	String get_scene_type(int p_idx) const;
+	void set_scene_path(int p_idx, const String &p_path);
 	Ref<Script> get_scene_root_script(int p_idx) const;
 	void set_edited_scene_version(uint64_t version, int p_scene_idx = -1);
 	uint64_t get_edited_scene_version() const;
@@ -234,10 +237,7 @@ public:
 	T *get_node_editor_data(Node *p_node) {
 		if (!selection.has(p_node))
 			return NULL;
-		Object *obj = selection[p_node];
-		if (!obj)
-			return NULL;
-		return obj->cast_to<T>();
+		return Object::cast_to<T>(selection[p_node]);
 	}
 
 	void add_editor_plugin(Object *p_object);

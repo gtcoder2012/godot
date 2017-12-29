@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -32,6 +32,7 @@
 
 #include "io/resource_import.h"
 #include "scene/resources/animation.h"
+#include "scene/resources/mesh.h"
 #include "scene/resources/shape.h"
 
 class Material;
@@ -39,6 +40,12 @@ class Material;
 class EditorSceneImporter : public Reference {
 
 	GDCLASS(EditorSceneImporter, Reference);
+
+protected:
+	static void _bind_methods();
+
+	Node *import_scene_from_other_importer(const String &p_path, uint32_t p_flags, int p_bake_fps);
+	Ref<Animation> import_animation_from_other_importer(const String &p_path, uint32_t p_flags, int p_bake_fps);
 
 public:
 	enum ImportFlags {
@@ -50,14 +57,15 @@ public:
 		IMPORT_ANIMATION_KEEP_VALUE_TRACKS = 32,
 		IMPORT_GENERATE_TANGENT_ARRAYS = 256,
 		IMPORT_FAIL_ON_MISSING_DEPENDENCIES = 512,
-		IMPORT_MATERIALS_IN_INSTANCES = 1024
+		IMPORT_MATERIALS_IN_INSTANCES = 1024,
+		IMPORT_USE_COMPRESSION = 2048
 
 	};
 
-	virtual uint32_t get_import_flags() const = 0;
-	virtual void get_extensions(List<String> *r_extensions) const = 0;
-	virtual Node *import_scene(const String &p_path, uint32_t p_flags, int p_bake_fps, List<String> *r_missing_deps, Error *r_err = NULL) = 0;
-	virtual Ref<Animation> import_animation(const String &p_path, uint32_t p_flags) = 0;
+	virtual uint32_t get_import_flags() const;
+	virtual void get_extensions(List<String> *r_extensions) const;
+	virtual Node *import_scene(const String &p_path, uint32_t p_flags, int p_bake_fps, List<String> *r_missing_deps, Error *r_err = NULL);
+	virtual Ref<Animation> import_animation(const String &p_path, uint32_t p_flags, int p_bake_fps);
 
 	EditorSceneImporter() {}
 };
@@ -81,12 +89,38 @@ class ResourceImporterScene : public ResourceImporter {
 
 	static ResourceImporterScene *singleton;
 
+	enum Presets {
+		PRESET_SEPARATE_MATERIALS,
+		PRESET_SEPARATE_MESHES,
+		PRESET_SEPARATE_ANIMATIONS,
+
+		PRESET_SINGLE_SCENE,
+
+		PRESET_SEPARATE_MESHES_AND_MATERIALS,
+		PRESET_SEPARATE_MESHES_AND_ANIMATIONS,
+		PRESET_SEPARATE_MATERIALS_AND_ANIMATIONS,
+		PRESET_SEPARATE_MESHES_MATERIALS_AND_ANIMATIONS,
+
+		PRESET_MULTIPLE_SCENES,
+		PRESET_MULTIPLE_SCENES_AND_MATERIALS,
+		PRESET_MAX
+	};
+
+	enum LightBakeMode {
+		LIGHT_BAKE_DISABLED,
+		LIGHT_BAKE_ENABLE,
+		//LIGHT_BAKE_LIGHTMAPS
+	};
+
+	void _replace_owner(Node *p_node, Node *p_scene, Node *p_new_owner);
+
 public:
 	static ResourceImporterScene *get_singleton() { return singleton; }
 
 	const Set<Ref<EditorSceneImporter> > &get_importers() const { return importers; }
 
 	void add_importer(Ref<EditorSceneImporter> p_importer) { importers.insert(p_importer); }
+	void remove_importer(Ref<EditorSceneImporter> p_importer) { importers.erase(p_importer); }
 
 	virtual String get_importer_name() const;
 	virtual String get_visible_name() const;
@@ -99,10 +133,13 @@ public:
 
 	virtual void get_import_options(List<ImportOption> *r_options, int p_preset = 0) const;
 	virtual bool get_option_visibility(const String &p_option, const Map<StringName, Variant> &p_options) const;
+	virtual int get_import_order() const { return 100; } //after everything
 
-	void _make_external_resources(Node *p_node, const String &p_base_path, bool p_make_materials, bool p_make_meshes, Map<Ref<Material>, Ref<Material> > &p_materials, Map<Ref<Mesh>, Ref<Mesh> > &p_meshes);
+	void _find_meshes(Node *p_node, Map<Ref<ArrayMesh>, Transform> &meshes);
 
-	Node *_fix_node(Node *p_node, Node *p_root, Map<Ref<Mesh>, Ref<Shape> > &collision_map);
+	void _make_external_resources(Node *p_node, const String &p_base_path, bool p_make_animations, bool p_keep_animations, bool p_make_materials, bool p_keep_materials, bool p_make_meshes, Map<Ref<Animation>, Ref<Animation> > &p_animations, Map<Ref<Material>, Ref<Material> > &p_materials, Map<Ref<ArrayMesh>, Ref<ArrayMesh> > &p_meshes);
+
+	Node *_fix_node(Node *p_node, Node *p_root, Map<Ref<ArrayMesh>, Ref<Shape> > &collision_map, LightBakeMode p_light_bake_mode);
 
 	void _create_clips(Node *scene, const Array &p_clips, bool p_bake_all);
 	void _filter_anim_tracks(Ref<Animation> anim, Set<String> &keep);
@@ -110,6 +147,9 @@ public:
 	void _optimize_animations(Node *scene, float p_max_lin_error, float p_max_ang_error, float p_max_angle);
 
 	virtual Error import(const String &p_source_file, const String &p_save_path, const Map<StringName, Variant> &p_options, List<String> *r_platform_variants, List<String> *r_gen_files = NULL);
+
+	Node *import_scene_from_other_importer(EditorSceneImporter *p_exception, const String &p_path, uint32_t p_flags, int p_bake_fps);
+	Ref<Animation> import_animation_from_other_importer(EditorSceneImporter *p_exception, const String &p_path, uint32_t p_flags, int p_bake_fps);
 
 	ResourceImporterScene();
 };

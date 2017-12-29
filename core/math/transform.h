@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -30,9 +30,9 @@
 #ifndef TRANSFORM_H
 #define TRANSFORM_H
 
+#include "aabb.h"
 #include "matrix3.h"
 #include "plane.h"
-#include "rect3.h"
 /**
 	@author Juan Linietsky <reduzio@gmail.com>
 */
@@ -80,8 +80,8 @@ public:
 	_FORCE_INLINE_ Plane xform(const Plane &p_plane) const;
 	_FORCE_INLINE_ Plane xform_inv(const Plane &p_plane) const;
 
-	_FORCE_INLINE_ Rect3 xform(const Rect3 &p_aabb) const;
-	_FORCE_INLINE_ Rect3 xform_inv(const Rect3 &p_aabb) const;
+	_FORCE_INLINE_ AABB xform(const AABB &p_aabb) const;
+	_FORCE_INLINE_ AABB xform_inv(const AABB &p_aabb) const;
 
 	void operator*=(const Transform &p_transform);
 	Transform operator*(const Transform &p_transform) const;
@@ -97,15 +97,7 @@ public:
 
 	void set(real_t xx, real_t xy, real_t xz, real_t yx, real_t yy, real_t yz, real_t zx, real_t zy, real_t zz, real_t tx, real_t ty, real_t tz) {
 
-		basis.elements[0][0] = xx;
-		basis.elements[0][1] = xy;
-		basis.elements[0][2] = xz;
-		basis.elements[1][0] = yx;
-		basis.elements[1][1] = yy;
-		basis.elements[1][2] = yz;
-		basis.elements[2][0] = zx;
-		basis.elements[2][1] = zy;
-		basis.elements[2][2] = zz;
+		basis.set(xx, xy, xz, yx, yy, yz, zx, zy, zz);
 		origin.x = tx;
 		origin.y = ty;
 		origin.z = tz;
@@ -161,16 +153,15 @@ _FORCE_INLINE_ Plane Transform::xform_inv(const Plane &p_plane) const {
 	return Plane(normal, d);
 }
 
-_FORCE_INLINE_ Rect3 Transform::xform(const Rect3 &p_aabb) const {
-/* define vertices */
-#if 1
+_FORCE_INLINE_ AABB Transform::xform(const AABB &p_aabb) const {
+	/* define vertices */
 	Vector3 x = basis.get_axis(0) * p_aabb.size.x;
 	Vector3 y = basis.get_axis(1) * p_aabb.size.y;
 	Vector3 z = basis.get_axis(2) * p_aabb.size.z;
-	Vector3 pos = xform(p_aabb.pos);
+	Vector3 pos = xform(p_aabb.position);
 	//could be even further optimized
-	Rect3 new_aabb;
-	new_aabb.pos = pos;
+	AABB new_aabb;
+	new_aabb.position = pos;
 	new_aabb.expand_to(pos + x);
 	new_aabb.expand_to(pos + y);
 	new_aabb.expand_to(pos + z);
@@ -179,48 +170,25 @@ _FORCE_INLINE_ Rect3 Transform::xform(const Rect3 &p_aabb) const {
 	new_aabb.expand_to(pos + y + z);
 	new_aabb.expand_to(pos + x + y + z);
 	return new_aabb;
-#else
+}
 
+_FORCE_INLINE_ AABB Transform::xform_inv(const AABB &p_aabb) const {
+
+	/* define vertices */
 	Vector3 vertices[8] = {
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y, p_aabb.pos.z)
+		Vector3(p_aabb.position.x + p_aabb.size.x, p_aabb.position.y + p_aabb.size.y, p_aabb.position.z + p_aabb.size.z),
+		Vector3(p_aabb.position.x + p_aabb.size.x, p_aabb.position.y + p_aabb.size.y, p_aabb.position.z),
+		Vector3(p_aabb.position.x + p_aabb.size.x, p_aabb.position.y, p_aabb.position.z + p_aabb.size.z),
+		Vector3(p_aabb.position.x + p_aabb.size.x, p_aabb.position.y, p_aabb.position.z),
+		Vector3(p_aabb.position.x, p_aabb.position.y + p_aabb.size.y, p_aabb.position.z + p_aabb.size.z),
+		Vector3(p_aabb.position.x, p_aabb.position.y + p_aabb.size.y, p_aabb.position.z),
+		Vector3(p_aabb.position.x, p_aabb.position.y, p_aabb.position.z + p_aabb.size.z),
+		Vector3(p_aabb.position.x, p_aabb.position.y, p_aabb.position.z)
 	};
 
 	AABB ret;
 
-	ret.pos = xform(vertices[0]);
-
-	for (int i = 1; i < 8; i++) {
-
-		ret.expand_to(xform(vertices[i]));
-	}
-
-	return ret;
-#endif
-}
-_FORCE_INLINE_ Rect3 Transform::xform_inv(const Rect3 &p_aabb) const {
-
-	/* define vertices */
-	Vector3 vertices[8] = {
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x + p_aabb.size.x, p_aabb.pos.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y + p_aabb.size.y, p_aabb.pos.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y, p_aabb.pos.z + p_aabb.size.z),
-		Vector3(p_aabb.pos.x, p_aabb.pos.y, p_aabb.pos.z)
-	};
-
-	Rect3 ret;
-
-	ret.pos = xform_inv(vertices[0]);
+	ret.position = xform_inv(vertices[0]);
 
 	for (int i = 1; i < 8; i++) {
 
@@ -230,4 +198,4 @@ _FORCE_INLINE_ Rect3 Transform::xform_inv(const Rect3 &p_aabb) const {
 	return ret;
 }
 
-#endif
+#endif // TRANSFORM_H

@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -66,7 +66,7 @@ enum Error {
 	ERR_CANT_CONNECT, // (25)
 	ERR_CANT_RESOLVE,
 	ERR_CONNECTION_ERROR,
-	ERR_CANT_AQUIRE_RESOURCE,
+	ERR_CANT_ACQUIRE_RESOURCE,
 	ERR_CANT_FORK,
 	ERR_INVALID_DATA, ///< Data passed is invalid	(30)
 	ERR_INVALID_PARAMETER, ///< Parameter passed is invalid
@@ -87,8 +87,6 @@ enum Error {
 	ERR_HELP, ///< user requested help!!
 	ERR_BUG, ///< a bug in the software certainly happened, due to a double check failing or unexpected behavior.
 	ERR_PRINTER_ON_FIRE, /// the parallel port printer is engulfed in flames
-	ERR_OMFG_THIS_IS_VERY_VERY_BAD, ///< shit happens, has never been used, though
-	ERR_WTF = ERR_OMFG_THIS_IS_VERY_VERY_BAD ///< short version of the above
 };
 
 #endif

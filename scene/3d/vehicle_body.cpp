@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -54,8 +54,8 @@ public:
 			const Vector3 &inertiaInvA,
 			const real_t massInvA,
 			const Vector3 &inertiaInvB,
-			const real_t massInvB)
-		: m_linearJointAxis(jointAxis) {
+			const real_t massInvB) :
+			m_linearJointAxis(jointAxis) {
 		m_aJ = world2A.xform(rel_pos1.cross(m_linearJointAxis));
 		m_bJ = world2B.xform(rel_pos2.cross(-m_linearJointAxis));
 		m_0MinvJt = inertiaInvA * m_aJ;
@@ -81,9 +81,7 @@ void VehicleWheel::_notification(int p_what) {
 
 	if (p_what == NOTIFICATION_ENTER_TREE) {
 
-		if (!get_parent())
-			return;
-		VehicleBody *cb = get_parent()->cast_to<VehicleBody>();
+		VehicleBody *cb = Object::cast_to<VehicleBody>(get_parent());
 		if (!cb)
 			return;
 		body = cb;
@@ -96,14 +94,20 @@ void VehicleWheel::_notification(int p_what) {
 	}
 	if (p_what == NOTIFICATION_EXIT_TREE) {
 
-		if (!get_parent())
-			return;
-		VehicleBody *cb = get_parent()->cast_to<VehicleBody>();
+		VehicleBody *cb = Object::cast_to<VehicleBody>(get_parent());
 		if (!cb)
 			return;
 		cb->wheels.erase(this);
 		body = NULL;
 	}
+}
+
+String VehicleWheel::get_configuration_warning() const {
+	if (!Object::cast_to<VehicleBody>(get_parent())) {
+		return TTR("VehicleWheel serves to provide a wheel system to a VehicleBody. Please use it as a child of a VehicleBody.");
+	}
+
+	return String();
 }
 
 void VehicleWheel::_update(PhysicsDirectBodyState *s) {
@@ -263,6 +267,8 @@ void VehicleWheel::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_roll_influence", "roll_influence"), &VehicleWheel::set_roll_influence);
 	ClassDB::bind_method(D_METHOD("get_roll_influence"), &VehicleWheel::get_roll_influence);
 
+	ClassDB::bind_method(D_METHOD("get_skidinfo"), &VehicleWheel::get_skidinfo);
+
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_as_traction"), "set_use_as_traction", "is_used_as_traction");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_as_steering"), "set_use_as_steering", "is_used_as_steering");
 	ADD_GROUP("Wheel", "wheel_");
@@ -297,6 +303,11 @@ void VehicleWheel::set_use_as_steering(bool p_enabled) {
 bool VehicleWheel::is_used_as_steering() const {
 
 	return steers;
+}
+
+float VehicleWheel::get_skidinfo() const {
+
+	return m_skidInfo;
 }
 
 VehicleWheel::VehicleWheel() {
@@ -416,7 +427,7 @@ real_t VehicleBody::_ray_cast(int p_idx, PhysicsDirectBodyState *s) {
 
 		wheel.m_raycastInfo.m_isInContact = true;
 		if (rr.collider)
-			wheel.m_raycastInfo.m_groundObject = rr.collider->cast_to<PhysicsBody>();
+			wheel.m_raycastInfo.m_groundObject = Object::cast_to<PhysicsBody>(rr.collider);
 
 		real_t hitDistance = param * raylen;
 		wheel.m_raycastInfo.m_suspensionLength = hitDistance - wheel.m_wheelRadius;
@@ -559,6 +570,9 @@ void VehicleBody::_resolve_single_bilateral(PhysicsDirectBodyState *s, const Vec
 			b2invinertia,
 			b2invmass);
 
+	// FIXME: rel_vel assignment here is overwritten by the following assignment.
+	// What seemes to be intented in the next next assignment is: rel_vel = normal.dot(rel_vel);
+	// Investigate why.
 	real_t rel_vel = jac.getRelativeVelocity(
 			s->get_linear_velocity(),
 			s->get_transform().basis.transposed().xform(s->get_angular_velocity()),
@@ -579,12 +593,12 @@ void VehicleBody::_resolve_single_bilateral(PhysicsDirectBodyState *s, const Vec
 #endif
 }
 
-VehicleBody::btVehicleWheelContactPoint::btVehicleWheelContactPoint(PhysicsDirectBodyState *s, PhysicsBody *body1, const Vector3 &frictionPosWorld, const Vector3 &frictionDirectionWorld, real_t maxImpulse)
-	: m_s(s),
-	  m_body1(body1),
-	  m_frictionPositionWorld(frictionPosWorld),
-	  m_frictionDirectionWorld(frictionDirectionWorld),
-	  m_maxImpulse(maxImpulse) {
+VehicleBody::btVehicleWheelContactPoint::btVehicleWheelContactPoint(PhysicsDirectBodyState *s, PhysicsBody *body1, const Vector3 &frictionPosWorld, const Vector3 &frictionDirectionWorld, real_t maxImpulse) :
+		m_s(s),
+		m_body1(body1),
+		m_frictionPositionWorld(frictionPosWorld),
+		m_frictionDirectionWorld(frictionDirectionWorld),
+		m_maxImpulse(maxImpulse) {
 	float denom0 = 0;
 	float denom1 = 0;
 
@@ -801,7 +815,7 @@ void VehicleBody::_update_friction(PhysicsDirectBodyState *s) {
 
 void VehicleBody::_direct_state_changed(Object *p_state) {
 
-	PhysicsDirectBodyState *s = p_state->cast_to<PhysicsDirectBodyState>();
+	PhysicsDirectBodyState *s = Object::cast_to<PhysicsDirectBodyState>(p_state);
 
 	set_ignore_transform_notification(true);
 	set_global_transform(s->get_transform());
@@ -893,9 +907,9 @@ real_t VehicleBody::get_friction() const {
 	return friction;
 }
 
-void VehicleBody::set_engine_force(float p_force) {
+void VehicleBody::set_engine_force(float p_engine_force) {
 
-	engine_force = p_force;
+	engine_force = p_engine_force;
 }
 
 float VehicleBody::get_engine_force() const {
@@ -955,8 +969,8 @@ void VehicleBody::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "friction", PROPERTY_HINT_RANGE, "0.01,1,0.01"), "set_friction", "get_friction");
 }
 
-VehicleBody::VehicleBody()
-	: PhysicsBody(PhysicsServer::BODY_MODE_RIGID) {
+VehicleBody::VehicleBody() :
+		PhysicsBody(PhysicsServer::BODY_MODE_RIGID) {
 
 	m_pitchControl = 0;
 	m_currentVehicleSpeedKmHour = real_t(0.);

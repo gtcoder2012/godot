@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -48,8 +48,8 @@ class AudioDriverXAudio2 : public AudioDriver {
 	struct XAudio2DriverVoiceCallback : public IXAudio2VoiceCallback {
 
 		HANDLE buffer_end_event;
-		XAudio2DriverVoiceCallback()
-			: buffer_end_event(CreateEvent(NULL, FALSE, FALSE, NULL)) {}
+		XAudio2DriverVoiceCallback() :
+				buffer_end_event(CreateEvent(NULL, FALSE, FALSE, NULL)) {}
 		void STDMETHODCALLTYPE OnBufferEnd(void *pBufferContext) { /*print_line("buffer ended");*/
 			SetEvent(buffer_end_event);
 		}

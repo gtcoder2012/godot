@@ -3,7 +3,7 @@
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
-/*                    http://www.godotengine.org                         */
+/*                      https://godotengine.org                          */
 /*************************************************************************/
 /* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
 /* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
@@ -80,7 +80,7 @@ Rect2 CapsuleShape2D::get_rect() const {
 
 	Vector2 he = Point2(get_radius(), get_radius() + get_height() * 0.5);
 	Rect2 rect;
-	rect.pos = -he;
+	rect.position = -he;
 	rect.size = he * 2.0;
 	return rect;
 }
@@ -97,8 +97,8 @@ void CapsuleShape2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "height"), "set_height", "get_height");
 }
 
-CapsuleShape2D::CapsuleShape2D()
-	: Shape2D(Physics2DServer::get_singleton()->shape_create(Physics2DServer::SHAPE_CAPSULE)) {
+CapsuleShape2D::CapsuleShape2D() :
+		Shape2D(Physics2DServer::get_singleton()->capsule_shape_create()) {
 
 	radius = 10;
 	height = 20;
