@@ -1,412 +1,560 @@
-/*************************************************************************/
-/*  audio_stream_ogg_vorbis.cpp                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  audio_stream_ogg_vorbis.cpp                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "audio_stream_ogg_vorbis.h"
 
-size_t AudioStreamPlaybackOGGVorbis::_ov_read_func(void *p_dst, size_t p_data, size_t p_count, void *_f) {
+#include "core/io/file_access.h"
+#include "core/variant/typed_array.h"
 
-	//printf("read to %p, %i bytes, %i nmemb, %p\n",p_dst,p_data,p_count,_f);
-	FileAccess *fa = (FileAccess *)_f;
-	size_t read_total = p_data * p_count;
+#include "modules/vorbis/resource_importer_ogg_vorbis.h"
+#include <ogg/ogg.h>
 
-	if (fa->eof_reached())
+int AudioStreamPlaybackOggVorbis::_mix_internal(AudioFrame *p_buffer, int p_frames) {
+	ERR_FAIL_COND_V(!ready, 0);
+
+	if (!active) {
 		return 0;
-
-	uint8_t *dst = (uint8_t *)p_dst;
-
-	int read = fa->get_buffer(dst, read_total);
-
-	return read;
-}
-
-int AudioStreamPlaybackOGGVorbis::_ov_seek_func(void *_f, ogg_int64_t offs, int whence) {
-
-//printf("seek to %p, offs %i, whence %i\n",_f,(int)offs,whence);
-
-#ifdef SEEK_SET
-	//printf("seek set defined\n");
-	FileAccess *fa = (FileAccess *)_f;
-
-	if (whence == SEEK_SET) {
-
-		fa->seek(offs);
-	} else if (whence == SEEK_CUR) {
-
-		fa->seek(fa->get_position() + offs);
-	} else if (whence == SEEK_END) {
-
-		fa->seek_end(offs);
-	} else {
-
-		ERR_PRINT("Vorbis seek function failure: Unexpected value in _whence\n");
 	}
-	int ret = fa->eof_reached() ? -1 : 0;
-	//printf("returning %i\n",ret);
-	return ret;
 
-#else
-	return -1; // no seeking
-#endif
-}
-int AudioStreamPlaybackOGGVorbis::_ov_close_func(void *_f) {
+	int todo = p_frames;
 
-	//printf("close %p\n",_f);
-	if (!_f)
-		return 0;
-	FileAccess *fa = (FileAccess *)_f;
-	if (fa->is_open())
-		fa->close();
-	return 0;
-}
-long AudioStreamPlaybackOGGVorbis::_ov_tell_func(void *_f) {
+	int beat_length_frames = -1;
+	bool use_loop = looping_override ? looping : vorbis_stream->loop;
 
-	//printf("close %p\n",_f);
+	if (use_loop && vorbis_stream->get_bpm() > 0 && vorbis_stream->get_beat_count() > 0) {
+		beat_length_frames = vorbis_stream->get_beat_count() * vorbis_data->get_sampling_rate() * 60 / vorbis_stream->get_bpm();
+	}
 
-	FileAccess *fa = (FileAccess *)_f;
-	return fa->get_position();
-}
+	while (todo > 0 && active) {
+		AudioFrame *buffer = p_buffer;
+		buffer += p_frames - todo;
 
-int AudioStreamPlaybackOGGVorbis::mix(int16_t *p_buffer, int p_frames) {
-
-	if (!playing)
-		return 0;
-
-	int total = p_frames;
-	while (true) {
-
-		int todo = p_frames;
-
-		if (todo == 0 || todo < MIN_MIX) {
-			break;
+		int to_mix = todo;
+		if (beat_length_frames >= 0 && (beat_length_frames - (int)frames_mixed) < to_mix) {
+			to_mix = MAX(0, beat_length_frames - (int)frames_mixed);
 		}
 
-#ifdef BIG_ENDIAN_ENABLED
-		long ret = ov_read(&vf, (char *)p_buffer, todo * stream_channels * sizeof(int16_t), 1, 2, 1, &current_section);
-#else
-		long ret = ov_read(&vf, (char *)p_buffer, todo * stream_channels * sizeof(int16_t), 0, 2, 1, &current_section);
-#endif
+		int mixed = _mix_frames_vorbis(buffer, to_mix);
+		ERR_FAIL_COND_V(mixed < 0, 0);
+		todo -= mixed;
+		frames_mixed += mixed;
 
-		if (ret < 0) {
-
-			playing = false;
-			ERR_EXPLAIN("Error reading OGG Vorbis File: " + file);
-			ERR_BREAK(ret < 0);
-		} else if (ret == 0) { // end of song, reload?
-
-			ov_clear(&vf);
-
-			_close_file();
-
-			if (!has_loop()) {
-
-				playing = false;
-				repeats = 1;
-				break;
+		if (loop_fade_remaining < FADE_SIZE) {
+			int to_fade = loop_fade_remaining + MIN(FADE_SIZE - loop_fade_remaining, mixed);
+			for (int i = loop_fade_remaining; i < to_fade; i++) {
+				buffer[i - loop_fade_remaining] += loop_fade[i] * (float(FADE_SIZE - i) / float(FADE_SIZE));
 			}
+			loop_fade_remaining = to_fade;
+		}
 
-			f = FileAccess::open(file, FileAccess::READ);
+		if (beat_length_frames >= 0) {
+			/**
+			 * Length determined by beat length
+			 * This code is commented out because, in practice, it is preferred that the fade
+			 * is done by the transitioner and this stream just goes on until it ends while fading out.
+			 *
+			 * End fade implementation is left here for reference in case at some point this feature
+			 * is desired.
 
-			int errv = ov_open_callbacks(f, &vf, NULL, 0, _ov_callbacks);
-			if (errv != 0) {
-				playing = false;
-				break; // :(
-			}
+			if (!beat_loop && (int)frames_mixed > beat_length_frames - FADE_SIZE) {
+				print_line("beat length fade/after mix?");
+				//No loop, just fade and finish
+				for (int i = 0; i < mixed; i++) {
+					int idx = frames_mixed + i - mixed;
+					buffer[i] *= 1.0 - float(MAX(0, (idx - (beat_length_frames - FADE_SIZE)))) / float(FADE_SIZE);
+				}
+				if ((int)frames_mixed == beat_length_frames) {
+					for (int i = p_frames - todo; i < p_frames; i++) {
+						p_buffer[i] = AudioFrame(0, 0);
+					}
+					active = false;
+					break;
+				}
+			} else
+			**/
 
-			if (loop_restart_time) {
-				bool ok = ov_time_seek(&vf, loop_restart_time) == 0;
-				if (!ok) {
-					playing = false;
-					//ERR_EXPLAIN("loop restart time rejected");
-					ERR_PRINT("loop restart time rejected")
+			if (use_loop && beat_length_frames <= (int)frames_mixed) {
+				// End of file when doing beat-based looping. <= used instead of == because importer editing
+				if (!have_packets_left && !have_samples_left) {
+					//Nothing remaining, so do nothing.
+					loop_fade_remaining = FADE_SIZE;
+				} else {
+					// Add some loop fade;
+					int faded_mix = _mix_frames_vorbis(loop_fade, FADE_SIZE);
+
+					for (int i = faded_mix; i < FADE_SIZE; i++) {
+						// In case lesss was mixed, pad with zeros
+						loop_fade[i] = AudioFrame(0, 0);
+					}
+					loop_fade_remaining = 0;
 				}
 
-				frames_mixed = stream_srate * loop_restart_time;
-			} else {
-
-				frames_mixed = 0;
+				seek(vorbis_stream->loop_offset);
+				loops++;
+				// We still have buffer to fill, start from this element in the next iteration.
+				continue;
 			}
-			repeats++;
-			continue;
 		}
 
-		ret /= stream_channels;
-		ret /= sizeof(int16_t);
+		if (!have_packets_left && !have_samples_left) {
+			// Actual end of file!
+			bool is_not_empty = mixed > 0 || vorbis_stream->get_length() > 0;
+			if (use_loop && is_not_empty) {
+				//loop
 
-		frames_mixed += ret;
+				seek(vorbis_stream->loop_offset);
+				loops++;
+				// We still have buffer to fill, start from this element in the next iteration.
 
-		p_buffer += ret * stream_channels;
-		p_frames -= ret;
+			} else {
+				for (int i = p_frames - todo; i < p_frames; i++) {
+					p_buffer[i] = AudioFrame(0, 0);
+				}
+				active = false;
+			}
+		}
+	}
+	return p_frames - todo;
+}
+
+int AudioStreamPlaybackOggVorbis::_mix_frames_vorbis(AudioFrame *p_buffer, int p_frames) {
+	ERR_FAIL_COND_V(!ready, p_frames);
+	if (!have_samples_left) {
+		ogg_packet *packet = nullptr;
+		int err;
+
+		if (!vorbis_data_playback->next_ogg_packet(&packet)) {
+			have_packets_left = false;
+			WARN_PRINT("ran out of packets in stream");
+			return -1;
+		}
+
+		err = vorbis_synthesis(&block, packet);
+		ERR_FAIL_COND_V_MSG(err != 0, p_frames, "Error during vorbis synthesis " + itos(err));
+
+		err = vorbis_synthesis_blockin(&dsp_state, &block);
+		ERR_FAIL_COND_V_MSG(err != 0, p_frames, "Error during vorbis block processing " + itos(err));
+
+		have_packets_left = !packet->e_o_s;
 	}
 
-	return total - p_frames;
-}
+	float **pcm; // Accessed with pcm[channel_idx][sample_idx].
 
-void AudioStreamPlaybackOGGVorbis::play(float p_from) {
-
-	if (playing)
-		stop();
-
-	if (_load_stream() != OK)
-		return;
-
-	frames_mixed = 0;
-	playing = true;
-	if (p_from > 0) {
-		seek(p_from);
+	int frames = vorbis_synthesis_pcmout(&dsp_state, &pcm);
+	if (frames > p_frames) {
+		frames = p_frames;
+		have_samples_left = true;
+	} else {
+		have_samples_left = false;
 	}
-}
 
-void AudioStreamPlaybackOGGVorbis::_close_file() {
-
-	if (f) {
-
-		memdelete(f);
-		f = NULL;
+	if (info.channels > 1) {
+		for (int frame = 0; frame < frames; frame++) {
+			p_buffer[frame].left = pcm[0][frame];
+			p_buffer[frame].right = pcm[1][frame];
+		}
+	} else {
+		for (int frame = 0; frame < frames; frame++) {
+			p_buffer[frame].left = pcm[0][frame];
+			p_buffer[frame].right = pcm[0][frame];
+		}
 	}
+	vorbis_synthesis_read(&dsp_state, frames);
+	return frames;
 }
 
-bool AudioStreamPlaybackOGGVorbis::is_playing() const {
-	return playing;
-}
-void AudioStreamPlaybackOGGVorbis::stop() {
-
-	_clear_stream();
-	playing = false;
-	//_clear();
+float AudioStreamPlaybackOggVorbis::get_stream_sampling_rate() {
+	return vorbis_data->get_sampling_rate();
 }
 
-float AudioStreamPlaybackOGGVorbis::get_playback_position() const {
+bool AudioStreamPlaybackOggVorbis::_alloc_vorbis() {
+	vorbis_info_init(&info);
+	info_is_allocated = true;
+	vorbis_comment_init(&comment);
+	comment_is_allocated = true;
 
-	int32_t frames = int32_t(frames_mixed);
-	if (frames < 0)
-		frames = 0;
-	return double(frames) / stream_srate;
+	ERR_FAIL_COND_V(vorbis_data.is_null(), false);
+	vorbis_data_playback = vorbis_data->instantiate_playback();
+
+	ogg_packet *packet;
+	int err;
+
+	for (int i = 0; i < 3; i++) {
+		if (!vorbis_data_playback->next_ogg_packet(&packet)) {
+			WARN_PRINT("Not enough packets to parse header");
+			return false;
+		}
+
+		err = vorbis_synthesis_headerin(&info, &comment, packet);
+		ERR_FAIL_COND_V_MSG(err != 0, false, "Error parsing header");
+	}
+
+	err = vorbis_synthesis_init(&dsp_state, &info);
+	ERR_FAIL_COND_V_MSG(err != 0, false, "Error initializing dsp state");
+	dsp_state_is_allocated = true;
+
+	err = vorbis_block_init(&dsp_state, &block);
+	ERR_FAIL_COND_V_MSG(err != 0, false, "Error initializing block");
+	block_is_allocated = true;
+
+	ready = true;
+
+	return true;
 }
 
-void AudioStreamPlaybackOGGVorbis::seek(float p_time) {
-
-	if (!playing)
-		return;
-	bool ok = ov_time_seek(&vf, p_time) == 0;
-	ERR_FAIL_COND(!ok);
-	frames_mixed = stream_srate * p_time;
+void AudioStreamPlaybackOggVorbis::start(double p_from_pos) {
+	ERR_FAIL_COND(!ready);
+	loop_fade_remaining = FADE_SIZE;
+	active = true;
+	seek(p_from_pos);
+	loops = 0;
+	begin_resample();
 }
 
-String AudioStreamPlaybackOGGVorbis::get_stream_name() const {
-
-	return "";
+void AudioStreamPlaybackOggVorbis::stop() {
+	active = false;
 }
 
-void AudioStreamPlaybackOGGVorbis::set_loop(bool p_enable) {
-
-	loops = p_enable;
+bool AudioStreamPlaybackOggVorbis::is_playing() const {
+	return active;
 }
 
-bool AudioStreamPlaybackOGGVorbis::has_loop() const {
-
+int AudioStreamPlaybackOggVorbis::get_loop_count() const {
 	return loops;
 }
 
-int AudioStreamPlaybackOGGVorbis::get_loop_count() const {
-	return repeats;
+double AudioStreamPlaybackOggVorbis::get_playback_position() const {
+	return double(frames_mixed) / (double)vorbis_data->get_sampling_rate();
 }
 
-Error AudioStreamPlaybackOGGVorbis::set_file(const String &p_file) {
-
-	file = p_file;
-	stream_valid = false;
-	Error err;
-	f = FileAccess::open(file, FileAccess::READ, &err);
-
-	if (err) {
-		ERR_FAIL_COND_V(err, err);
-	}
-
-	int errv = ov_open_callbacks(f, &vf, NULL, 0, _ov_callbacks);
-	switch (errv) {
-
-		case OV_EREAD: { // - A read from media returned an error.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_CANT_READ);
-		} break;
-		case OV_EVERSION: // - Vorbis version mismatch.
-		case OV_ENOTVORBIS: { // - Bitstream is not Vorbis data.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_UNRECOGNIZED);
-		} break;
-		case OV_EBADHEADER: { // - Invalid Vorbis bitstream header.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_CORRUPT);
-		} break;
-		case OV_EFAULT: { // - Internal logic fault; indicates a bug or heap/stack corruption.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_BUG);
-		} break;
-	}
-	const vorbis_info *vinfo = ov_info(&vf, -1);
-	stream_channels = vinfo->channels;
-	stream_srate = vinfo->rate;
-	length = ov_time_total(&vf, -1);
-	ov_clear(&vf);
-	memdelete(f);
-	f = NULL;
-	stream_valid = true;
-
-	return OK;
+void AudioStreamPlaybackOggVorbis::tag_used_streams() {
+	vorbis_stream->tag_used(get_playback_position());
 }
 
-Error AudioStreamPlaybackOGGVorbis::_load_stream() {
-
-	ERR_FAIL_COND_V(!stream_valid, ERR_UNCONFIGURED);
-
-	_clear_stream();
-	if (file == "")
-		return ERR_INVALID_DATA;
-
-	Error err;
-	f = FileAccess::open(file, FileAccess::READ, &err);
-	if (err) {
-		ERR_FAIL_COND_V(err, err);
+void AudioStreamPlaybackOggVorbis::set_parameter(const StringName &p_name, const Variant &p_value) {
+	if (p_name == SNAME("looping")) {
+		if (p_value == Variant()) {
+			looping_override = false;
+			looping = false;
+		} else {
+			looping_override = true;
+			looping = p_value;
+		}
 	}
-
-	int errv = ov_open_callbacks(f, &vf, NULL, 0, _ov_callbacks);
-	switch (errv) {
-
-		case OV_EREAD: { // - A read from media returned an error.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_CANT_READ);
-		} break;
-		case OV_EVERSION: // - Vorbis version mismatch.
-		case OV_ENOTVORBIS: { // - Bitstream is not Vorbis data.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_UNRECOGNIZED);
-		} break;
-		case OV_EBADHEADER: { // - Invalid Vorbis bitstream header.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_FILE_CORRUPT);
-		} break;
-		case OV_EFAULT: { // - Internal logic fault; indicates a bug or heap/stack corruption.
-			memdelete(f);
-			f = NULL;
-			ERR_FAIL_V(ERR_BUG);
-		} break;
-	}
-	repeats = 0;
-	stream_loaded = true;
-
-	return OK;
 }
 
-float AudioStreamPlaybackOGGVorbis::get_length() const {
-
-	if (!stream_loaded) {
-		if (const_cast<AudioStreamPlaybackOGGVorbis *>(this)->_load_stream() != OK)
-			return 0;
+Variant AudioStreamPlaybackOggVorbis::get_parameter(const StringName &p_name) const {
+	if (looping_override && p_name == SNAME("looping")) {
+		return looping;
 	}
-	return length;
+	return Variant();
 }
 
-void AudioStreamPlaybackOGGVorbis::_clear_stream() {
-
-	if (!stream_loaded)
+void AudioStreamPlaybackOggVorbis::seek(double p_time) {
+	ERR_FAIL_COND(!ready);
+	ERR_FAIL_COND(vorbis_stream.is_null());
+	if (!active) {
 		return;
+	}
 
-	ov_clear(&vf);
-	_close_file();
+	if (p_time >= vorbis_stream->get_length()) {
+		p_time = 0;
+	}
 
-	stream_loaded = false;
-	//stream_channels=1;
-	playing = false;
+	frames_mixed = uint32_t(vorbis_data->get_sampling_rate() * p_time);
+
+	const int64_t desired_sample = p_time * get_stream_sampling_rate();
+
+	if (!vorbis_data_playback->seek_page(desired_sample)) {
+		WARN_PRINT("seek failed");
+		return;
+	}
+
+	// We want to start decoding before the page that we expect the sample to be in (the sample may
+	// be part of a partial packet across page boundaries). Otherwise, the decoder may not have
+	// synchronized before reaching the sample.
+	int64_t start_page_number = vorbis_data_playback->get_page_number() - 1;
+	if (start_page_number < 0) {
+		start_page_number = 0;
+	}
+
+	while (true) {
+		ogg_packet *packet;
+		int err;
+
+		// We start at an unknown granule position.
+		int64_t granule_pos = -1;
+
+		// Decode data until we get to the desired sample or notice that we have read past it.
+		vorbis_data_playback->set_page_number(start_page_number);
+		vorbis_synthesis_restart(&dsp_state);
+
+		while (true) {
+			if (!vorbis_data_playback->next_ogg_packet(&packet)) {
+				WARN_PRINT_ONCE("Seeking beyond limits");
+				return;
+			}
+
+			err = vorbis_synthesis(&block, packet);
+			if (err != OV_ENOTAUDIO) {
+				ERR_FAIL_COND_MSG(err != 0, "Error during vorbis synthesis " + itos(err) + ".");
+
+				err = vorbis_synthesis_blockin(&dsp_state, &block);
+				ERR_FAIL_COND_MSG(err != 0, "Error during vorbis block processing " + itos(err) + ".");
+
+				int samples_out = vorbis_synthesis_pcmout(&dsp_state, nullptr);
+
+				if (granule_pos < 0) {
+					// We don't know where we are yet, so just keep on decoding.
+					err = vorbis_synthesis_read(&dsp_state, samples_out);
+					ERR_FAIL_COND_MSG(err != 0, "Error during vorbis read updating " + itos(err) + ".");
+				} else if (granule_pos + samples_out >= desired_sample) {
+					// Our sample is in this block. Skip the beginning of the block up to the sample, then
+					// return.
+					int skip_samples = (int)(desired_sample - granule_pos);
+					err = vorbis_synthesis_read(&dsp_state, skip_samples);
+					ERR_FAIL_COND_MSG(err != 0, "Error during vorbis read updating " + itos(err) + ".");
+					have_samples_left = skip_samples < samples_out;
+					have_packets_left = !packet->e_o_s;
+					return;
+				} else {
+					// Our sample is not in this block. Skip it.
+					err = vorbis_synthesis_read(&dsp_state, samples_out);
+					ERR_FAIL_COND_MSG(err != 0, "Error during vorbis read updating " + itos(err) + ".");
+					granule_pos += samples_out;
+				}
+			}
+			if (packet->granulepos != -1) {
+				// We found an update to our granule position.
+				granule_pos = packet->granulepos;
+				if (granule_pos > desired_sample) {
+					// We've read past our sample. We need to start on an earlier page.
+					if (start_page_number == 0) {
+						// We didn't find the sample even reading from the beginning.
+						have_samples_left = false;
+						have_packets_left = !packet->e_o_s;
+						return;
+					}
+					start_page_number--;
+					break;
+				}
+			}
+			if (packet->e_o_s) {
+				// We've reached the end of the stream and didn't find our sample.
+				have_samples_left = false;
+				have_packets_left = false;
+				return;
+			}
+		}
+	}
 }
 
-void AudioStreamPlaybackOGGVorbis::set_paused(bool p_paused) {
-
-	paused = p_paused;
+AudioStreamPlaybackOggVorbis::~AudioStreamPlaybackOggVorbis() {
+	if (block_is_allocated) {
+		vorbis_block_clear(&block);
+	}
+	if (dsp_state_is_allocated) {
+		vorbis_dsp_clear(&dsp_state);
+	}
+	if (comment_is_allocated) {
+		vorbis_comment_clear(&comment);
+	}
+	if (info_is_allocated) {
+		vorbis_info_clear(&info);
+	}
 }
 
-bool AudioStreamPlaybackOGGVorbis::is_paused() const {
+Ref<AudioStreamPlayback> AudioStreamOggVorbis::instantiate_playback() {
+	Ref<AudioStreamPlaybackOggVorbis> ovs;
 
-	return paused;
+	ERR_FAIL_COND_V(packet_sequence.is_null(), nullptr);
+
+	ovs.instantiate();
+	ovs->vorbis_stream = Ref<AudioStreamOggVorbis>(this);
+	ovs->vorbis_data = packet_sequence;
+	ovs->frames_mixed = 0;
+	ovs->active = false;
+	ovs->loops = 0;
+	if (ovs->_alloc_vorbis()) {
+		return ovs;
+	}
+	// Failed to allocate data structures.
+	return nullptr;
 }
 
-AudioStreamPlaybackOGGVorbis::AudioStreamPlaybackOGGVorbis() {
-
-	loops = false;
-	playing = false;
-	_ov_callbacks.read_func = _ov_read_func;
-	_ov_callbacks.seek_func = _ov_seek_func;
-	_ov_callbacks.close_func = _ov_close_func;
-	_ov_callbacks.tell_func = _ov_tell_func;
-	f = NULL;
-	stream_loaded = false;
-	stream_valid = false;
-	repeats = 0;
-	paused = true;
-	stream_channels = 0;
-	stream_srate = 0;
-	current_section = 0;
-	length = 0;
-	loop_restart_time = 0;
+String AudioStreamOggVorbis::get_stream_name() const {
+	return ""; //return stream_name;
 }
 
-AudioStreamPlaybackOGGVorbis::~AudioStreamPlaybackOGGVorbis() {
+void AudioStreamOggVorbis::maybe_update_info() {
+	ERR_FAIL_COND(packet_sequence.is_null());
 
-	_clear_stream();
+	vorbis_info info;
+	vorbis_comment comment;
+	int err;
+
+	vorbis_info_init(&info);
+	vorbis_comment_init(&comment);
+
+	Ref<OggPacketSequencePlayback> packet_sequence_playback = packet_sequence->instantiate_playback();
+
+	for (int i = 0; i < 3; i++) {
+		ogg_packet *packet;
+		if (!packet_sequence_playback->next_ogg_packet(&packet)) {
+			WARN_PRINT("Failed to get header packet");
+			break;
+		}
+		if (i == 0) {
+			packet->b_o_s = 1;
+
+			ERR_FAIL_COND(!vorbis_synthesis_idheader(packet));
+		}
+
+		err = vorbis_synthesis_headerin(&info, &comment, packet);
+		ERR_FAIL_COND_MSG(err != 0, "Error parsing header packet " + itos(i) + ": " + itos(err));
+	}
+
+	packet_sequence->set_sampling_rate(info.rate);
+
+	vorbis_comment_clear(&comment);
+	vorbis_info_clear(&info);
 }
 
-RES ResourceFormatLoaderAudioStreamOGGVorbis::load(const String &p_path, const String &p_original_path, Error *r_error) {
-	if (r_error)
-		*r_error = OK;
-
-	AudioStreamOGGVorbis *ogg_stream = memnew(AudioStreamOGGVorbis);
-	ogg_stream->set_file(p_path);
-	return Ref<AudioStreamOGGVorbis>(ogg_stream);
+void AudioStreamOggVorbis::set_packet_sequence(Ref<OggPacketSequence> p_packet_sequence) {
+	packet_sequence = p_packet_sequence;
+	if (packet_sequence.is_valid()) {
+		maybe_update_info();
+	}
 }
 
-void ResourceFormatLoaderAudioStreamOGGVorbis::get_recognized_extensions(List<String> *p_extensions) const {
-
-	p_extensions->push_back("ogg");
-}
-String ResourceFormatLoaderAudioStreamOGGVorbis::get_resource_type(const String &p_path) const {
-
-	if (p_path.get_extension().to_lower() == "ogg")
-		return "AudioStreamOGGVorbis";
-	return "";
+Ref<OggPacketSequence> AudioStreamOggVorbis::get_packet_sequence() const {
+	return packet_sequence;
 }
 
-bool ResourceFormatLoaderAudioStreamOGGVorbis::handles_type(const String &p_type) const {
-	return (p_type == "AudioStream" || p_type == "AudioStreamOGG" || p_type == "AudioStreamOGGVorbis");
+void AudioStreamOggVorbis::set_loop(bool p_enable) {
+	loop = p_enable;
+}
+
+bool AudioStreamOggVorbis::has_loop() const {
+	return loop;
+}
+
+void AudioStreamOggVorbis::set_loop_offset(double p_seconds) {
+	loop_offset = p_seconds;
+}
+
+double AudioStreamOggVorbis::get_loop_offset() const {
+	return loop_offset;
+}
+
+double AudioStreamOggVorbis::get_length() const {
+	ERR_FAIL_COND_V(packet_sequence.is_null(), 0);
+	return packet_sequence->get_length();
+}
+
+void AudioStreamOggVorbis::set_bpm(double p_bpm) {
+	ERR_FAIL_COND(p_bpm < 0);
+	bpm = p_bpm;
+	emit_changed();
+}
+
+double AudioStreamOggVorbis::get_bpm() const {
+	return bpm;
+}
+
+void AudioStreamOggVorbis::set_beat_count(int p_beat_count) {
+	ERR_FAIL_COND(p_beat_count < 0);
+	beat_count = p_beat_count;
+	emit_changed();
+}
+
+int AudioStreamOggVorbis::get_beat_count() const {
+	return beat_count;
+}
+
+void AudioStreamOggVorbis::set_bar_beats(int p_bar_beats) {
+	ERR_FAIL_COND(p_bar_beats < 2);
+	bar_beats = p_bar_beats;
+	emit_changed();
+}
+
+int AudioStreamOggVorbis::get_bar_beats() const {
+	return bar_beats;
+}
+
+bool AudioStreamOggVorbis::is_monophonic() const {
+	return false;
+}
+
+void AudioStreamOggVorbis::get_parameter_list(List<Parameter> *r_parameters) {
+	r_parameters->push_back(Parameter(PropertyInfo(Variant::BOOL, "looping", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CHECKABLE), Variant()));
+}
+
+void AudioStreamOggVorbis::_bind_methods() {
+	ClassDB::bind_static_method("AudioStreamOggVorbis", D_METHOD("load_from_buffer", "buffer"), &AudioStreamOggVorbis::load_from_buffer);
+	ClassDB::bind_static_method("AudioStreamOggVorbis", D_METHOD("load_from_file", "path"), &AudioStreamOggVorbis::load_from_file);
+
+	ClassDB::bind_method(D_METHOD("set_packet_sequence", "packet_sequence"), &AudioStreamOggVorbis::set_packet_sequence);
+	ClassDB::bind_method(D_METHOD("get_packet_sequence"), &AudioStreamOggVorbis::get_packet_sequence);
+
+	ClassDB::bind_method(D_METHOD("set_loop", "enable"), &AudioStreamOggVorbis::set_loop);
+	ClassDB::bind_method(D_METHOD("has_loop"), &AudioStreamOggVorbis::has_loop);
+
+	ClassDB::bind_method(D_METHOD("set_loop_offset", "seconds"), &AudioStreamOggVorbis::set_loop_offset);
+	ClassDB::bind_method(D_METHOD("get_loop_offset"), &AudioStreamOggVorbis::get_loop_offset);
+
+	ClassDB::bind_method(D_METHOD("set_bpm", "bpm"), &AudioStreamOggVorbis::set_bpm);
+	ClassDB::bind_method(D_METHOD("get_bpm"), &AudioStreamOggVorbis::get_bpm);
+
+	ClassDB::bind_method(D_METHOD("set_beat_count", "count"), &AudioStreamOggVorbis::set_beat_count);
+	ClassDB::bind_method(D_METHOD("get_beat_count"), &AudioStreamOggVorbis::get_beat_count);
+
+	ClassDB::bind_method(D_METHOD("set_bar_beats", "count"), &AudioStreamOggVorbis::set_bar_beats);
+	ClassDB::bind_method(D_METHOD("get_bar_beats"), &AudioStreamOggVorbis::get_bar_beats);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "packet_sequence", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_packet_sequence", "get_packet_sequence");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "bpm", PROPERTY_HINT_RANGE, "0,400,0.01,or_greater"), "set_bpm", "get_bpm");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "beat_count", PROPERTY_HINT_RANGE, "0,512,1,or_greater"), "set_beat_count", "get_beat_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "bar_beats", PROPERTY_HINT_RANGE, "2,32,1,or_greater"), "set_bar_beats", "get_bar_beats");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "loop"), "set_loop", "has_loop");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "loop_offset"), "set_loop_offset", "get_loop_offset");
+}
+
+AudioStreamOggVorbis::AudioStreamOggVorbis() {}
+
+AudioStreamOggVorbis::~AudioStreamOggVorbis() {}
+
+Ref<AudioStreamOggVorbis> AudioStreamOggVorbis::load_from_buffer(const Vector<uint8_t> &file_data) {
+	return ResourceImporterOggVorbis::load_from_buffer(file_data);
+}
+
+Ref<AudioStreamOggVorbis> AudioStreamOggVorbis::load_from_file(const String &p_path) {
+	return ResourceImporterOggVorbis::load_from_file(p_path);
 }

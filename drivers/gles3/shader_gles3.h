@@ -1,389 +1,266 @@
-/*************************************************************************/
-/*  shader_gles3.h                                                       */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  shader_gles3.h                                                        */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #ifndef SHADER_GLES3_H
 #define SHADER_GLES3_H
 
+#include "core/math/projection.h"
+#include "core/os/mutex.h"
+#include "core/string/string_builder.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/local_vector.h"
+#include "core/templates/rb_map.h"
+#include "core/templates/rid_owner.h"
+#include "core/variant/variant.h"
+#include "servers/rendering_server.h"
+
+#ifdef GLES3_ENABLED
+
+#include "platform_gl.h"
+
 #include <stdio.h>
 
-#include "platform_config.h"
-#ifndef GLES3_INCLUDE_H
-#include <GLES3/gl3.h>
-#else
-#include GLES3_INCLUDE_H
-#endif
-
-#include "camera_matrix.h"
-#include "hash_map.h"
-#include "map.h"
-#include "variant.h"
-
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
-
 class ShaderGLES3 {
+public:
+	struct TextureUniformData {
+		StringName name;
+		int array_size;
+	};
+
 protected:
-	struct Enum {
-
-		uint64_t mask;
-		uint64_t shift;
-		const char *defines[16];
-	};
-
-	struct EnumValue {
-
-		uint64_t set_mask;
-		uint64_t clear_mask;
-	};
-
-	struct AttributePair {
-
-		const char *name;
-		int index;
-	};
-
-	struct UniformPair {
-		const char *name;
-		Variant::Type type_hint;
-	};
-
 	struct TexUnitPair {
-
 		const char *name;
 		int index;
 	};
 
 	struct UBOPair {
-
 		const char *name;
 		int index;
 	};
 
-	struct Feedback {
-
+	struct Specialization {
 		const char *name;
-		int conditional;
+		bool default_value = false;
 	};
 
-	bool uniforms_dirty;
+	struct Feedback {
+		const char *name;
+		uint64_t specialization;
+	};
 
 private:
-	//@TODO Optimize to a fixed set of shader pools and use a LRU
-	int uniform_count;
-	int texunit_pair_count;
-	int conditional_count;
-	int ubo_count;
-	int feedback_count;
-	int vertex_code_start;
-	int fragment_code_start;
-	int attribute_pair_count;
+	//versions
+	CharString general_defines;
 
-	struct CustomCode {
-
-		String vertex;
-		String vertex_globals;
-		String fragment;
-		String fragment_globals;
-		String light;
-		String uniforms;
-		uint32_t version;
-		Vector<StringName> texture_uniforms;
-		Vector<CharString> custom_defines;
-	};
-
+	// A version is a high-level construct which is a combination of built-in and user-defined shader code, Each user-created Shader makes one version
+	// Variants use #ifdefs to toggle behavior on and off to change behavior of the shader
+	// All variants are compiled each time a new version is created
+	// Specializations use #ifdefs to toggle behavior on and off for performance, on supporting hardware, they will compile a version with everything enabled, and then compile more copies to improve performance
+	// Use specializations to enable and disabled advanced features, use variants to toggle behavior when different data may be used (e.g. using a samplerArray vs a sampler, or doing a depth prepass vs a color pass)
 	struct Version {
+		LocalVector<TextureUniformData> texture_uniforms;
+		CharString uniforms;
+		CharString vertex_globals;
+		CharString fragment_globals;
+		HashMap<StringName, CharString> code_sections;
+		Vector<CharString> custom_defines;
 
-		GLuint id;
-		GLuint vert_id;
-		GLuint frag_id;
-		GLint *uniform_location;
-		Vector<GLint> texture_uniform_locations;
-		uint32_t code_version;
-		bool ok;
-		Version() {
-			code_version = 0;
-			ok = false;
-			uniform_location = NULL;
-		}
-	};
-
-	Version *version;
-
-	union VersionKey {
-
-		struct {
-			uint32_t version;
-			uint32_t code_version;
+		struct Specialization {
+			GLuint id;
+			GLuint vert_id;
+			GLuint frag_id;
+			LocalVector<GLint> uniform_location;
+			LocalVector<GLint> texture_uniform_locations;
+			bool build_queued = false;
+			bool ok = false;
+			Specialization() {
+				id = 0;
+				vert_id = 0;
+				frag_id = 0;
+			}
 		};
-		uint64_t key;
-		bool operator==(const VersionKey &p_key) const { return key == p_key.key; }
-		bool operator<(const VersionKey &p_key) const { return key < p_key.key; }
+
+		LocalVector<OAHashMap<uint64_t, Specialization>> variants;
 	};
 
-	struct VersionKeyHash {
+	Mutex variant_set_mutex;
 
-		static _FORCE_INLINE_ uint32_t hash(const VersionKey &p_key) { return HashMapHasherDefault::hash(p_key.key); };
+	void _get_uniform_locations(Version::Specialization &spec, Version *p_version);
+	void _compile_specialization(Version::Specialization &spec, uint32_t p_variant, Version *p_version, uint64_t p_specialization);
+
+	void _clear_version(Version *p_version);
+	void _initialize_version(Version *p_version);
+
+	RID_Owner<Version, true> version_owner;
+
+	struct StageTemplate {
+		struct Chunk {
+			enum Type {
+				TYPE_MATERIAL_UNIFORMS,
+				TYPE_VERTEX_GLOBALS,
+				TYPE_FRAGMENT_GLOBALS,
+				TYPE_CODE,
+				TYPE_TEXT
+			};
+
+			Type type;
+			StringName code;
+			CharString text;
+		};
+		LocalVector<Chunk> chunks;
 	};
 
-	//this should use a way more cachefriendly version..
-	HashMap<VersionKey, Version, VersionKeyHash> version_map;
+	String name;
 
-	HashMap<uint32_t, CustomCode> custom_code_map;
-	uint32_t last_custom_code;
+	String base_sha256;
 
-	VersionKey conditional_version;
-	VersionKey new_conditional_version;
+	static String shader_cache_dir;
+	static bool shader_cache_cleanup_on_start;
+	static bool shader_cache_save_compressed;
+	static bool shader_cache_save_compressed_zstd;
+	static bool shader_cache_save_debug;
+	bool shader_cache_dir_valid = false;
 
-	virtual String get_shader_name() const = 0;
+	int64_t max_image_units = 0;
 
-	const char **conditional_defines;
-	const char **uniform_names;
-	const AttributePair *attribute_pairs;
-	const TexUnitPair *texunit_pairs;
-	const UBOPair *ubo_pairs;
+	enum StageType {
+		STAGE_TYPE_VERTEX,
+		STAGE_TYPE_FRAGMENT,
+		STAGE_TYPE_MAX,
+	};
+
+	StageTemplate stage_templates[STAGE_TYPE_MAX];
+
+	void _build_variant_code(StringBuilder &p_builder, uint32_t p_variant, const Version *p_version, StageType p_stage_type, uint64_t p_specialization);
+
+	void _add_stage(const char *p_code, StageType p_stage_type);
+
+	String _version_get_sha1(Version *p_version) const;
+	bool _load_from_cache(Version *p_version);
+	void _save_to_cache(Version *p_version);
+
+	const char **uniform_names = nullptr;
+	int uniform_count = 0;
+	const UBOPair *ubo_pairs = nullptr;
+	int ubo_count = 0;
 	const Feedback *feedbacks;
-	const char *vertex_code;
-	const char *fragment_code;
-	CharString fragment_code0;
-	CharString fragment_code1;
-	CharString fragment_code2;
-	CharString fragment_code3;
-	CharString fragment_code4;
+	int feedback_count = 0;
+	const TexUnitPair *texunit_pairs = nullptr;
+	int texunit_pair_count = 0;
+	int specialization_count = 0;
+	const Specialization *specializations = nullptr;
+	uint64_t specialization_default_mask = 0;
+	const char **variant_defines = nullptr;
+	int variant_count = 0;
 
-	CharString vertex_code0;
-	CharString vertex_code1;
-	CharString vertex_code2;
-	CharString vertex_code3;
-
-	Vector<CharString> custom_defines;
-
-	int base_material_tex_index;
-
-	Version *get_current_version();
-
-	static ShaderGLES3 *active;
-
-	int max_image_units;
-
-	_FORCE_INLINE_ void _set_uniform_variant(GLint p_uniform, const Variant &p_value) {
-
-		if (p_uniform < 0)
-			return; // do none
-		switch (p_value.get_type()) {
-
-			case Variant::BOOL:
-			case Variant::INT: {
-
-				int val = p_value;
-				glUniform1i(p_uniform, val);
-			} break;
-			case Variant::REAL: {
-
-				real_t val = p_value;
-				glUniform1f(p_uniform, val);
-			} break;
-			case Variant::COLOR: {
-
-				Color val = p_value;
-				glUniform4f(p_uniform, val.r, val.g, val.b, val.a);
-			} break;
-			case Variant::VECTOR2: {
-
-				Vector2 val = p_value;
-				glUniform2f(p_uniform, val.x, val.y);
-			} break;
-			case Variant::VECTOR3: {
-
-				Vector3 val = p_value;
-				glUniform3f(p_uniform, val.x, val.y, val.z);
-			} break;
-			case Variant::PLANE: {
-
-				Plane val = p_value;
-				glUniform4f(p_uniform, val.normal.x, val.normal.y, val.normal.z, val.d);
-			} break;
-			case Variant::QUAT: {
-
-				Quat val = p_value;
-				glUniform4f(p_uniform, val.x, val.y, val.z, val.w);
-			} break;
-
-			case Variant::TRANSFORM2D: {
-
-				Transform2D tr = p_value;
-				GLfloat matrix[16] = { /* build a 16x16 matrix */
-					tr.elements[0][0],
-					tr.elements[0][1],
-					0,
-					0,
-					tr.elements[1][0],
-					tr.elements[1][1],
-					0,
-					0,
-					0,
-					0,
-					1,
-					0,
-					tr.elements[2][0],
-					tr.elements[2][1],
-					0,
-					1
-				};
-
-				glUniformMatrix4fv(p_uniform, 1, false, matrix);
-
-			} break;
-			case Variant::BASIS:
-			case Variant::TRANSFORM: {
-
-				Transform tr = p_value;
-				GLfloat matrix[16] = { /* build a 16x16 matrix */
-					tr.basis.elements[0][0],
-					tr.basis.elements[1][0],
-					tr.basis.elements[2][0],
-					0,
-					tr.basis.elements[0][1],
-					tr.basis.elements[1][1],
-					tr.basis.elements[2][1],
-					0,
-					tr.basis.elements[0][2],
-					tr.basis.elements[1][2],
-					tr.basis.elements[2][2],
-					0,
-					tr.origin.x,
-					tr.origin.y,
-					tr.origin.z,
-					1
-				};
-
-				glUniformMatrix4fv(p_uniform, 1, false, matrix);
-			} break;
-			default: { ERR_FAIL(); } // do nothing
-		}
-	}
-
-	Map<uint32_t, Variant> uniform_defaults;
-	Map<uint32_t, CameraMatrix> uniform_cameras;
+	int base_texture_index = 0;
+	Version::Specialization *current_shader = nullptr;
 
 protected:
-	_FORCE_INLINE_ int _get_uniform(int p_which) const;
-	_FORCE_INLINE_ void _set_conditional(int p_which, bool p_value);
-
-	void setup(const char **p_conditional_defines, int p_conditional_count, const char **p_uniform_names, int p_uniform_count, const AttributePair *p_attribute_pairs, int p_attribute_count, const TexUnitPair *p_texunit_pairs, int p_texunit_pair_count, const UBOPair *p_ubo_pairs, int p_ubo_pair_count, const Feedback *p_feedback, int p_feedback_count, const char *p_vertex_code, const char *p_fragment_code, int p_vertex_code_start, int p_fragment_code_start);
-
 	ShaderGLES3();
+	void _setup(const char *p_vertex_code, const char *p_fragment_code, const char *p_name, int p_uniform_count, const char **p_uniform_names, int p_ubo_count, const UBOPair *p_ubos, int p_feedback_count, const Feedback *p_feedback, int p_texture_count, const TexUnitPair *p_tex_units, int p_specialization_count, const Specialization *p_specializations, int p_variant_count, const char **p_variants);
+
+	_FORCE_INLINE_ bool _version_bind_shader(RID p_version, int p_variant, uint64_t p_specialization) {
+		ERR_FAIL_INDEX_V(p_variant, variant_count, false);
+
+		Version *version = version_owner.get_or_null(p_version);
+		ERR_FAIL_NULL_V(version, false);
+
+		if (version->variants.size() == 0) {
+			_initialize_version(version); //may lack initialization
+		}
+
+		Version::Specialization *spec = version->variants[p_variant].lookup_ptr(p_specialization);
+		if (!spec) {
+			if (false) {
+				// Queue load this specialization and use defaults in the meantime (TODO)
+
+				spec = version->variants[p_variant].lookup_ptr(specialization_default_mask);
+			} else {
+				// Compile on the spot
+				Version::Specialization s;
+				_compile_specialization(s, p_variant, version, p_specialization);
+				version->variants[p_variant].insert(p_specialization, s);
+				spec = version->variants[p_variant].lookup_ptr(p_specialization);
+				if (shader_cache_dir_valid) {
+					_save_to_cache(version);
+				}
+			}
+		} else if (spec->build_queued) {
+			// Still queued, wait
+			spec = version->variants[p_variant].lookup_ptr(specialization_default_mask);
+		}
+
+		if (!spec || !spec->ok) {
+			WARN_PRINT_ONCE("shader failed to compile, unable to bind shader.");
+			return false;
+		}
+
+		glUseProgram(spec->id);
+		current_shader = spec;
+		return true;
+	}
+
+	_FORCE_INLINE_ int _version_get_uniform(int p_which, RID p_version, int p_variant, uint64_t p_specialization) {
+		ERR_FAIL_INDEX_V(p_which, uniform_count, -1);
+		Version *version = version_owner.get_or_null(p_version);
+		ERR_FAIL_NULL_V(version, -1);
+		ERR_FAIL_INDEX_V(p_variant, int(version->variants.size()), -1);
+		Version::Specialization *spec = version->variants[p_variant].lookup_ptr(p_specialization);
+		ERR_FAIL_NULL_V(spec, -1);
+		ERR_FAIL_INDEX_V(p_which, int(spec->uniform_location.size()), -1);
+		return spec->uniform_location[p_which];
+	}
+
+	virtual void _init() = 0;
 
 public:
-	enum {
-		CUSTOM_SHADER_DISABLED = 0
-	};
+	RID version_create();
 
-	GLint get_uniform_location(const String &p_name) const;
-	GLint get_uniform_location(int p_index) const;
+	void version_set_code(RID p_version, const HashMap<String, String> &p_code, const String &p_uniforms, const String &p_vertex_globals, const String &p_fragment_globals, const Vector<String> &p_custom_defines, const LocalVector<ShaderGLES3::TextureUniformData> &p_texture_uniforms, bool p_initialize = false);
 
-	static _FORCE_INLINE_ ShaderGLES3 *get_active() { return active; };
-	bool bind();
-	void unbind();
-	void bind_uniforms();
+	bool version_is_valid(RID p_version);
 
-	inline GLuint get_program() const { return version ? version->id : 0; }
+	bool version_free(RID p_version);
 
-	void clear_caches();
+	static void set_shader_cache_dir(const String &p_dir);
+	static void set_shader_cache_save_compressed(bool p_enable);
+	static void set_shader_cache_save_compressed_zstd(bool p_enable);
+	static void set_shader_cache_save_debug(bool p_enable);
 
-	uint32_t create_custom_shader();
-	void set_custom_shader_code(uint32_t p_code_id, const String &p_vertex, const String &p_vertex_globals, const String &p_fragment, const String &p_light, const String &p_fragment_globals, const String &p_uniforms, const Vector<StringName> &p_texture_uniforms, const Vector<CharString> &p_custom_defines);
-	void set_custom_shader(uint32_t p_code_id);
-	void free_custom_shader(uint32_t p_code_id);
+	RS::ShaderNativeSourceCode version_get_native_source_code(RID p_version);
 
-	void set_uniform_default(int p_idx, const Variant &p_value) {
-
-		if (p_value.get_type() == Variant::NIL) {
-
-			uniform_defaults.erase(p_idx);
-		} else {
-
-			uniform_defaults[p_idx] = p_value;
-		}
-		uniforms_dirty = true;
-	}
-
-	uint32_t get_version() const { return new_conditional_version.version; }
-
-	void set_uniform_camera(int p_idx, const CameraMatrix &p_mat) {
-
-		uniform_cameras[p_idx] = p_mat;
-		uniforms_dirty = true;
-	};
-
-	_FORCE_INLINE_ void set_texture_uniform(int p_idx, const Variant &p_value) {
-
-		ERR_FAIL_COND(!version);
-		ERR_FAIL_INDEX(p_idx, version->texture_uniform_locations.size());
-		_set_uniform_variant(version->texture_uniform_locations[p_idx], p_value);
-	}
-
-	_FORCE_INLINE_ GLint get_texture_uniform_location(int p_idx) {
-
-		ERR_FAIL_COND_V(!version, -1);
-		ERR_FAIL_INDEX_V(p_idx, version->texture_uniform_locations.size(), -1);
-		return version->texture_uniform_locations[p_idx];
-	}
-
-	virtual void init() = 0;
-	void finish();
-
-	void set_base_material_tex_index(int p_idx);
-
-	void add_custom_define(const String &p_define) {
-		custom_defines.push_back(p_define.utf8());
-	}
-
+	void initialize(const String &p_general_defines = "", int p_base_texture_index = 0);
 	virtual ~ShaderGLES3();
 };
 
-// called a lot, made inline
+#endif // GLES3_ENABLED
 
-int ShaderGLES3::_get_uniform(int p_which) const {
-
-	ERR_FAIL_INDEX_V(p_which, uniform_count, -1);
-	ERR_FAIL_COND_V(!version, -1);
-	return version->uniform_location[p_which];
-}
-
-void ShaderGLES3::_set_conditional(int p_which, bool p_value) {
-
-	ERR_FAIL_INDEX(p_which, conditional_count);
-	if (p_value)
-		new_conditional_version.version |= (1 << p_which);
-	else
-		new_conditional_version.version &= ~(1 << p_which);
-}
-
-#endif
+#endif // SHADER_GLES3_H

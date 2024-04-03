@@ -1,784 +1,595 @@
-/*************************************************************************/
-/*  gd_mono.cpp                                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  gd_mono.cpp                                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "gd_mono.h"
 
-#include <mono/metadata/exception.h>
-#include <mono/metadata/mono-config.h>
-#include <mono/metadata/mono-debug.h>
-#include <mono/metadata/mono-gc.h>
-
-#include "os/dir_access.h"
-#include "os/file_access.h"
-#include "os/os.h"
-#include "os/thread.h"
-#include "project_settings.h"
-
 #include "../csharp_script.h"
+#include "../glue/runtime_interop.h"
+#include "../godotsharp_dirs.h"
+#include "../thirdparty/coreclr_delegates.h"
+#include "../thirdparty/hostfxr.h"
 #include "../utils/path_utils.h"
-#include "gd_mono_utils.h"
+#include "gd_mono_cache.h"
 
 #ifdef TOOLS_ENABLED
-#include "../editor/godotsharp_editor.h"
+#include "../editor/hostfxr_resolver.h"
 #endif
 
-void gdmono_unhandled_exception_hook(MonoObject *exc, void *user_data) {
+#include "core/config/project_settings.h"
+#include "core/debugger/engine_debugger.h"
+#include "core/io/dir_access.h"
+#include "core/io/file_access.h"
+#include "core/os/os.h"
+#include "core/os/thread.h"
 
-	(void)user_data; // UNUSED
+#ifdef UNIX_ENABLED
+#include <dlfcn.h>
+#endif
 
-	ERR_PRINT(GDMonoUtils::get_exception_name_and_message(exc).utf8());
-	mono_print_unhandled_exception(exc);
-	abort();
+GDMono *GDMono::singleton = nullptr;
+
+namespace {
+hostfxr_initialize_for_dotnet_command_line_fn hostfxr_initialize_for_dotnet_command_line = nullptr;
+hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config = nullptr;
+hostfxr_get_runtime_delegate_fn hostfxr_get_runtime_delegate = nullptr;
+hostfxr_close_fn hostfxr_close = nullptr;
+
+#ifdef _WIN32
+static_assert(sizeof(char_t) == sizeof(char16_t));
+using HostFxrCharString = Char16String;
+#define HOSTFXR_STR(m_str) L##m_str
+#else
+static_assert(sizeof(char_t) == sizeof(char));
+using HostFxrCharString = CharString;
+#define HOSTFXR_STR(m_str) m_str
+#endif
+
+HostFxrCharString str_to_hostfxr(const String &p_str) {
+#ifdef _WIN32
+	return p_str.utf16();
+#else
+	return p_str.utf8();
+#endif
 }
 
-#ifdef MONO_PRINT_HANDLER_ENABLED
-void gdmono_MonoPrintCallback(const char *string, mono_bool is_stdout) {
+const char_t *get_data(const HostFxrCharString &p_char_str) {
+	return (const char_t *)p_char_str.get_data();
+}
 
-	if (is_stdout) {
-		OS::get_singleton()->print(string);
-	} else {
-		OS::get_singleton()->printerr(string);
+String find_hostfxr() {
+#ifdef TOOLS_ENABLED
+	String dotnet_root;
+	String fxr_path;
+	if (godotsharp::hostfxr_resolver::try_get_path(dotnet_root, fxr_path)) {
+		return fxr_path;
 	}
-}
-#endif
 
-GDMono *GDMono::singleton = NULL;
+	// hostfxr_resolver doesn't look for dotnet in `PATH`. If it fails, we try to find the dotnet
+	// executable in `PATH` here and pass its location as `dotnet_root` to `get_hostfxr_path`.
+	String dotnet_exe = path::find_executable("dotnet");
 
-#ifdef DEBUG_ENABLED
-static bool _wait_for_debugger_msecs(uint32_t p_msecs) {
+	if (!dotnet_exe.is_empty()) {
+		// The file found in PATH may be a symlink
+		dotnet_exe = path::abspath(path::realpath(dotnet_exe));
 
-	do {
-		if (mono_is_debugger_attached())
-			return true;
+		// TODO:
+		// Sometimes, the symlink may not point to the dotnet executable in the dotnet root.
+		// That's the case with snaps. The snap install should have been found with the
+		// previous `get_hostfxr_path`, but it would still be better to do this properly
+		// and use something like `dotnet --list-sdks/runtimes` to find the actual location.
+		// This way we could also check if the proper sdk or runtime is installed. This would
+		// allow us to fail gracefully and show some helpful information in the editor.
 
-		int last_tick = OS::get_singleton()->get_ticks_msec();
-
-		OS::get_singleton()->delay_usec((p_msecs < 25 ? p_msecs : 25) * 1000);
-
-		int tdiff = OS::get_singleton()->get_ticks_msec() - last_tick;
-
-		if (tdiff > p_msecs) {
-			p_msecs = 0;
-		} else {
-			p_msecs -= tdiff;
+		dotnet_root = dotnet_exe.get_base_dir();
+		if (godotsharp::hostfxr_resolver::try_get_path_from_dotnet_root(dotnet_root, fxr_path)) {
+			return fxr_path;
 		}
-	} while (p_msecs > 0);
+	}
 
-	return mono_is_debugger_attached();
-}
+	ERR_PRINT(String() + ".NET: One of the dependent libraries is missing. " +
+			"Typically when the `hostfxr`, `hostpolicy` or `coreclr` dynamic " +
+			"libraries are not present in the expected locations.");
+
+	return String();
+#else
+
+#if defined(WINDOWS_ENABLED)
+	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+								.path_join("hostfxr.dll");
+#elif defined(MACOS_ENABLED)
+	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+								.path_join("libhostfxr.dylib");
+#elif defined(UNIX_ENABLED)
+	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+								.path_join("libhostfxr.so");
+#else
+#error "Platform not supported (yet?)"
 #endif
+
+	if (FileAccess::exists(probe_path)) {
+		return probe_path;
+	}
+
+	return String();
+
+#endif
+}
+
+bool load_hostfxr(void *&r_hostfxr_dll_handle) {
+	String hostfxr_path = find_hostfxr();
+
+	if (hostfxr_path.is_empty()) {
+		return false;
+	}
+
+	print_verbose("Found hostfxr: " + hostfxr_path);
+
+	Error err = OS::get_singleton()->open_dynamic_library(hostfxr_path, r_hostfxr_dll_handle);
+
+	if (err != OK) {
+		return false;
+	}
+
+	void *lib = r_hostfxr_dll_handle;
+
+	void *symbol = nullptr;
+
+	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "hostfxr_initialize_for_dotnet_command_line", symbol);
+	ERR_FAIL_COND_V(err != OK, false);
+	hostfxr_initialize_for_dotnet_command_line = (hostfxr_initialize_for_dotnet_command_line_fn)symbol;
+
+	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "hostfxr_initialize_for_runtime_config", symbol);
+	ERR_FAIL_COND_V(err != OK, false);
+	hostfxr_initialize_for_runtime_config = (hostfxr_initialize_for_runtime_config_fn)symbol;
+
+	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "hostfxr_get_runtime_delegate", symbol);
+	ERR_FAIL_COND_V(err != OK, false);
+	hostfxr_get_runtime_delegate = (hostfxr_get_runtime_delegate_fn)symbol;
+
+	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "hostfxr_close", symbol);
+	ERR_FAIL_COND_V(err != OK, false);
+	hostfxr_close = (hostfxr_close_fn)symbol;
+
+	return (hostfxr_initialize_for_runtime_config &&
+			hostfxr_get_runtime_delegate &&
+			hostfxr_close);
+}
 
 #ifdef TOOLS_ENABLED
-// temporary workaround. should be provided from Main::setup/setup2 instead
-bool _is_project_manager_requested() {
+load_assembly_and_get_function_pointer_fn initialize_hostfxr_for_config(const char_t *p_config_path) {
+	hostfxr_handle cxt = nullptr;
+	int rc = hostfxr_initialize_for_runtime_config(p_config_path, nullptr, &cxt);
+	if (rc != 0 || cxt == nullptr) {
+		hostfxr_close(cxt);
+		ERR_FAIL_V_MSG(nullptr, "hostfxr_initialize_for_runtime_config failed with code: " + itos(rc));
+	}
+
+	void *load_assembly_and_get_function_pointer = nullptr;
+
+	rc = hostfxr_get_runtime_delegate(cxt,
+			hdt_load_assembly_and_get_function_pointer, &load_assembly_and_get_function_pointer);
+	if (rc != 0 || load_assembly_and_get_function_pointer == nullptr) {
+		ERR_FAIL_V_MSG(nullptr, "hostfxr_get_runtime_delegate failed with code: " + itos(rc));
+	}
+
+	hostfxr_close(cxt);
+
+	return (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
+}
+#else
+load_assembly_and_get_function_pointer_fn initialize_hostfxr_self_contained(
+		const char_t *p_main_assembly_path) {
+	hostfxr_handle cxt = nullptr;
 
 	List<String> cmdline_args = OS::get_singleton()->get_cmdline_args();
-	for (List<String>::Element *E = cmdline_args.front(); E; E = E->next()) {
-		const String &arg = E->get();
-		if (arg == "-p" || arg == "--project-manager")
-			return true;
+
+	List<HostFxrCharString> argv_store;
+	Vector<const char_t *> argv;
+	argv.resize(cmdline_args.size() + 1);
+
+	argv.write[0] = p_main_assembly_path;
+
+	int i = 1;
+	for (const String &E : cmdline_args) {
+		HostFxrCharString &stored = argv_store.push_back(str_to_hostfxr(E))->get();
+		argv.write[i] = get_data(stored);
+		i++;
 	}
 
-	return false;
+	int rc = hostfxr_initialize_for_dotnet_command_line(argv.size(), argv.ptrw(), nullptr, &cxt);
+	if (rc != 0 || cxt == nullptr) {
+		hostfxr_close(cxt);
+		ERR_FAIL_V_MSG(nullptr, "hostfxr_initialize_for_dotnet_command_line failed with code: " + itos(rc));
+	}
+
+	void *load_assembly_and_get_function_pointer = nullptr;
+
+	rc = hostfxr_get_runtime_delegate(cxt,
+			hdt_load_assembly_and_get_function_pointer, &load_assembly_and_get_function_pointer);
+	if (rc != 0 || load_assembly_and_get_function_pointer == nullptr) {
+		ERR_FAIL_V_MSG(nullptr, "hostfxr_get_runtime_delegate failed with code: " + itos(rc));
+	}
+
+	hostfxr_close(cxt);
+
+	return (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
 }
 #endif
-
-#ifdef DEBUG_ENABLED
-void gdmono_debug_init() {
-
-	mono_debug_init(MONO_DEBUG_FORMAT_MONO);
-
-	int da_port = GLOBAL_DEF("mono/debugger_agent/port", 23685);
-	bool da_suspend = GLOBAL_DEF("mono/debugger_agent/wait_for_debugger", false);
-	int da_timeout = GLOBAL_DEF("mono/debugger_agent/wait_timeout", 3000);
 
 #ifdef TOOLS_ENABLED
-	if (Engine::get_singleton()->is_editor_hint() ||
-			ProjectSettings::get_singleton()->get_resource_path().empty() ||
-			_is_project_manager_requested()) {
-		return;
-	}
+using godot_plugins_initialize_fn = bool (*)(void *, bool, gdmono::PluginCallbacks *, GDMonoCache::ManagedCallbacks *, const void **, int32_t);
+#else
+using godot_plugins_initialize_fn = bool (*)(void *, GDMonoCache::ManagedCallbacks *, const void **, int32_t);
 #endif
 
-	CharString da_args = String("--debugger-agent=transport=dt_socket,address=127.0.0.1:" + itos(da_port) +
-								",embedding=1,server=y,suspend=" + (da_suspend ? "y,timeout=" + itos(da_timeout) : "n"))
-								 .utf8();
-	// --debugger-agent=help
-	const char *options[] = {
-		"--soft-breakpoints",
-		da_args.get_data()
-	};
-	mono_jit_parse_options(2, (char **)options);
+#ifdef TOOLS_ENABLED
+godot_plugins_initialize_fn initialize_hostfxr_and_godot_plugins(bool &r_runtime_initialized) {
+	godot_plugins_initialize_fn godot_plugins_initialize = nullptr;
+
+	HostFxrCharString godot_plugins_path = str_to_hostfxr(
+			GodotSharpDirs::get_api_assemblies_dir().path_join("GodotPlugins.dll"));
+
+	HostFxrCharString config_path = str_to_hostfxr(
+			GodotSharpDirs::get_api_assemblies_dir().path_join("GodotPlugins.runtimeconfig.json"));
+
+	load_assembly_and_get_function_pointer_fn load_assembly_and_get_function_pointer =
+			initialize_hostfxr_for_config(get_data(config_path));
+
+	if (load_assembly_and_get_function_pointer == nullptr) {
+		// Show a message box to the user to make the problem explicit (and explain a potential crash).
+		OS::get_singleton()->alert(TTR("Unable to load .NET runtime, no compatible version was found.\nAttempting to create/edit a project will lead to a crash.\n\nPlease install the .NET SDK 6.0 or later from https://dotnet.microsoft.com/en-us/download and restart Godot."), TTR("Failed to load .NET runtime"));
+		ERR_FAIL_V_MSG(nullptr, ".NET: Failed to load compatible .NET runtime");
+	}
+
+	r_runtime_initialized = true;
+
+	print_verbose(".NET: hostfxr initialized");
+
+	int rc = load_assembly_and_get_function_pointer(get_data(godot_plugins_path),
+			HOSTFXR_STR("GodotPlugins.Main, GodotPlugins"),
+			HOSTFXR_STR("InitializeFromEngine"),
+			UNMANAGEDCALLERSONLY_METHOD,
+			nullptr,
+			(void **)&godot_plugins_initialize);
+	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to get GodotPlugins initialization function pointer");
+
+	return godot_plugins_initialize;
+}
+#else
+godot_plugins_initialize_fn initialize_hostfxr_and_godot_plugins(bool &r_runtime_initialized) {
+	godot_plugins_initialize_fn godot_plugins_initialize = nullptr;
+
+	String assembly_name = path::get_csharp_project_name();
+
+	HostFxrCharString assembly_path = str_to_hostfxr(GodotSharpDirs::get_api_assemblies_dir()
+															 .path_join(assembly_name + ".dll"));
+
+	load_assembly_and_get_function_pointer_fn load_assembly_and_get_function_pointer =
+			initialize_hostfxr_self_contained(get_data(assembly_path));
+	ERR_FAIL_NULL_V(load_assembly_and_get_function_pointer, nullptr);
+
+	r_runtime_initialized = true;
+
+	print_verbose(".NET: hostfxr initialized");
+
+	int rc = load_assembly_and_get_function_pointer(get_data(assembly_path),
+			get_data(str_to_hostfxr("GodotPlugins.Game.Main, " + assembly_name)),
+			HOSTFXR_STR("InitializeFromGameProject"),
+			UNMANAGEDCALLERSONLY_METHOD,
+			nullptr,
+			(void **)&godot_plugins_initialize);
+	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to get GodotPlugins initialization function pointer");
+
+	return godot_plugins_initialize;
+}
+
+godot_plugins_initialize_fn try_load_native_aot_library(void *&r_aot_dll_handle) {
+	String assembly_name = path::get_csharp_project_name();
+
+#if defined(WINDOWS_ENABLED)
+	String native_aot_so_path = GodotSharpDirs::get_api_assemblies_dir().path_join(assembly_name + ".dll");
+#elif defined(MACOS_ENABLED) || defined(IOS_ENABLED)
+	String native_aot_so_path = GodotSharpDirs::get_api_assemblies_dir().path_join(assembly_name + ".dylib");
+#elif defined(UNIX_ENABLED)
+	String native_aot_so_path = GodotSharpDirs::get_api_assemblies_dir().path_join(assembly_name + ".so");
+#else
+#error "Platform not supported (yet?)"
+#endif
+
+	Error err = OS::get_singleton()->open_dynamic_library(native_aot_so_path, r_aot_dll_handle);
+
+	if (err != OK) {
+		return nullptr;
+	}
+
+	void *lib = r_aot_dll_handle;
+
+	void *symbol = nullptr;
+
+	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "godotsharp_game_main_init", symbol);
+	ERR_FAIL_COND_V(err != OK, nullptr);
+	return (godot_plugins_initialize_fn)symbol;
 }
 #endif
+
+} // namespace
+
+bool GDMono::should_initialize() {
+#ifdef TOOLS_ENABLED
+	// The editor always needs to initialize the .NET module for now.
+	return true;
+#else
+	return OS::get_singleton()->has_feature("dotnet");
+#endif
+}
+
+static bool _on_core_api_assembly_loaded() {
+	if (!GDMonoCache::godot_api_cache_updated) {
+		return false;
+	}
+
+	bool debug;
+#ifdef DEBUG_ENABLED
+	debug = true;
+#else
+	debug = false;
+#endif
+
+	GDMonoCache::managed_callbacks.GD_OnCoreApiAssemblyLoaded(debug);
+
+	return true;
+}
 
 void GDMono::initialize() {
+	print_verbose(".NET: Initializing module...");
 
-	ERR_FAIL_NULL(Engine::get_singleton());
+	_init_godot_api_hashes();
 
-	OS::get_singleton()->print("Mono: Initializing module...\n");
+	godot_plugins_initialize_fn godot_plugins_initialize = nullptr;
 
-#ifdef DEBUG_METHODS_ENABLED
-	_initialize_and_check_api_hashes();
-#endif
-
-	GDMonoLog::get_singleton()->initialize();
-
-#ifdef MONO_PRINT_HANDLER_ENABLED
-	mono_trace_set_print_handler(gdmono_MonoPrintCallback);
-	mono_trace_set_printerr_handler(gdmono_MonoPrintCallback);
-#endif
-
-#ifdef WINDOWS_ENABLED
-	mono_reg_info = MonoRegUtils::find_mono();
-
-	CharString assembly_dir;
-	CharString config_dir;
-
-	if (mono_reg_info.assembly_dir.length() && DirAccess::exists(mono_reg_info.assembly_dir)) {
-		assembly_dir = mono_reg_info.assembly_dir.utf8();
-	}
-
-	if (mono_reg_info.config_dir.length() && DirAccess::exists(mono_reg_info.config_dir)) {
-		config_dir = mono_reg_info.config_dir.utf8();
-	}
-
-	mono_set_dirs(assembly_dir.length() ? assembly_dir.get_data() : NULL,
-			config_dir.length() ? config_dir.get_data() : NULL);
-#else
-	mono_set_dirs(NULL, NULL);
-#endif
-
-	GDMonoAssembly::initialize();
-
-#ifdef DEBUG_ENABLED
-	gdmono_debug_init();
-#endif
-
-	mono_config_parse(NULL);
-
-	root_domain = mono_jit_init_version("GodotEngine.RootDomain", "v4.0.30319");
-
-	ERR_EXPLAIN("Mono: Failed to initialize runtime");
-	ERR_FAIL_NULL(root_domain);
-
-	GDMonoUtils::set_main_thread(GDMonoUtils::get_current_thread());
-
-	runtime_initialized = true;
-
-	OS::get_singleton()->print("Mono: Runtime initialized\n");
-
-	// mscorlib assembly MUST be present at initialization
-	ERR_EXPLAIN("Mono: Failed to load mscorlib assembly");
-	ERR_FAIL_COND(!_load_corlib_assembly());
-
-#ifdef TOOLS_ENABLED
-	// The tools domain must be loaded here, before the scripts domain.
-	// Otherwise domain unload on the scripts domain will hang indefinitely.
-
-	ERR_EXPLAIN("Mono: Failed to load tools domain");
-	ERR_FAIL_COND(_load_tools_domain() != OK);
-
-	// TODO move to editor init callback, and do it lazily when required before editor init (e.g.: bindings generation)
-	ERR_EXPLAIN("Mono: Failed to load Editor Tools assembly");
-	ERR_FAIL_COND(!_load_editor_tools_assembly());
-#endif
-
-	ERR_EXPLAIN("Mono: Failed to load scripts domain");
-	ERR_FAIL_COND(_load_scripts_domain() != OK);
-
-#ifdef DEBUG_ENABLED
-	bool debugger_attached = _wait_for_debugger_msecs(500);
-	if (!debugger_attached && OS::get_singleton()->is_stdout_verbose())
-		OS::get_singleton()->printerr("Mono: Debugger wait timeout\n");
-#endif
-
-	_register_internal_calls();
-
-	// The following assemblies are not required at initialization
-	_load_all_script_assemblies();
-
-	mono_install_unhandled_exception_hook(gdmono_unhandled_exception_hook, NULL);
-
-	OS::get_singleton()->print("Mono: ALL IS GOOD\n");
-}
-
-#ifndef MONO_GLUE_DISABLED
-namespace GodotSharpBindings {
-
-uint64_t get_core_api_hash();
-uint64_t get_editor_api_hash();
-
-void register_generated_icalls();
-} // namespace GodotSharpBindings
-#endif
-
-void GDMono::_register_internal_calls() {
-#ifndef MONO_GLUE_DISABLED
-	GodotSharpBindings::register_generated_icalls();
-#endif
-
-#ifdef TOOLS_ENABLED
-	GodotSharpBuilds::_register_internal_calls();
-#endif
-}
-
-#ifdef DEBUG_METHODS_ENABLED
-void GDMono::_initialize_and_check_api_hashes() {
-
-	api_core_hash = ClassDB::get_api_hash(ClassDB::API_CORE);
-
-#ifndef MONO_GLUE_DISABLED
-	if (api_core_hash != GodotSharpBindings::get_core_api_hash()) {
-		ERR_PRINT("Mono: Core API hash mismatch!");
+#if !defined(IOS_ENABLED)
+	// Check that the .NET assemblies directory exists before trying to use it.
+	if (!DirAccess::exists(GodotSharpDirs::get_api_assemblies_dir())) {
+		OS::get_singleton()->alert(vformat(RTR("Unable to find the .NET assemblies directory.\nMake sure the '%s' directory exists and contains the .NET assemblies."), GodotSharpDirs::get_api_assemblies_dir()), RTR(".NET assemblies not found"));
+		ERR_FAIL_MSG(".NET: Assemblies not found");
 	}
 #endif
 
-#ifdef TOOLS_ENABLED
-	api_editor_hash = ClassDB::get_api_hash(ClassDB::API_EDITOR);
+	if (!load_hostfxr(hostfxr_dll_handle)) {
+#if !defined(TOOLS_ENABLED)
+		godot_plugins_initialize = try_load_native_aot_library(hostfxr_dll_handle);
 
-#ifndef MONO_GLUE_DISABLED
-	if (api_editor_hash != GodotSharpBindings::get_editor_api_hash()) {
-		ERR_PRINT("Mono: Editor API hash mismatch!");
-	}
-#endif
-
-#endif // TOOLS_ENABLED
-}
-#endif // DEBUG_METHODS_ENABLED
-
-void GDMono::add_assembly(uint32_t p_domain_id, GDMonoAssembly *p_assembly) {
-
-	assemblies[p_domain_id][p_assembly->get_name()] = p_assembly;
-}
-
-GDMonoAssembly **GDMono::get_loaded_assembly(const String &p_name) {
-
-	MonoDomain *domain = mono_domain_get();
-	uint32_t domain_id = domain ? mono_domain_get_id(domain) : 0;
-	return assemblies[domain_id].getptr(p_name);
-}
-
-bool GDMono::_load_assembly(const String &p_name, GDMonoAssembly **r_assembly) {
-
-	CRASH_COND(!r_assembly);
-
-	if (OS::get_singleton()->is_stdout_verbose())
-		OS::get_singleton()->print((String() + "Mono: Loading assembly " + p_name + "...\n").utf8());
-
-	MonoImageOpenStatus status = MONO_IMAGE_OK;
-	MonoAssemblyName *aname = mono_assembly_name_new(p_name.utf8());
-	MonoAssembly *assembly = mono_assembly_load_full(aname, NULL, &status, false);
-	mono_assembly_name_free(aname);
-
-	if (!assembly)
-		return false;
-
-	uint32_t domain_id = mono_domain_get_id(mono_domain_get());
-
-	GDMonoAssembly **stored_assembly = assemblies[domain_id].getptr(p_name);
-
-	ERR_FAIL_COND_V(status != MONO_IMAGE_OK, false);
-	ERR_FAIL_COND_V(stored_assembly == NULL, false);
-
-	ERR_FAIL_COND_V((*stored_assembly)->get_assembly() != assembly, false);
-	*r_assembly = *stored_assembly;
-
-	if (OS::get_singleton()->is_stdout_verbose())
-		OS::get_singleton()->print(String("Mono: Assembly " + p_name + " loaded from path: " + (*r_assembly)->get_path() + "\n").utf8());
-
-	return true;
-}
-
-bool GDMono::_load_corlib_assembly() {
-
-	if (corlib_assembly)
-		return true;
-
-	bool success = _load_assembly("mscorlib", &corlib_assembly);
-
-	if (success)
-		GDMonoUtils::update_corlib_cache();
-
-	return success;
-}
-
-bool GDMono::_load_core_api_assembly() {
-
-	if (api_assembly)
-		return true;
-
-	bool success = _load_assembly(API_ASSEMBLY_NAME, &api_assembly);
-
-	if (success)
-		GDMonoUtils::update_godot_api_cache();
-
-	return success;
-}
-
-#ifdef TOOLS_ENABLED
-bool GDMono::_load_editor_api_assembly() {
-
-	if (editor_api_assembly)
-		return true;
-
-	return _load_assembly(EDITOR_API_ASSEMBLY_NAME, &editor_api_assembly);
-}
-#endif
-
-#ifdef TOOLS_ENABLED
-bool GDMono::_load_editor_tools_assembly() {
-
-	if (editor_tools_assembly)
-		return true;
-
-	_GDMONO_SCOPE_DOMAIN_(tools_domain)
-
-	return _load_assembly(EDITOR_TOOLS_ASSEMBLY_NAME, &editor_tools_assembly);
-}
-#endif
-
-bool GDMono::_load_project_assembly() {
-
-	if (project_assembly)
-		return true;
-
-	String name = ProjectSettings::get_singleton()->get("application/config/name");
-	if (name.empty()) {
-		name = "UnnamedProject";
-	}
-
-	bool success = _load_assembly(name, &project_assembly);
-
-	if (success)
-		mono_assembly_set_main(project_assembly->get_assembly());
-
-	return success;
-}
-
-bool GDMono::_load_all_script_assemblies() {
-
-#ifndef MONO_GLUE_DISABLED
-	if (!_load_core_api_assembly()) {
-		if (OS::get_singleton()->is_stdout_verbose())
-			OS::get_singleton()->printerr("Mono: Failed to load Core API assembly\n");
-		return false;
-	} else {
-#ifdef TOOLS_ENABLED
-		if (!_load_editor_api_assembly()) {
-			if (OS::get_singleton()->is_stdout_verbose())
-				OS::get_singleton()->printerr("Mono: Failed to load Editor API assembly\n");
-			return false;
+		if (godot_plugins_initialize != nullptr) {
+			is_native_aot = true;
+			runtime_initialized = true;
+		} else {
+			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
 		}
+#else
+
+		// Show a message box to the user to make the problem explicit (and explain a potential crash).
+		OS::get_singleton()->alert(TTR("Unable to load .NET runtime, specifically hostfxr.\nAttempting to create/edit a project will lead to a crash.\n\nPlease install the .NET SDK 6.0 or later from https://dotnet.microsoft.com/en-us/download and restart Godot."), TTR("Failed to load .NET runtime"));
+		ERR_FAIL_MSG(".NET: Failed to load hostfxr");
 #endif
 	}
 
+	if (!is_native_aot) {
+		godot_plugins_initialize = initialize_hostfxr_and_godot_plugins(runtime_initialized);
+		ERR_FAIL_NULL(godot_plugins_initialize);
+	}
+
+	int32_t interop_funcs_size = 0;
+	const void **interop_funcs = godotsharp::get_runtime_interop_funcs(interop_funcs_size);
+
+	GDMonoCache::ManagedCallbacks managed_callbacks{};
+
+	void *godot_dll_handle = nullptr;
+
+#if defined(UNIX_ENABLED) && !defined(MACOS_ENABLED) && !defined(IOS_ENABLED)
+	// Managed code can access it on its own on other platforms
+	godot_dll_handle = dlopen(nullptr, RTLD_NOW);
+#endif
+
+#ifdef TOOLS_ENABLED
+	gdmono::PluginCallbacks plugin_callbacks_res;
+	bool init_ok = godot_plugins_initialize(godot_dll_handle,
+			Engine::get_singleton()->is_editor_hint(),
+			&plugin_callbacks_res, &managed_callbacks,
+			interop_funcs, interop_funcs_size);
+	ERR_FAIL_COND_MSG(!init_ok, ".NET: GodotPlugins initialization failed");
+
+	plugin_callbacks = plugin_callbacks_res;
+#else
+	bool init_ok = godot_plugins_initialize(godot_dll_handle, &managed_callbacks,
+			interop_funcs, interop_funcs_size);
+	ERR_FAIL_COND_MSG(!init_ok, ".NET: GodotPlugins initialization failed");
+#endif
+
+	GDMonoCache::update_godot_api_cache(managed_callbacks);
+
+	print_verbose(".NET: GodotPlugins initialized");
+
+	_on_core_api_assembly_loaded();
+
+#ifdef TOOLS_ENABLED
+	_try_load_project_assembly();
+#endif
+
+	initialized = true;
+}
+
+#ifdef TOOLS_ENABLED
+void GDMono::_try_load_project_assembly() {
+	if (Engine::get_singleton()->is_project_manager_hint()) {
+		return;
+	}
+
+	// Load the project's main assembly. This doesn't necessarily need to succeed.
+	// The game may not be using .NET at all, or if the project does use .NET and
+	// we're running in the editor, it may just happen to be it wasn't built yet.
 	if (!_load_project_assembly()) {
-		if (OS::get_singleton()->is_stdout_verbose())
-			OS::get_singleton()->printerr("Mono: Failed to load project assembly\n");
+		if (OS::get_singleton()->is_stdout_verbose()) {
+			print_error(".NET: Failed to load project assembly");
+		}
+	}
+}
+#endif
+
+void GDMono::_init_godot_api_hashes() {
+#ifdef DEBUG_METHODS_ENABLED
+	get_api_core_hash();
+
+#ifdef TOOLS_ENABLED
+	get_api_editor_hash();
+#endif // TOOLS_ENABLED
+#endif // DEBUG_METHODS_ENABLED
+}
+
+#ifdef TOOLS_ENABLED
+bool GDMono::_load_project_assembly() {
+	String assembly_name = path::get_csharp_project_name();
+
+	String assembly_path = GodotSharpDirs::get_res_temp_assemblies_dir()
+								   .path_join(assembly_name + ".dll");
+	assembly_path = ProjectSettings::get_singleton()->globalize_path(assembly_path);
+
+	if (!FileAccess::exists(assembly_path)) {
 		return false;
 	}
 
-	return true;
-#else
-	if (OS::get_singleton()->is_stdout_verbose())
-		OS::get_singleton()->print("Mono: Glue disbled, ignoring script assemblies\n");
+	String loaded_assembly_path;
+	bool success = plugin_callbacks.LoadProjectAssemblyCallback(assembly_path.utf16(), &loaded_assembly_path);
 
-	return true;
+	if (success) {
+		project_assembly_path = loaded_assembly_path.simplify_path();
+		project_assembly_modified_time = FileAccess::get_modified_time(loaded_assembly_path);
+	}
+
+	return success;
+}
 #endif
+
+#ifdef GD_MONO_HOT_RELOAD
+void GDMono::reload_failure() {
+	if (++project_load_failure_count >= (int)GLOBAL_GET("dotnet/project/assembly_reload_attempts")) {
+		// After reloading a project has failed n times in a row, update the path and modification time
+		// to stop any further attempts at loading this assembly, which probably is never going to work anyways.
+		project_load_failure_count = 0;
+
+		ERR_PRINT_ED(".NET: Giving up on assembly reloading. Please restart the editor if unloading was failing.");
+
+		String assembly_name = path::get_csharp_project_name();
+		String assembly_path = GodotSharpDirs::get_res_temp_assemblies_dir().path_join(assembly_name + ".dll");
+		assembly_path = ProjectSettings::get_singleton()->globalize_path(assembly_path);
+		project_assembly_path = assembly_path.simplify_path();
+		project_assembly_modified_time = FileAccess::get_modified_time(assembly_path);
+	}
 }
 
-Error GDMono::_load_scripts_domain() {
-
-	ERR_FAIL_COND_V(scripts_domain != NULL, ERR_BUG);
-
-	if (OS::get_singleton()->is_stdout_verbose()) {
-		OS::get_singleton()->print("Mono: Loading scripts domain...\n");
-	}
-
-	scripts_domain = GDMonoUtils::create_domain("GodotEngine.ScriptsDomain");
-
-	ERR_EXPLAIN("Mono: Could not create scripts app domain");
-	ERR_FAIL_NULL_V(scripts_domain, ERR_CANT_CREATE);
-
-	mono_domain_set(scripts_domain, true);
-
-	return OK;
-}
-
-Error GDMono::_unload_scripts_domain() {
-
-	ERR_FAIL_NULL_V(scripts_domain, ERR_BUG);
-
-	if (OS::get_singleton()->is_stdout_verbose()) {
-		OS::get_singleton()->print("Mono: Unloading scripts domain...\n");
-	}
-
-	_GodotSharp::get_singleton()->_dispose_callback();
-
-	if (mono_domain_get() != root_domain)
-		mono_domain_set(root_domain, true);
-
-	mono_gc_collect(mono_gc_max_generation());
+Error GDMono::reload_project_assemblies() {
+	ERR_FAIL_COND_V(!runtime_initialized, ERR_BUG);
 
 	finalizing_scripts_domain = true;
-	mono_domain_finalize(scripts_domain, 2000);
-	finalizing_scripts_domain = false;
 
-	mono_gc_collect(mono_gc_max_generation());
-
-	_domain_assemblies_cleanup(mono_domain_get_id(scripts_domain));
-
-	api_assembly = NULL;
-	project_assembly = NULL;
-#ifdef TOOLS_ENABLED
-	editor_api_assembly = NULL;
-#endif
-
-	MonoDomain *domain = scripts_domain;
-	scripts_domain = NULL;
-
-	_GodotSharp::get_singleton()->_dispose_callback();
-
-	MonoObject *ex = NULL;
-	mono_domain_try_unload(domain, &ex);
-
-	if (ex) {
-		ERR_PRINT("Exception thrown when unloading scripts domain:");
-		mono_print_unhandled_exception(ex);
+	if (!get_plugin_callbacks().UnloadProjectPluginCallback()) {
+		ERR_PRINT_ED(".NET: Failed to unload assemblies. Please check https://github.com/godotengine/godot/issues/78513 for more information.");
+		reload_failure();
 		return FAILED;
 	}
 
-	return OK;
-}
+	finalizing_scripts_domain = false;
 
-#ifdef TOOLS_ENABLED
-Error GDMono::_load_tools_domain() {
-
-	ERR_FAIL_COND_V(tools_domain != NULL, ERR_BUG);
-
-	if (OS::get_singleton()->is_stdout_verbose()) {
-		OS::get_singleton()->print("Mono: Loading tools domain...\n");
-	}
-
-	tools_domain = GDMonoUtils::create_domain("GodotEngine.ToolsDomain");
-
-	ERR_EXPLAIN("Mono: Could not create tools app domain");
-	ERR_FAIL_NULL_V(tools_domain, ERR_CANT_CREATE);
-
-	return OK;
-}
-#endif
-
-#ifdef TOOLS_ENABLED
-Error GDMono::reload_scripts_domain() {
-
-	ERR_FAIL_COND_V(!runtime_initialized, ERR_BUG);
-
-	if (scripts_domain) {
-		Error err = _unload_scripts_domain();
-		if (err != OK) {
-			ERR_PRINT("Mono: Failed to unload scripts domain");
-			return err;
-		}
-	}
-
-	Error err = _load_scripts_domain();
-	if (err != OK) {
-		ERR_PRINT("Mono: Failed to load scripts domain");
-		return err;
-	}
-
-	if (!_load_all_script_assemblies()) {
-		if (OS::get_singleton()->is_stdout_verbose())
-			OS::get_singleton()->printerr("Mono: Failed to load script assemblies\n");
+	// Load the project's main assembly. Here, during hot-reloading, we do
+	// consider failing to load the project's main assembly to be an error.
+	if (!_load_project_assembly()) {
+		ERR_PRINT_ED(".NET: Failed to load project assembly.");
+		reload_failure();
 		return ERR_CANT_OPEN;
 	}
 
+	if (project_load_failure_count > 0) {
+		project_load_failure_count = 0;
+		ERR_PRINT_ED(".NET: Assembly reloading succeeded after failures.");
+	}
+
 	return OK;
 }
 #endif
 
-GDMonoClass *GDMono::get_class(MonoClass *p_raw_class) {
-
-	MonoImage *image = mono_class_get_image(p_raw_class);
-
-	if (image == corlib_assembly->get_image())
-		return corlib_assembly->get_class(p_raw_class);
-
-	uint32_t domain_id = mono_domain_get_id(mono_domain_get());
-	HashMap<String, GDMonoAssembly *> &domain_assemblies = assemblies[domain_id];
-
-	const String *k = NULL;
-	while ((k = domain_assemblies.next(k))) {
-		GDMonoAssembly *assembly = domain_assemblies.get(*k);
-		if (assembly->get_image() == image) {
-			GDMonoClass *klass = assembly->get_class(p_raw_class);
-
-			if (klass)
-				return klass;
-		}
-	}
-
-	return NULL;
-}
-
-void GDMono::_domain_assemblies_cleanup(uint32_t p_domain_id) {
-
-	HashMap<String, GDMonoAssembly *> &domain_assemblies = assemblies[p_domain_id];
-
-	const String *k = NULL;
-	while ((k = domain_assemblies.next(k))) {
-		memdelete(domain_assemblies.get(*k));
-	}
-
-	assemblies.erase(p_domain_id);
-}
-
 GDMono::GDMono() {
-
 	singleton = this;
-
-	gdmono_log = memnew(GDMonoLog);
-
-	runtime_initialized = false;
-	finalizing_scripts_domain = false;
-
-	root_domain = NULL;
-	scripts_domain = NULL;
-#ifdef TOOLS_ENABLED
-	tools_domain = NULL;
-#endif
-
-	corlib_assembly = NULL;
-	api_assembly = NULL;
-	project_assembly = NULL;
-#ifdef TOOLS_ENABLED
-	editor_api_assembly = NULL;
-	editor_tools_assembly = NULL;
-#endif
-
-#ifdef DEBUG_METHODS_ENABLED
-	api_core_hash = 0;
-#ifdef TOOLS_ENABLED
-	api_editor_hash = 0;
-#endif
-#endif
 }
 
 GDMono::~GDMono() {
+	finalizing_scripts_domain = true;
 
-	if (runtime_initialized) {
-
-		if (scripts_domain) {
-
-			Error err = _unload_scripts_domain();
-			if (err != OK) {
-				WARN_PRINT("Mono: Failed to unload scripts domain");
-			}
-		}
-
-		const uint32_t *k = NULL;
-		while ((k = assemblies.next(k))) {
-			HashMap<String, GDMonoAssembly *> &domain_assemblies = assemblies.get(*k);
-
-			const String *kk = NULL;
-			while ((kk = domain_assemblies.next(kk))) {
-				memdelete(domain_assemblies.get(*kk));
-			}
-		}
-		assemblies.clear();
-
-		GDMonoUtils::clear_cache();
-
-		OS::get_singleton()->print("Mono: Runtime cleanup...\n");
-
-		runtime_initialized = false;
-		mono_jit_cleanup(root_domain);
+	if (hostfxr_dll_handle) {
+		OS::get_singleton()->close_dynamic_library(hostfxr_dll_handle);
 	}
 
-	if (gdmono_log)
-		memdelete(gdmono_log);
+	finalizing_scripts_domain = false;
+	runtime_initialized = false;
 
-	singleton = NULL;
+	singleton = nullptr;
 }
 
-_GodotSharp *_GodotSharp::singleton = NULL;
+namespace mono_bind {
 
-void _GodotSharp::_dispose_object(Object *p_object) {
+GodotSharp *GodotSharp::singleton = nullptr;
 
-	if (p_object->get_script_instance()) {
-		CSharpInstance *cs_instance = CAST_CSHARP_INSTANCE(p_object->get_script_instance());
-		if (cs_instance) {
-			cs_instance->mono_object_disposed();
-			return;
-		}
-	}
-
-	// Unsafe refcount decrement. The managed instance also counts as a reference.
-	// See: CSharpLanguage::alloc_instance_binding_data(Object *p_object)
-	if (Object::cast_to<Reference>(p_object)->unreference()) {
-		memdelete(p_object);
-	}
+bool GodotSharp::_is_runtime_initialized() {
+	return GDMono::get_singleton() != nullptr && GDMono::get_singleton()->is_runtime_initialized();
 }
 
-void _GodotSharp::_dispose_callback() {
-
-#ifndef NO_THREADS
-	queue_mutex->lock();
-#endif
-
-	for (List<Object *>::Element *E = obj_delete_queue.front(); E; E = E->next()) {
-		_dispose_object(E->get());
+void GodotSharp::_reload_assemblies(bool p_soft_reload) {
+#ifdef GD_MONO_HOT_RELOAD
+	CRASH_COND(CSharpLanguage::get_singleton() == nullptr);
+	// This method may be called more than once with `call_deferred`, so we need to check
+	// again if reloading is needed to avoid reloading multiple times unnecessarily.
+	if (CSharpLanguage::get_singleton()->is_assembly_reloading_needed()) {
+		CSharpLanguage::get_singleton()->reload_assemblies(p_soft_reload);
 	}
-
-	for (List<NodePath *>::Element *E = np_delete_queue.front(); E; E = E->next()) {
-		memdelete(E->get());
-	}
-
-	for (List<RID *>::Element *E = rid_delete_queue.front(); E; E = E->next()) {
-		memdelete(E->get());
-	}
-
-	obj_delete_queue.clear();
-	np_delete_queue.clear();
-	rid_delete_queue.clear();
-	queue_empty = true;
-
-#ifndef NO_THREADS
-	queue_mutex->unlock();
 #endif
 }
 
-void _GodotSharp::attach_thread() {
-
-	GDMonoUtils::attach_current_thread();
+void GodotSharp::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("is_runtime_initialized"), &GodotSharp::_is_runtime_initialized);
+	ClassDB::bind_method(D_METHOD("_reload_assemblies"), &GodotSharp::_reload_assemblies);
 }
 
-void _GodotSharp::detach_thread() {
-
-	GDMonoUtils::detach_current_thread();
-}
-
-bool _GodotSharp::is_finalizing_domain() {
-
-	return GDMono::get_singleton()->is_finalizing_scripts_domain();
-}
-
-bool _GodotSharp::is_domain_loaded() {
-
-	return GDMono::get_singleton()->get_scripts_domain() != NULL;
-}
-
-#define ENQUEUE_FOR_DISPOSAL(m_queue, m_inst) \
-	m_queue.push_back(m_inst);                \
-	if (queue_empty) {                        \
-		queue_empty = false;                  \
-		call_deferred("_dispose_callback");   \
-	}
-
-void _GodotSharp::queue_dispose(Object *p_object) {
-
-	if (GDMonoUtils::is_main_thread() && !GDMono::get_singleton()->is_finalizing_scripts_domain()) {
-		_dispose_object(p_object);
-	} else {
-#ifndef NO_THREADS
-		queue_mutex->lock();
-#endif
-
-		ENQUEUE_FOR_DISPOSAL(obj_delete_queue, p_object);
-
-#ifndef NO_THREADS
-		queue_mutex->unlock();
-#endif
-	}
-}
-
-void _GodotSharp::queue_dispose(NodePath *p_node_path) {
-
-	if (GDMonoUtils::is_main_thread() && !GDMono::get_singleton()->is_finalizing_scripts_domain()) {
-		memdelete(p_node_path);
-	} else {
-#ifndef NO_THREADS
-		queue_mutex->lock();
-#endif
-
-		ENQUEUE_FOR_DISPOSAL(np_delete_queue, p_node_path);
-
-#ifndef NO_THREADS
-		queue_mutex->unlock();
-#endif
-	}
-}
-
-void _GodotSharp::queue_dispose(RID *p_rid) {
-
-	if (GDMonoUtils::is_main_thread() && !GDMono::get_singleton()->is_finalizing_scripts_domain()) {
-		memdelete(p_rid);
-	} else {
-#ifndef NO_THREADS
-		queue_mutex->lock();
-#endif
-
-		ENQUEUE_FOR_DISPOSAL(rid_delete_queue, p_rid);
-
-#ifndef NO_THREADS
-		queue_mutex->unlock();
-#endif
-	}
-}
-
-void _GodotSharp::_bind_methods() {
-
-	ClassDB::bind_method(D_METHOD("attach_thread"), &_GodotSharp::attach_thread);
-	ClassDB::bind_method(D_METHOD("detach_thread"), &_GodotSharp::detach_thread);
-
-	ClassDB::bind_method(D_METHOD("is_finalizing_domain"), &_GodotSharp::is_finalizing_domain);
-	ClassDB::bind_method(D_METHOD("is_domain_loaded"), &_GodotSharp::is_domain_loaded);
-
-	ClassDB::bind_method(D_METHOD("_dispose_callback"), &_GodotSharp::_dispose_callback);
-}
-
-_GodotSharp::_GodotSharp() {
-
+GodotSharp::GodotSharp() {
 	singleton = this;
-	queue_empty = true;
-#ifndef NO_THREADS
-	queue_mutex = Mutex::create();
-#endif
 }
 
-_GodotSharp::~_GodotSharp() {
-
-	singleton = NULL;
-
-	if (queue_mutex) {
-		memdelete(queue_mutex);
-	}
+GodotSharp::~GodotSharp() {
+	singleton = nullptr;
 }
+
+} // namespace mono_bind

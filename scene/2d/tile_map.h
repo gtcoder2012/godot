@@ -1,320 +1,227 @@
-/*************************************************************************/
-/*  tile_map.h                                                           */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  tile_map.h                                                            */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #ifndef TILE_MAP_H
 #define TILE_MAP_H
 
-#include "scene/2d/navigation2d.h"
-#include "scene/2d/node_2d.h"
-#include "scene/resources/tile_set.h"
-#include "self_list.h"
-#include "vset.h"
+#include "scene/2d/tile_map_layer_group.h"
+#include "scene/resources/2d/tile_set.h"
 
-class TileMap : public Node2D {
+class Control;
+class TileMapLayer;
+class TerrainConstraint;
 
-	GDCLASS(TileMap, Node2D);
+enum TileMapDataFormat {
+	FORMAT_1 = 0,
+	FORMAT_2,
+	FORMAT_3,
+	FORMAT_MAX,
+};
+
+class TileMap : public TileMapLayerGroup {
+	GDCLASS(TileMap, TileMapLayerGroup)
 
 public:
-	enum Mode {
-		MODE_SQUARE,
-		MODE_ISOMETRIC,
-		MODE_CUSTOM
-	};
-
-	enum HalfOffset {
-		HALF_OFFSET_X,
-		HALF_OFFSET_Y,
-		HALF_OFFSET_DISABLED,
-	};
-
-	enum TileOrigin {
-		TILE_ORIGIN_TOP_LEFT,
-		TILE_ORIGIN_CENTER,
-		TILE_ORIGIN_BOTTOM_LEFT
+	// Kept for compatibility, but should use TileMapLayer::VisibilityMode instead.
+	enum VisibilityMode {
+		VISIBILITY_MODE_DEFAULT,
+		VISIBILITY_MODE_FORCE_SHOW,
+		VISIBILITY_MODE_FORCE_HIDE,
 	};
 
 private:
-	enum DataFormat {
-		FORMAT_1 = 0,
-		FORMAT_2
-	};
+	friend class TileSetPlugin;
 
-	Ref<TileSet> tile_set;
-	Size2i cell_size;
-	int quadrant_size;
-	Mode mode;
-	Transform2D custom_transform;
-	HalfOffset half_offset;
-	bool use_kinematic;
-	Navigation2D *navigation;
+	// A compatibility enum to specify how is the data if formatted.
+	mutable TileMapDataFormat format = TileMapDataFormat::FORMAT_3;
 
-	union PosKey {
+	static constexpr float FP_ADJUST = 0.00001;
 
-		struct {
-			int16_t x;
-			int16_t y;
-		};
-		uint32_t key;
+	// Properties.
+	int rendering_quadrant_size = 16;
+	bool collision_animatable = false;
+	VisibilityMode collision_visibility_mode = VISIBILITY_MODE_DEFAULT;
+	VisibilityMode navigation_visibility_mode = VISIBILITY_MODE_DEFAULT;
 
-		//using a more precise comparison so the regions can be sorted later
-		bool operator<(const PosKey &p_k) const { return (y == p_k.y) ? x < p_k.x : y < p_k.y; }
+	// Layers.
+	LocalVector<TileMapLayer *> layers;
+	TileMapLayer *default_layer; // Dummy layer to fetch default values.
 
-		bool operator==(const PosKey &p_k) const { return (y == p_k.y && x == p_k.x); }
+	// Transforms for collision_animatable.
+	Transform2D last_valid_transform;
+	Transform2D new_transform;
 
-		PosKey(int16_t p_x, int16_t p_y) {
-			x = p_x;
-			y = p_y;
-		}
-		PosKey() {
-			x = 0;
-			y = 0;
-		}
-	};
-
-	union Cell {
-
-		struct {
-			int32_t id : 24;
-			bool flip_h : 1;
-			bool flip_v : 1;
-			bool transpose : 1;
-			int16_t autotile_coord_x : 16;
-			int16_t autotile_coord_y : 16;
-		};
-
-		uint64_t _u64t;
-		Cell() { _u64t = 0; }
-	};
-
-	Map<PosKey, Cell> tile_map;
-	List<PosKey> dirty_bitmask;
-
-	struct Quadrant {
-
-		Vector2 pos;
-		List<RID> canvas_items;
-		RID body;
-
-		SelfList<Quadrant> dirty_list;
-
-		struct NavPoly {
-			int id;
-			Transform2D xform;
-		};
-
-		struct Occluder {
-			RID id;
-			Transform2D xform;
-		};
-
-		Map<PosKey, NavPoly> navpoly_ids;
-		Map<PosKey, Occluder> occluder_instances;
-
-		VSet<PosKey> cells;
-
-		void operator=(const Quadrant &q) {
-			pos = q.pos;
-			canvas_items = q.canvas_items;
-			body = q.body;
-			cells = q.cells;
-			navpoly_ids = q.navpoly_ids;
-			occluder_instances = q.occluder_instances;
-		}
-		Quadrant(const Quadrant &q) :
-				dirty_list(this) {
-			pos = q.pos;
-			canvas_items = q.canvas_items;
-			body = q.body;
-			cells = q.cells;
-			occluder_instances = q.occluder_instances;
-			navpoly_ids = q.navpoly_ids;
-		}
-		Quadrant() :
-				dirty_list(this) {}
-	};
-
-	Map<PosKey, Quadrant> quadrant_map;
-
-	SelfList<Quadrant>::List dirty_quadrant_list;
-
-	bool pending_update;
-
-	Rect2 rect_cache;
-	bool rect_cache_dirty;
-	Rect2 used_size_cache;
-	bool used_size_cache_dirty;
-	bool quadrant_order_dirty;
-	bool y_sort_mode;
-	bool clip_uv;
-	float fp_adjust;
-	float friction;
-	float bounce;
-	uint32_t collision_layer;
-	uint32_t collision_mask;
-	mutable DataFormat format;
-
-	TileOrigin tile_origin;
-
-	int occluder_light_mask;
-
-	void _fix_cell_transform(Transform2D &xform, const Cell &p_cell, const Vector2 &p_offset, const Size2 &p_sc);
-
-	Map<PosKey, Quadrant>::Element *_create_quadrant(const PosKey &p_qk);
-	void _erase_quadrant(Map<PosKey, Quadrant>::Element *Q);
-	void _make_quadrant_dirty(Map<PosKey, Quadrant>::Element *Q);
-	void _recreate_quadrants();
-	void _clear_quadrants();
-	void _update_dirty_quadrants();
-	void _update_quadrant_space(const RID &p_space);
-	void _update_quadrant_transform();
-	void _recompute_rect_cache();
-
-	void _update_all_items_material_state();
-	_FORCE_INLINE_ void _update_item_material_state(const RID &p_canvas_item);
-
-	_FORCE_INLINE_ int _get_quadrant_size() const;
-
-	void _set_tile_data(const PoolVector<int> &p_data);
-	PoolVector<int> _get_tile_data() const;
-
-	void _set_old_cell_size(int p_size) { set_cell_size(Size2(p_size, p_size)); }
-	int _get_old_cell_size() const { return cell_size.x; }
-
-	_FORCE_INLINE_ Vector2 _map_to_world(int p_x, int p_y, bool p_ignore_ofs = false) const;
+	void _emit_changed();
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	void _get_property_list(List<PropertyInfo> *p_list) const;
+	bool _property_can_revert(const StringName &p_name) const;
+	bool _property_get_revert(const StringName &p_name, Variant &r_property) const;
 
 	void _notification(int p_what);
 	static void _bind_methods();
 
+#ifndef DISABLE_DEPRECATED
+	Rect2i _get_used_rect_bind_compat_78328();
+	void _set_quadrant_size_compat_81070(int p_quadrant_size);
+	int _get_quadrant_size_compat_81070() const;
+	VisibilityMode _get_collision_visibility_mode_bind_compat_87115();
+	VisibilityMode _get_navigation_visibility_mode_bind_compat_87115();
+
+	static void _bind_compatibility_methods();
+#endif
+
 public:
-	enum {
-		INVALID_CELL = -1
-	};
+#ifdef TOOLS_ENABLED
+	virtual Rect2 _edit_get_rect() const override;
+#endif
 
-	void set_tileset(const Ref<TileSet> &p_tileset);
-	Ref<TileSet> get_tileset() const;
+#ifndef DISABLE_DEPRECATED
+	void force_update(int p_layer);
+#endif
 
-	void set_cell_size(Size2 p_size);
-	Size2 get_cell_size() const;
+	void set_rendering_quadrant_size(int p_size);
+	int get_rendering_quadrant_size() const;
 
-	void set_quadrant_size(int p_size);
-	int get_quadrant_size() const;
+	static void draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, int p_frame = -1, Color p_modulation = Color(1.0, 1.0, 1.0, 1.0), const TileData *p_tile_data_override = nullptr, real_t p_normalized_animation_offset = 0.0);
 
-	void set_cell(int p_x, int p_y, int p_tile, bool p_flip_x = false, bool p_flip_y = false, bool p_transpose = false, Vector2 p_autotile_coord = Vector2());
-	int get_cell(int p_x, int p_y) const;
-	bool is_cell_x_flipped(int p_x, int p_y) const;
-	bool is_cell_y_flipped(int p_x, int p_y) const;
-	bool is_cell_transposed(int p_x, int p_y) const;
-	void set_cell_autotile_coord(int p_x, int p_y, const Vector2 &p_coord);
-	Vector2 get_cell_autotile_coord(int p_x, int p_y) const;
+	// Layers management.
+	int get_layers_count() const;
+	void add_layer(int p_to_pos);
+	void move_layer(int p_layer, int p_to_pos);
+	void remove_layer(int p_layer);
 
-	void set_cellv(const Vector2 &p_pos, int p_tile, bool p_flip_x = false, bool p_flip_y = false, bool p_transpose = false);
-	int get_cellv(const Vector2 &p_pos) const;
+	void set_layer_name(int p_layer, String p_name);
+	String get_layer_name(int p_layer) const;
+	void set_layer_enabled(int p_layer, bool p_visible);
+	bool is_layer_enabled(int p_layer) const;
+	void set_layer_modulate(int p_layer, Color p_modulate);
+	Color get_layer_modulate(int p_layer) const;
+	void set_layer_y_sort_enabled(int p_layer, bool p_enabled);
+	bool is_layer_y_sort_enabled(int p_layer) const;
+	void set_layer_y_sort_origin(int p_layer, int p_y_sort_origin);
+	int get_layer_y_sort_origin(int p_layer) const;
+	void set_layer_z_index(int p_layer, int p_z_index);
+	int get_layer_z_index(int p_layer) const;
+	void set_layer_navigation_enabled(int p_layer, bool p_enabled);
+	bool is_layer_navigation_enabled(int p_layer) const;
+	void set_layer_navigation_map(int p_layer, RID p_map);
+	RID get_layer_navigation_map(int p_layer) const;
 
-	Rect2 _edit_get_rect() const;
+	void set_collision_animatable(bool p_collision_animatable);
+	bool is_collision_animatable() const;
 
-	void make_bitmask_area_dirty(const Vector2 &p_pos);
-	void update_bitmask_area(const Vector2 &p_pos);
-	void update_bitmask_region(const Vector2 &p_start = Vector2(), const Vector2 &p_end = Vector2());
-	void update_cell_bitmask(int p_x, int p_y);
-	void update_dirty_bitmask();
+	// Debug visibility modes.
+	void set_collision_visibility_mode(VisibilityMode p_show_collision);
+	VisibilityMode get_collision_visibility_mode() const;
 
-	void set_collision_layer(uint32_t p_layer);
-	uint32_t get_collision_layer() const;
+	void set_navigation_visibility_mode(VisibilityMode p_show_navigation);
+	VisibilityMode get_navigation_visibility_mode() const;
 
-	void set_collision_mask(uint32_t p_mask);
-	uint32_t get_collision_mask() const;
+	// Cells accessors.
+	void set_cell(int p_layer, const Vector2i &p_coords, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = 0);
+	void erase_cell(int p_layer, const Vector2i &p_coords);
+	int get_cell_source_id(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
+	Vector2i get_cell_atlas_coords(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
+	int get_cell_alternative_tile(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
+	// Helper method to make accessing the data easier.
+	TileData *get_cell_tile_data(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
 
-	void set_collision_layer_bit(int p_bit, bool p_value);
-	bool get_collision_layer_bit(int p_bit) const;
+	// Patterns.
+	Ref<TileMapPattern> get_pattern(int p_layer, TypedArray<Vector2i> p_coords_array);
+	Vector2i map_pattern(const Vector2i &p_position_in_tilemap, const Vector2i &p_coords_in_pattern, Ref<TileMapPattern> p_pattern);
+	void set_pattern(int p_layer, const Vector2i &p_position, const Ref<TileMapPattern> p_pattern);
 
-	void set_collision_mask_bit(int p_bit, bool p_value);
-	bool get_collision_mask_bit(int p_bit) const;
+	// Terrains (Not exposed).
+	HashMap<Vector2i, TileSet::TerrainsPattern> terrain_fill_constraints(int p_layer, const Vector<Vector2i> &p_to_replace, int p_terrain_set, const RBSet<TerrainConstraint> &p_constraints);
+	HashMap<Vector2i, TileSet::TerrainsPattern> terrain_fill_connect(int p_layer, const Vector<Vector2i> &p_coords_array, int p_terrain_set, int p_terrain, bool p_ignore_empty_terrains = true);
+	HashMap<Vector2i, TileSet::TerrainsPattern> terrain_fill_path(int p_layer, const Vector<Vector2i> &p_coords_array, int p_terrain_set, int p_terrain, bool p_ignore_empty_terrains = true);
+	HashMap<Vector2i, TileSet::TerrainsPattern> terrain_fill_pattern(int p_layer, const Vector<Vector2i> &p_coords_array, int p_terrain_set, TileSet::TerrainsPattern p_terrains_pattern, bool p_ignore_empty_terrains = true);
 
-	void set_collision_use_kinematic(bool p_use_kinematic);
-	bool get_collision_use_kinematic() const;
+	// Terrains (exposed).
+	void set_cells_terrain_connect(int p_layer, TypedArray<Vector2i> p_cells, int p_terrain_set, int p_terrain, bool p_ignore_empty_terrains = true);
+	void set_cells_terrain_path(int p_layer, TypedArray<Vector2i> p_path, int p_terrain_set, int p_terrain, bool p_ignore_empty_terrains = true);
 
-	void set_collision_friction(float p_friction);
-	float get_collision_friction() const;
+	// Not exposed to users.
+	TileMapCell get_cell(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
+	int get_effective_quadrant_size(int p_layer) const;
 
-	void set_collision_bounce(float p_bounce);
-	float get_collision_bounce() const;
+	virtual void set_y_sort_enabled(bool p_enable) override;
 
-	void set_mode(Mode p_mode);
-	Mode get_mode() const;
+	Vector2 map_to_local(const Vector2i &p_pos) const;
+	Vector2i local_to_map(const Vector2 &p_pos) const;
+	bool is_existing_neighbor(TileSet::CellNeighbor p_cell_neighbor) const;
+	Vector2i get_neighbor_cell(const Vector2i &p_coords, TileSet::CellNeighbor p_cell_neighbor) const;
 
-	void set_half_offset(HalfOffset p_half_offset);
-	HalfOffset get_half_offset() const;
+	TypedArray<Vector2i> get_used_cells(int p_layer) const;
+	TypedArray<Vector2i> get_used_cells_by_id(int p_layer, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = TileSetSource::INVALID_TILE_ALTERNATIVE) const;
+	Rect2i get_used_rect() const;
 
-	void set_tile_origin(TileOrigin p_tile_origin);
-	TileOrigin get_tile_origin() const;
+	// Override some methods of the CanvasItem class to pass the changes to the quadrants CanvasItems.
+	virtual void set_light_mask(int p_light_mask) override;
+	virtual void set_self_modulate(const Color &p_self_modulate) override;
+	virtual void set_texture_filter(CanvasItem::TextureFilter p_texture_filter) override;
+	virtual void set_texture_repeat(CanvasItem::TextureRepeat p_texture_repeat) override;
 
-	void set_custom_transform(const Transform2D &p_xform);
-	Transform2D get_custom_transform() const;
+	// For finding tiles from collision.
+	Vector2i get_coords_for_body_rid(RID p_physics_body);
+	// For getting their layers as well.
+	int get_layer_for_body_rid(RID p_physics_body);
 
-	Transform2D get_cell_transform() const;
-	Vector2 get_cell_draw_offset() const;
+	// Fixing and clearing methods.
+	void fix_invalid_tiles();
 
-	Vector2 map_to_world(const Vector2 &p_pos, bool p_ignore_ofs = false) const;
-	Vector2 world_to_map(const Vector2 &p_pos) const;
-
-	void set_y_sort_mode(bool p_enable);
-	bool is_y_sort_mode_enabled() const;
-
-	Array get_used_cells() const;
-	Array get_used_cells_by_id(int p_id) const;
-	Rect2 get_used_rect(); // Not const because of cache
-
-	void set_occluder_light_mask(int p_mask);
-	int get_occluder_light_mask() const;
-
-	virtual void set_light_mask(int p_light_mask);
-
-	virtual void set_material(const Ref<Material> &p_material);
-
-	virtual void set_use_parent_material(bool p_use_parent_material);
-
-	void set_clip_uv(bool p_enable);
-	bool get_clip_uv() const;
-
+	// Clears tiles from a given layer.
+	void clear_layer(int p_layer);
 	void clear();
+
+	// Force a TileMap update.
+	void update_internals();
+	void notify_runtime_tile_data_update(int p_layer = -1);
+
+	// Helpers?
+	TypedArray<Vector2i> get_surrounding_cells(const Vector2i &p_coords);
+
+	// Virtual function to modify the TileData at runtime.
+	GDVIRTUAL2R(bool, _use_tile_data_runtime_update, int, Vector2i);
+	GDVIRTUAL3(_tile_data_runtime_update, int, Vector2i, TileData *);
+
+	// Configuration warnings.
+	PackedStringArray get_configuration_warnings() const override;
 
 	TileMap();
 	~TileMap();
 };
 
-VARIANT_ENUM_CAST(TileMap::Mode);
-VARIANT_ENUM_CAST(TileMap::HalfOffset);
-VARIANT_ENUM_CAST(TileMap::TileOrigin);
+VARIANT_ENUM_CAST(TileMap::VisibilityMode);
 
 #endif // TILE_MAP_H

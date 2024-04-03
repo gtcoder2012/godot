@@ -1,243 +1,183 @@
-/*************************************************************************/
-/*  os_android.h                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  os_android.h                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #ifndef OS_ANDROID_H
 #define OS_ANDROID_H
 
-#include "audio_driver_jandroid.h"
 #include "audio_driver_opensl.h"
+
+#include "core/os/main_loop.h"
 #include "drivers/unix/os_unix.h"
-#include "main/input_default.h"
-#include "os/input.h"
-#include "os/main_loop.h"
-//#include "power_android.h"
 #include "servers/audio_server.h"
-#include "servers/visual/rasterizer.h"
 
-#ifdef ANDROID_NATIVE_ACTIVITY
-#include <android/log.h>
-#include <android/sensor.h>
-#include <android_native_app_glue.h>
-#endif
+class GodotJavaWrapper;
+class GodotIOJavaWrapper;
 
-typedef void (*GFXInitFunc)(void *ud, bool gl2);
-typedef int (*OpenURIFunc)(const String &);
-typedef String (*GetUserDataDirFunc)();
-typedef String (*GetLocaleFunc)();
-typedef String (*GetModelFunc)();
-typedef int (*GetScreenDPIFunc)();
-typedef String (*GetUniqueIDFunc)();
-typedef void (*ShowVirtualKeyboardFunc)(const String &);
-typedef void (*HideVirtualKeyboardFunc)();
-typedef void (*SetScreenOrientationFunc)(int);
-typedef String (*GetSystemDirFunc)(int);
-
-typedef void (*VideoPlayFunc)(const String &);
-typedef bool (*VideoIsPlayingFunc)();
-typedef void (*VideoPauseFunc)();
-typedef void (*VideoStopFunc)();
-typedef void (*SetKeepScreenOnFunc)(bool p_enabled);
-typedef void (*AlertFunc)(const String &, const String &);
-typedef int (*VirtualKeyboardHeightFunc)();
+struct ANativeWindow;
 
 class OS_Android : public OS_Unix {
-public:
-	struct TouchPos {
-		int id;
-		Point2 pos;
-	};
-
-	enum {
-		JOY_EVENT_BUTTON = 0,
-		JOY_EVENT_AXIS = 1,
-		JOY_EVENT_HAT = 2
-	};
-
-	struct JoypadEvent {
-
-		int device;
-		int type;
-		int index;
-		bool pressed;
-		float value;
-		int hat;
-	};
-
 private:
-	Vector<TouchPos> touch;
+	Size2i display_size;
 
-	Point2 last_mouse;
-	GFXInitFunc gfx_init_func;
-	void *gfx_init_ud;
-
-	bool use_gl2;
-	bool use_reload_hooks;
 	bool use_apk_expansion;
 
-	bool use_16bits_fbo;
+#if defined(GLES3_ENABLED)
+	const char *gl_extensions;
+#endif
 
-	VisualServer *visual_server;
+#if defined(VULKAN_ENABLED)
+	ANativeWindow *native_window = nullptr;
+#endif
 
 	mutable String data_dir_cache;
+	mutable String cache_dir_cache;
+	mutable String remote_fs_dir;
 
-	//AudioDriverAndroid audio_driver_android;
 	AudioDriverOpenSL audio_driver_android;
 
-	const char *gl_extensions;
+	MainLoop *main_loop = nullptr;
 
-	InputDefault *input;
-	VideoMode default_videomode;
-	MainLoop *main_loop;
+	struct FontInfo {
+		String font_name;
+		HashSet<String> lang;
+		HashSet<String> script;
+		int weight = 400;
+		int stretch = 100;
+		bool italic = false;
+		int priority = 0;
+		String filename;
+	};
 
-	OpenURIFunc open_uri_func;
-	GetUserDataDirFunc get_user_data_dir_func;
-	GetLocaleFunc get_locale_func;
-	GetModelFunc get_model_func;
-	GetScreenDPIFunc get_screen_dpi_func;
-	ShowVirtualKeyboardFunc show_virtual_keyboard_func;
-	HideVirtualKeyboardFunc hide_virtual_keyboard_func;
-	VirtualKeyboardHeightFunc get_virtual_keyboard_height_func;
-	SetScreenOrientationFunc set_screen_orientation_func;
-	GetUniqueIDFunc get_unique_id_func;
-	GetSystemDirFunc get_system_dir_func;
+	HashMap<String, String> font_aliases;
+	List<FontInfo> fonts;
+	HashSet<String> font_names;
+	bool font_config_loaded = false;
 
-	VideoPlayFunc video_play_func;
-	VideoIsPlayingFunc video_is_playing_func;
-	VideoPauseFunc video_pause_func;
-	VideoStopFunc video_stop_func;
-	SetKeepScreenOnFunc set_keep_screen_on_func;
-	AlertFunc alert_func;
+	GodotJavaWrapper *godot_java = nullptr;
+	GodotIOJavaWrapper *godot_io_java = nullptr;
 
-	//power_android *power_manager;
+	void _load_system_font_config();
+	String get_system_property(const char *key) const;
 
 public:
-	// functions used by main to initialize/deintialize the OS
-	virtual int get_video_driver_count() const;
-	virtual const char *get_video_driver_name(int p_driver) const;
+	static const char *ANDROID_EXEC_PATH;
+	static const int DEFAULT_WINDOW_WIDTH = 800;
+	static const int DEFAULT_WINDOW_HEIGHT = 600;
 
-	virtual int get_audio_driver_count() const;
-	virtual const char *get_audio_driver_name(int p_driver) const;
+	virtual void initialize_core() override;
+	virtual void initialize() override;
 
-	virtual void initialize_core();
-	virtual void initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver);
+	virtual void initialize_joypads() override;
 
-	virtual void set_main_loop(MainLoop *p_main_loop);
-	virtual void delete_main_loop();
+	virtual void set_main_loop(MainLoop *p_main_loop) override;
+	virtual void delete_main_loop() override;
 
-	virtual void finalize();
+	virtual void finalize() override;
 
 	typedef int64_t ProcessID;
 
-	static OS *get_singleton();
+	static OS_Android *get_singleton();
+	GodotJavaWrapper *get_godot_java();
+	GodotIOJavaWrapper *get_godot_io_java();
 
-	virtual void alert(const String &p_alert, const String &p_title = "ALERT!");
+	virtual bool request_permission(const String &p_name) override;
+	virtual bool request_permissions() override;
+	virtual Vector<String> get_granted_permissions() const override;
 
-	virtual void set_mouse_show(bool p_show);
-	virtual void set_mouse_grab(bool p_grab);
-	virtual bool is_mouse_grab_enabled() const;
-	virtual Point2 get_mouse_position() const;
-	virtual int get_mouse_button_state() const;
-	virtual void set_window_title(const String &p_title);
+	virtual void alert(const String &p_alert, const String &p_title) override;
 
-	//virtual void set_clipboard(const String& p_text);
-	//virtual String get_clipboard() const;
+	virtual Error open_dynamic_library(const String &p_path, void *&p_library_handle, bool p_also_set_library_path = false, String *r_resolved_path = nullptr) override;
 
-	virtual void set_video_mode(const VideoMode &p_video_mode, int p_screen = 0);
-	virtual VideoMode get_video_mode(int p_screen = 0) const;
-	virtual void get_fullscreen_mode_list(List<VideoMode> *p_list, int p_screen = 0) const;
-
-	virtual void set_keep_screen_on(bool p_enabled);
-
-	virtual Size2 get_window_size() const;
-
-	virtual String get_name();
-	virtual MainLoop *get_main_loop() const;
-
-	virtual bool can_draw() const;
-
-	virtual void set_cursor_shape(CursorShape p_shape);
+	virtual String get_name() const override;
+	virtual String get_distribution_name() const override;
+	virtual String get_version() const override;
+	virtual MainLoop *get_main_loop() const override;
 
 	void main_loop_begin();
-	bool main_loop_iterate();
-	void main_loop_request_go_back();
+	bool main_loop_iterate(bool *r_should_swap_buffers = nullptr);
 	void main_loop_end();
 	void main_loop_focusout();
 	void main_loop_focusin();
 
-	virtual bool has_touchscreen_ui_hint() const;
-
-	virtual bool has_virtual_keyboard() const;
-	virtual void show_virtual_keyboard(const String &p_existing_text, const Rect2 &p_screen_rect = Rect2());
-	virtual void hide_virtual_keyboard();
-	virtual int get_virtual_keyboard_height() const;
+	void set_display_size(const Size2i &p_size);
+	Size2i get_display_size() const;
 
 	void set_opengl_extensions(const char *p_gl_extensions);
-	void set_display_size(Size2 p_size);
 
-	void reload_gfx();
-	void set_context_is_16_bits(bool p_is_16);
+	void set_native_window(ANativeWindow *p_native_window);
+	ANativeWindow *get_native_window() const;
 
-	void set_need_reload_hooks(bool p_needs_them);
-	virtual void set_screen_orientation(ScreenOrientation p_orientation);
+	virtual Error shell_open(const String &p_uri) override;
 
-	virtual Error shell_open(String p_uri);
-	virtual String get_user_data_dir() const;
-	virtual String get_resource_dir() const;
-	virtual String get_locale() const;
-	virtual String get_model_name() const;
-	virtual int get_screen_dpi(int p_screen = 0) const;
+	virtual Vector<String> get_system_fonts() const override;
+	virtual String get_system_font_path(const String &p_font_name, int p_weight = 400, int p_stretch = 100, bool p_italic = false) const override;
+	virtual Vector<String> get_system_font_path_for_text(const String &p_font_name, const String &p_text, const String &p_locale = String(), const String &p_script = String(), int p_weight = 400, int p_stretch = 100, bool p_italic = false) const override;
+	virtual String get_executable_path() const override;
+	virtual String get_user_data_dir() const override;
+	virtual String get_data_path() const override;
+	virtual String get_cache_path() const override;
+	virtual String get_resource_dir() const override;
+	virtual String get_locale() const override;
+	virtual String get_model_name() const override;
 
-	virtual String get_unique_id() const;
+	virtual String get_unique_id() const override;
 
-	virtual String get_system_dir(SystemDir p_dir) const;
+	virtual String get_system_dir(SystemDir p_dir, bool p_shared_storage = true) const override;
 
-	void process_accelerometer(const Vector3 &p_accelerometer);
-	void process_gravity(const Vector3 &p_gravity);
-	void process_magnetometer(const Vector3 &p_magnetometer);
-	void process_gyroscope(const Vector3 &p_gyroscope);
-	void process_touch(int p_what, int p_pointer, const Vector<TouchPos> &p_points);
-	void process_joy_event(JoypadEvent p_event);
-	void process_event(Ref<InputEvent> p_event);
-	void init_video_mode(int p_video_width, int p_video_height);
+	virtual Error move_to_trash(const String &p_path) override;
 
-	virtual Error native_video_play(String p_path, float p_volume);
-	virtual bool native_video_is_playing();
-	virtual void native_video_pause();
-	virtual void native_video_stop();
+	void vibrate_handheld(int p_duration_ms) override;
 
-	virtual bool is_joy_known(int p_device);
-	virtual String get_joy_guid(int p_device) const;
-	void joy_connection_changed(int p_device, bool p_connected, String p_name);
+	virtual String get_config_path() const override;
 
-	virtual bool _check_internal_feature_support(const String &p_feature);
-	OS_Android(GFXInitFunc p_gfx_init_func, void *p_gfx_init_ud, OpenURIFunc p_open_uri_func, GetUserDataDirFunc p_get_user_data_dir_func, GetLocaleFunc p_get_locale_func, GetModelFunc p_get_model_func, GetScreenDPIFunc p_get_screen_dpi_func, ShowVirtualKeyboardFunc p_show_vk, HideVirtualKeyboardFunc p_hide_vk, VirtualKeyboardHeightFunc p_vk_height_func, SetScreenOrientationFunc p_screen_orient, GetUniqueIDFunc p_get_unique_id, GetSystemDirFunc p_get_sdir_func, VideoPlayFunc p_video_play_func, VideoIsPlayingFunc p_video_is_playing_func, VideoPauseFunc p_video_pause_func, VideoStopFunc p_video_stop_func, SetKeepScreenOnFunc p_set_keep_screen_on_func, AlertFunc p_alert_func, bool p_use_apk_expansion);
+	virtual Error execute(const String &p_path, const List<String> &p_arguments, String *r_pipe = nullptr, int *r_exitcode = nullptr, bool read_stderr = false, Mutex *p_pipe_mutex = nullptr, bool p_open_console = false) override;
+	virtual Error create_process(const String &p_path, const List<String> &p_arguments, ProcessID *r_child_id = nullptr, bool p_open_console = false) override;
+	virtual Error create_instance(const List<String> &p_arguments, ProcessID *r_child_id = nullptr) override;
+	virtual Error kill(const ProcessID &p_pid) override;
+	virtual String get_system_ca_certificates() override;
+
+	virtual Error setup_remote_filesystem(const String &p_server_host, int p_port, const String &p_password, String &r_project_path) override;
+
+	virtual void benchmark_begin_measure(const String &p_context, const String &p_what) override;
+	virtual void benchmark_end_measure(const String &p_context, const String &p_what) override;
+	virtual void benchmark_dump() override;
+
+	virtual void load_platform_gdextensions() const override;
+
+	virtual bool _check_internal_feature_support(const String &p_feature) override;
+	OS_Android(GodotJavaWrapper *p_godot_java, GodotIOJavaWrapper *p_godot_io_java, bool p_use_apk_expansion);
 	~OS_Android();
+
+private:
+	// Location where we relocate external dynamic libraries to make them accessible.
+	String get_dynamic_libraries_path() const;
 };
 
-#endif
+#endif // OS_ANDROID_H

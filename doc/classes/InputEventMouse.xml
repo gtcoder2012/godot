@@ -1,29 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="InputEventMouse" inherits="InputEventWithModifiers" category="Core" version="3.0-beta">
+<class name="InputEventMouse" inherits="InputEventWithModifiers" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
 		Base input event type for mouse events.
 	</brief_description>
 	<description>
-		Stores general mouse events informations.
+		Stores general information about mouse events.
 	</description>
 	<tutorials>
-		http://docs.godotengine.org/en/stable/learning/features/inputs/inputevent.html
+		<link title="Using InputEvent">$DOCS_URL/tutorials/inputs/inputevent.html</link>
 	</tutorials>
-	<demos>
-	</demos>
-	<methods>
-	</methods>
 	<members>
-		<member name="button_mask" type="int" setter="set_button_mask" getter="get_button_mask">
-			Mouse button mask identifier, one of or a bitwise combination of the BUTTON_MASK_* constants in [@GlobalScope].
+		<member name="button_mask" type="int" setter="set_button_mask" getter="get_button_mask" enum="MouseButtonMask" is_bitfield="true" default="0">
+			The mouse button mask identifier, one of or a bitwise combination of the [enum MouseButton] button masks.
 		</member>
-		<member name="global_position" type="Vector2" setter="set_global_position" getter="get_global_position">
-			Mouse position relative to the current [Viewport] when used in [method Control._gui_input], otherwise is at 0,0.
+		<member name="global_position" type="Vector2" setter="set_global_position" getter="get_global_position" default="Vector2(0, 0)">
+			When received in [method Node._input] or [method Node._unhandled_input], returns the mouse's position in the root [Viewport] using the coordinate system of the root [Viewport].
+			When received in [method Control._gui_input], returns the mouse's position in the [CanvasLayer] that the [Control] is in using the coordinate system of the [CanvasLayer].
 		</member>
-		<member name="position" type="Vector2" setter="set_position" getter="get_position">
-			Mouse local position relative to the [Viewport]. If used in [method Control._gui_input] the position is relative to the current [Control] wich is under the mouse.
+		<member name="position" type="Vector2" setter="set_position" getter="get_position" default="Vector2(0, 0)">
+			When received in [method Node._input] or [method Node._unhandled_input], returns the mouse's position in the [Viewport] this [Node] is in using the coordinate system of this [Viewport].
+			When received in [method Control._gui_input], returns the mouse's position in the [Control] using the local coordinate system of the [Control].
 		</member>
 	</members>
-	<constants>
-	</constants>
 </class>

@@ -7,7 +7,7 @@ and semantics are as close as possible to those of the Perl 5 language.
 
                        Written by Philip Hazel
      Original API code Copyright (c) 1997-2012 University of Cambridge
-         New API code Copyright (c) 2016 University of Cambridge
+          New API code Copyright (c) 2016-2023 University of Cambridge
 
 -----------------------------------------------------------------------------
 Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #error This file must be included from pcre2_jit_compile.c.
 #endif
 
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#endif /* __has_feature(memory_sanitizer) */
+#endif /* defined(__has_feature) */
+
 #ifdef SUPPORT_JIT
 
 static SLJIT_NOINLINE int jit_machine_stack_exec(jit_arguments *arguments, jit_function executable_func)
@@ -49,10 +55,10 @@ static SLJIT_NOINLINE int jit_machine_stack_exec(jit_arguments *arguments, jit_f
 sljit_u8 local_space[MACHINE_STACK_SIZE];
 struct sljit_stack local_stack;
 
-local_stack.top = (sljit_sw)&local_space;
-local_stack.base = local_stack.top;
-local_stack.limit = local_stack.base + MACHINE_STACK_SIZE;
-local_stack.max_limit = local_stack.limit;
+local_stack.min_start = local_space;
+local_stack.start = local_space;
+local_stack.end = local_space + MACHINE_STACK_SIZE;
+local_stack.top = local_space + MACHINE_STACK_SIZE;
 arguments->stack = &local_stack;
 return executable_func(arguments);
 }
@@ -74,7 +80,6 @@ Arguments:
   options         option bits
   match_data      points to a match_data block
   mcontext        points to a match context
-  jit_stack       points to a JIT stack
 
 Returns:          > 0 => success; value is the number of ovector pairs filled
                   = 0 => success, but ovector is not big enough
@@ -118,10 +123,10 @@ if ((options & PCRE2_PARTIAL_HARD) != 0)
 else if ((options & PCRE2_PARTIAL_SOFT) != 0)
   index = 1;
 
-if (functions->executable_funcs[index] == NULL)
+if (functions == NULL || functions->executable_funcs[index] == NULL)
   return PCRE2_ERROR_JIT_BADOPTION;
 
-/* Sanity checks should be handled by pcre_exec. */
+/* Sanity checks should be handled by pcre2_match. */
 arguments.str = subject + start_offset;
 arguments.begin = subject;
 arguments.end = subject + length;
@@ -152,8 +157,6 @@ else
   jit_stack = NULL;
   }
 
-/* JIT only need two offsets for each ovector entry. Hence
-   the last 1/3 of the ovector will never be touched. */
 
 max_oveccount = functions->top_bracket;
 if (oveccount > max_oveccount)
@@ -173,13 +176,21 @@ else
 if (rc > (int)oveccount)
   rc = 0;
 match_data->code = re;
-match_data->subject = subject;
+match_data->subject = (rc >= 0 || rc == PCRE2_ERROR_PARTIAL)? subject : NULL;
+match_data->subject_length = length;
 match_data->rc = rc;
 match_data->startchar = arguments.startchar_ptr - subject;
 match_data->leftchar = 0;
 match_data->rightchar = 0;
 match_data->mark = arguments.mark_ptr;
 match_data->matchedby = PCRE2_MATCHEDBY_JIT;
+
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+if (rc > 0)
+  __msan_unpoison(match_data->ovector, 2 * rc * sizeof(match_data->ovector[0]));
+#endif /* __has_feature(memory_sanitizer) */
+#endif /* defined(__has_feature) */
 
 return match_data->rc;
 

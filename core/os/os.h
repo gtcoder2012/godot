@@ -1,127 +1,119 @@
-/*************************************************************************/
-/*  os.h                                                                 */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  os.h                                                                  */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #ifndef OS_H
 #define OS_H
 
-#include "engine.h"
-#include "image.h"
-#include "io/logger.h"
-#include "list.h"
-#include "os/main_loop.h"
-#include "ustring.h"
-#include "vector.h"
-#include <stdarg.h>
+#include "core/config/engine.h"
+#include "core/io/image.h"
+#include "core/io/logger.h"
+#include "core/io/remote_filesystem_client.h"
+#include "core/os/time_enums.h"
+#include "core/string/ustring.h"
+#include "core/templates/list.h"
+#include "core/templates/vector.h"
 
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
+#include <stdarg.h>
+#include <stdlib.h>
 
 class OS {
-
 	static OS *singleton;
+	static uint64_t target_ticks;
 	String _execpath;
 	List<String> _cmdline;
-	bool _keep_screen_on;
-	bool low_processor_usage_mode;
-	int low_processor_usage_mode_sleep_usec;
-	bool _verbose_stdout;
+	List<String> _user_args;
+	bool _keep_screen_on = true; // set default value to true, because this had been true before godot 2.0.
+	bool low_processor_usage_mode = false;
+	int low_processor_usage_mode_sleep_usec = 10000;
+	bool _delta_smoothing_enabled = false;
+	bool _verbose_stdout = false;
+	bool _debug_stdout = false;
 	String _local_clipboard;
-	uint64_t _msec_splash;
-	bool _no_window;
-	int _exit_code;
-	int _orientation;
-	bool _allow_hidpi;
-	bool _use_vsync;
+	// Assume success by default, all failure cases need to set EXIT_FAILURE explicitly.
+	int _exit_code = EXIT_SUCCESS;
+	bool _allow_hidpi = false;
+	bool _allow_layered = false;
+	bool _stdout_enabled = true;
+	bool _stderr_enabled = true;
+	bool _writing_movie = false;
 
-	char *last_error;
+	CompositeLogger *_logger = nullptr;
 
-	void *_stack_bottom;
+	bool restart_on_exit = false;
+	List<String> restart_commandline;
 
-	CompositeLogger *_logger;
+	// for the user interface we keep a record of the current display driver
+	// so we can retrieve the rendering drivers available
+	int _display_driver_id = -1;
+	String _current_rendering_driver_name;
+	String _current_rendering_method;
+
+	RemoteFilesystemClient default_rfs;
+
+	// For tracking benchmark data
+	bool use_benchmark = false;
+	String benchmark_file;
+	HashMap<Pair<String, String>, uint64_t, PairHash<String, String>> benchmark_marks_from;
+	HashMap<Pair<String, String>, double, PairHash<String, String>> benchmark_marks_final;
 
 protected:
 	void _set_logger(CompositeLogger *p_logger);
 
 public:
-	typedef void (*ImeCallback)(void *p_inp, String p_text, Point2 p_selection);
-
-	enum PowerState {
-		POWERSTATE_UNKNOWN, /**< cannot determine power status */
-		POWERSTATE_ON_BATTERY, /**< Not plugged in, running on the battery */
-		POWERSTATE_NO_BATTERY, /**< Plugged in, no battery available */
-		POWERSTATE_CHARGING, /**< Plugged in, charging battery */
-		POWERSTATE_CHARGED /**< Plugged in, battery charged */
-	};
+	typedef void (*ImeCallback)(void *p_inp, const String &p_text, Point2 p_selection);
+	typedef bool (*HasServerFeatureCallback)(const String &p_feature);
 
 	enum RenderThreadMode {
-
 		RENDER_THREAD_UNSAFE,
 		RENDER_THREAD_SAFE,
 		RENDER_SEPARATE_THREAD
 	};
-	struct VideoMode {
-
-		int width, height;
-		bool fullscreen;
-		bool resizable;
-		bool borderless_window;
-		bool maximized;
-		bool use_vsync;
-		float get_aspect() const { return (float)width / (float)height; }
-		VideoMode(int p_width = 1024, int p_height = 600, bool p_fullscreen = false, bool p_resizable = true, bool p_borderless_window = false, bool p_maximized = false, bool p_use_vsync = false) {
-			width = p_width;
-			height = p_height;
-			fullscreen = p_fullscreen;
-			resizable = p_resizable;
-			borderless_window = p_borderless_window;
-			maximized = p_maximized;
-			use_vsync = p_use_vsync;
-		}
-	};
 
 protected:
 	friend class Main;
+	// Needed by tests to setup command-line args.
+	friend int test_main(int argc, char *argv[]);
 
-	RenderThreadMode _render_thread_mode;
+	HasServerFeatureCallback has_server_feature_callback = nullptr;
+	RenderThreadMode _render_thread_mode = RENDER_THREAD_SAFE;
 
-	// functions used by main to initialize/deintialize the OS
-	virtual int get_video_driver_count() const = 0;
-	virtual const char *get_video_driver_name(int p_driver) const = 0;
-
-	virtual int get_audio_driver_count() const = 0;
-	virtual const char *get_audio_driver_name(int p_driver) const = 0;
-
+	// Functions used by Main to initialize/deinitialize the OS.
 	void add_logger(Logger *p_logger);
 
-	virtual void initialize_core() = 0;
-	virtual void initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver) = 0;
+	virtual void initialize() = 0;
+	virtual void initialize_joypads() = 0;
+
+	void set_current_rendering_driver_name(const String &p_driver_name) { _current_rendering_driver_name = p_driver_name; }
+	void set_current_rendering_method(const String &p_name) { _current_rendering_method = p_name; }
+
+	void set_display_driver_id(int p_display_driver_id) { _display_driver_id = p_display_driver_id; }
 
 	virtual void set_main_loop(MainLoop *p_main_loop) = 0;
 	virtual void delete_main_loop() = 0;
@@ -129,9 +121,8 @@ protected:
 	virtual void finalize() = 0;
 	virtual void finalize_core() = 0;
 
-	virtual void set_cmdline(const char *p_execpath, const List<String> &p_args);
+	virtual void set_cmdline(const char *p_execpath, const List<String> &p_args, const List<String> &p_user_args);
 
-	void _ensure_user_data_dir();
 	virtual bool _check_internal_feature_support(const String &p_feature) = 0;
 
 public:
@@ -139,136 +130,90 @@ public:
 
 	static OS *get_singleton();
 
-	void print_error(const char *p_function, const char *p_file, int p_line, const char *p_code, const char *p_rationale, Logger::ErrorType p_type = Logger::ERR_ERROR);
-	void print(const char *p_format, ...);
-	void printerr(const char *p_format, ...);
+	String get_current_rendering_driver_name() const { return _current_rendering_driver_name; }
+	String get_current_rendering_method() const { return _current_rendering_method; }
 
-	virtual void alert(const String &p_alert, const String &p_title = "ALERT!") = 0;
-	virtual String get_stdin_string(bool p_block = true) = 0;
+	int get_display_driver_id() const { return _display_driver_id; }
 
-	virtual void set_last_error(const char *p_error);
-	virtual const char *get_last_error() const;
-	virtual void clear_last_error();
+	virtual Vector<String> get_video_adapter_driver_info() const = 0;
 
-	enum MouseMode {
-		MOUSE_MODE_VISIBLE,
-		MOUSE_MODE_HIDDEN,
-		MOUSE_MODE_CAPTURED,
-		MOUSE_MODE_CONFINED
-	};
+	void print_error(const char *p_function, const char *p_file, int p_line, const char *p_code, const char *p_rationale, bool p_editor_notify = false, Logger::ErrorType p_type = Logger::ERR_ERROR);
+	void print(const char *p_format, ...) _PRINTF_FORMAT_ATTRIBUTE_2_3;
+	void print_rich(const char *p_format, ...) _PRINTF_FORMAT_ATTRIBUTE_2_3;
+	void printerr(const char *p_format, ...) _PRINTF_FORMAT_ATTRIBUTE_2_3;
 
-	virtual void set_mouse_mode(MouseMode p_mode);
-	virtual MouseMode get_mouse_mode() const;
+	virtual String get_stdin_string() = 0;
 
-	virtual void warp_mouse_position(const Point2 &p_to) {}
-	virtual Point2 get_mouse_position() const = 0;
-	virtual int get_mouse_button_state() const = 0;
-	virtual void set_window_title(const String &p_title) = 0;
+	virtual Error get_entropy(uint8_t *r_buffer, int p_bytes) = 0; // Should return cryptographically-safe random bytes.
+	virtual String get_system_ca_certificates() { return ""; } // Concatenated certificates in PEM format.
 
-	virtual void set_clipboard(const String &p_text);
-	virtual String get_clipboard() const;
+	virtual PackedStringArray get_connected_midi_inputs();
+	virtual void open_midi_inputs();
+	virtual void close_midi_inputs();
 
-	virtual void set_video_mode(const VideoMode &p_video_mode, int p_screen = 0) = 0;
-	virtual VideoMode get_video_mode(int p_screen = 0) const = 0;
-	virtual void get_fullscreen_mode_list(List<VideoMode> *p_list, int p_screen = 0) const = 0;
+	virtual void alert(const String &p_alert, const String &p_title = "ALERT!");
 
-	virtual int get_screen_count() const { return 1; }
-	virtual int get_current_screen() const { return 0; }
-	virtual void set_current_screen(int p_screen) {}
-	virtual Point2 get_screen_position(int p_screen = -1) const { return Point2(); }
-	virtual Size2 get_screen_size(int p_screen = -1) const { return get_window_size(); }
-	virtual int get_screen_dpi(int p_screen = -1) const { return 72; }
-	virtual Point2 get_window_position() const { return Vector2(); }
-	virtual void set_window_position(const Point2 &p_position) {}
-	virtual Size2 get_window_size() const = 0;
-	virtual void set_window_size(const Size2 p_size) {}
-	virtual void set_window_fullscreen(bool p_enabled) {}
-	virtual bool is_window_fullscreen() const { return true; }
-	virtual void set_window_resizable(bool p_enabled) {}
-	virtual bool is_window_resizable() const { return false; }
-	virtual void set_window_minimized(bool p_enabled) {}
-	virtual bool is_window_minimized() const { return false; }
-	virtual void set_window_maximized(bool p_enabled) {}
-	virtual bool is_window_maximized() const { return true; }
-	virtual void request_attention() {}
-
-	virtual void set_borderless_window(bool p_borderless) {}
-	virtual bool get_borderless_window() { return 0; }
-
-	virtual void set_ime_position(const Point2 &p_pos) {}
-	virtual void set_ime_intermediate_text_callback(ImeCallback p_callback, void *p_inp) {}
-
-	virtual Error open_dynamic_library(const String p_path, void *&p_library_handle, bool p_also_set_library_path = false) { return ERR_UNAVAILABLE; }
+	virtual Error open_dynamic_library(const String &p_path, void *&p_library_handle, bool p_also_set_library_path = false, String *r_resolved_path = nullptr) { return ERR_UNAVAILABLE; }
 	virtual Error close_dynamic_library(void *p_library_handle) { return ERR_UNAVAILABLE; }
-	virtual Error get_dynamic_library_symbol_handle(void *p_library_handle, const String p_name, void *&p_symbol_handle, bool p_optional = false) { return ERR_UNAVAILABLE; }
+	virtual Error get_dynamic_library_symbol_handle(void *p_library_handle, const String &p_name, void *&p_symbol_handle, bool p_optional = false) { return ERR_UNAVAILABLE; }
 
-	virtual void set_keep_screen_on(bool p_enabled);
-	virtual bool is_keep_screen_on() const;
 	virtual void set_low_processor_usage_mode(bool p_enabled);
 	virtual bool is_in_low_processor_usage_mode() const;
 	virtual void set_low_processor_usage_mode_sleep_usec(int p_usec);
 	virtual int get_low_processor_usage_mode_sleep_usec() const;
 
+	void set_delta_smoothing(bool p_enabled);
+	bool is_delta_smoothing_enabled() const;
+
+	virtual Vector<String> get_system_fonts() const { return Vector<String>(); };
+	virtual String get_system_font_path(const String &p_font_name, int p_weight = 400, int p_stretch = 100, bool p_italic = false) const { return String(); };
+	virtual Vector<String> get_system_font_path_for_text(const String &p_font_name, const String &p_text, const String &p_locale = String(), const String &p_script = String(), int p_weight = 400, int p_stretch = 100, bool p_italic = false) const { return Vector<String>(); };
 	virtual String get_executable_path() const;
-	virtual Error execute(const String &p_path, const List<String> &p_arguments, bool p_blocking, ProcessID *r_child_id = NULL, String *r_pipe = NULL, int *r_exitcode = NULL, bool read_stderr = false) = 0;
+	virtual Error execute(const String &p_path, const List<String> &p_arguments, String *r_pipe = nullptr, int *r_exitcode = nullptr, bool read_stderr = false, Mutex *p_pipe_mutex = nullptr, bool p_open_console = false) = 0;
+	virtual Dictionary execute_with_pipe(const String &p_path, const List<String> &p_arguments) { return Dictionary(); }
+	virtual Error create_process(const String &p_path, const List<String> &p_arguments, ProcessID *r_child_id = nullptr, bool p_open_console = false) = 0;
+	virtual Error create_instance(const List<String> &p_arguments, ProcessID *r_child_id = nullptr) { return create_process(get_executable_path(), p_arguments, r_child_id); };
 	virtual Error kill(const ProcessID &p_pid) = 0;
 	virtual int get_process_id() const;
+	virtual bool is_process_running(const ProcessID &p_pid) const = 0;
+	virtual void vibrate_handheld(int p_duration_ms = 500) {}
 
-	virtual Error shell_open(String p_uri);
+	virtual Error shell_open(const String &p_uri);
+	virtual Error shell_show_in_file_manager(String p_path, bool p_open_folder = true);
 	virtual Error set_cwd(const String &p_cwd);
 
 	virtual bool has_environment(const String &p_var) const = 0;
 	virtual String get_environment(const String &p_var) const = 0;
+	virtual void set_environment(const String &p_var, const String &p_value) const = 0;
+	virtual void unset_environment(const String &p_var) const = 0;
 
-	virtual String get_name() = 0;
+	virtual String get_name() const = 0;
+	virtual String get_identifier() const;
+	virtual String get_distribution_name() const = 0;
+	virtual String get_version() const = 0;
 	virtual List<String> get_cmdline_args() const { return _cmdline; }
+	virtual List<String> get_cmdline_user_args() const { return _user_args; }
+	virtual List<String> get_cmdline_platform_args() const { return List<String>(); }
 	virtual String get_model_name() const;
+
+	bool is_layered_allowed() const { return _allow_layered; }
+	bool is_hidpi_allowed() const { return _allow_hidpi; }
+
+	void ensure_user_data_dir();
 
 	virtual MainLoop *get_main_loop() const = 0;
 
 	virtual void yield();
 
-	enum Weekday {
-		DAY_SUNDAY,
-		DAY_MONDAY,
-		DAY_TUESDAY,
-		DAY_WEDNESDAY,
-		DAY_THURSDAY,
-		DAY_FRIDAY,
-		DAY_SATURDAY
-	};
-
-	enum Month {
-		/// Start at 1 to follow Windows SYSTEMTIME structure
-		/// https://msdn.microsoft.com/en-us/library/windows/desktop/ms724950(v=vs.85).aspx
-		MONTH_JANUARY = 1,
-		MONTH_FEBRUARY,
-		MONTH_MARCH,
-		MONTH_APRIL,
-		MONTH_MAY,
-		MONTH_JUNE,
-		MONTH_JULY,
-		MONTH_AUGUST,
-		MONTH_SEPTEMBER,
-		MONTH_OCTOBER,
-		MONTH_NOVEMBER,
-		MONTH_DECEMBER
-	};
-
-	struct Date {
-
-		int year;
+	struct DateTime {
+		int64_t year;
 		Month month;
-		int day;
+		uint8_t day;
 		Weekday weekday;
+		uint8_t hour;
+		uint8_t minute;
+		uint8_t second;
 		bool dst;
-	};
-
-	struct Time {
-
-		int hour;
-		int min;
-		int sec;
 	};
 
 	struct TimeZoneInfo {
@@ -276,77 +221,49 @@ public:
 		String name;
 	};
 
-	virtual Date get_date(bool local = false) const = 0;
-	virtual Time get_time(bool local = false) const = 0;
+	virtual DateTime get_datetime(bool utc = false) const = 0;
 	virtual TimeZoneInfo get_time_zone_info() const = 0;
-	virtual uint64_t get_unix_time() const;
-	virtual uint64_t get_system_time_secs() const;
+	virtual double get_unix_time() const;
 
 	virtual void delay_usec(uint32_t p_usec) const = 0;
-	virtual uint64_t get_ticks_usec() const = 0;
-	uint32_t get_ticks_msec() const;
-	uint64_t get_splash_tick_msec() const;
+	virtual void add_frame_delay(bool p_can_draw);
 
-	virtual bool can_draw() const = 0;
+	virtual uint64_t get_ticks_usec() const = 0;
+	uint64_t get_ticks_msec() const;
 
 	virtual bool is_userfs_persistent() const { return true; }
 
 	bool is_stdout_verbose() const;
+	bool is_stdout_debug_enabled() const;
+
+	bool is_stdout_enabled() const;
+	bool is_stderr_enabled() const;
+	void set_stdout_enabled(bool p_enabled);
+	void set_stderr_enabled(bool p_enabled);
 
 	virtual void disable_crash_handler() {}
 	virtual bool is_disable_crash_handler() const { return false; }
+	virtual void initialize_debugging() {}
 
-	enum CursorShape {
-		CURSOR_ARROW,
-		CURSOR_IBEAM,
-		CURSOR_POINTING_HAND,
-		CURSOR_CROSS,
-		CURSOR_WAIT,
-		CURSOR_BUSY,
-		CURSOR_DRAG,
-		CURSOR_CAN_DROP,
-		CURSOR_FORBIDDEN,
-		CURSOR_VSIZE,
-		CURSOR_HSIZE,
-		CURSOR_BDIAGSIZE,
-		CURSOR_FDIAGSIZE,
-		CURSOR_MOVE,
-		CURSOR_VSPLIT,
-		CURSOR_HSPLIT,
-		CURSOR_HELP,
-		CURSOR_MAX
-	};
-
-	virtual bool has_virtual_keyboard() const;
-	virtual void show_virtual_keyboard(const String &p_existing_text, const Rect2 &p_screen_rect = Rect2());
-	virtual void hide_virtual_keyboard();
-
-	// returns height of the currently shown virtual keyboard (0 if keyboard is hidden)
-	virtual int get_virtual_keyboard_height() const;
-
-	virtual void set_cursor_shape(CursorShape p_shape) = 0;
-
-	virtual bool get_swap_ok_cancel() { return false; }
-	virtual void dump_memory_to_file(const char *p_file);
-	virtual void dump_resources_to_file(const char *p_file);
-	virtual void print_resources_in_use(bool p_short = false);
-	virtual void print_all_resources(String p_to_file = "");
-
-	virtual int get_static_memory_usage() const;
-	virtual int get_static_memory_peak_usage() const;
-	virtual int get_dynamic_memory_usage() const;
-	virtual int get_free_static_memory() const;
+	virtual uint64_t get_static_memory_usage() const;
+	virtual uint64_t get_static_memory_peak_usage() const;
+	virtual Dictionary get_memory_info() const;
 
 	RenderThreadMode get_render_thread_mode() const { return _render_thread_mode; }
 
 	virtual String get_locale() const;
+	String get_locale_language() const;
 
-	String get_safe_dir_name(const String &p_dir_name, bool p_allow_dir_separator = false) const;
+	virtual uint64_t get_embedded_pck_offset() const;
+
+	String get_safe_dir_name(const String &p_dir_name, bool p_allow_paths = false) const;
 	virtual String get_godot_dir_name() const;
 
 	virtual String get_data_path() const;
 	virtual String get_config_path() const;
 	virtual String get_cache_path() const;
+	virtual String get_bundle_resource_dir() const;
+	virtual String get_bundle_icon_path() const;
 
 	virtual String get_user_data_dir() const;
 	virtual String get_resource_dir() const;
@@ -362,103 +279,63 @@ public:
 		SYSTEM_DIR_RINGTONES,
 	};
 
-	virtual String get_system_dir(SystemDir p_dir) const;
+	virtual String get_system_dir(SystemDir p_dir, bool p_shared_storage = true) const;
 
 	virtual Error move_to_trash(const String &p_path) { return FAILED; }
 
-	virtual void set_no_window_mode(bool p_enable);
-	virtual bool is_no_window_mode_enabled() const;
-
-	virtual bool has_touchscreen_ui_hint() const;
-
-	enum ScreenOrientation {
-
-		SCREEN_LANDSCAPE,
-		SCREEN_PORTRAIT,
-		SCREEN_REVERSE_LANDSCAPE,
-		SCREEN_REVERSE_PORTRAIT,
-		SCREEN_SENSOR_LANDSCAPE,
-		SCREEN_SENSOR_PORTRAIT,
-		SCREEN_SENSOR,
-	};
-
-	virtual void set_screen_orientation(ScreenOrientation p_orientation);
-	ScreenOrientation get_screen_orientation() const;
-
-	virtual void enable_for_stealing_focus(ProcessID pid) {}
-	virtual void move_window_to_foreground() {}
-
-	virtual void debug_break();
-
-	virtual void release_rendering_thread();
-	virtual void make_rendering_thread();
-	virtual void swap_buffers();
-
-	virtual void set_icon(const Ref<Image> &p_icon);
-
 	virtual int get_exit_code() const;
+	// `set_exit_code` should only be used from `SceneTree` (or from a similar
+	// level, e.g. from the `Main::start` if leaving without creating a `SceneTree`).
+	// For other components, `SceneTree.quit()` should be used instead.
 	virtual void set_exit_code(int p_code);
 
 	virtual int get_processor_count() const;
+	virtual String get_processor_name() const;
+	virtual int get_default_thread_pool_size() const { return get_processor_count(); }
 
 	virtual String get_unique_id() const;
 
-	virtual Error native_video_play(String p_path, float p_volume, String p_audio_track, String p_subtitle_track);
-	virtual bool native_video_is_playing() const;
-	virtual void native_video_pause();
-	virtual void native_video_unpause();
-	virtual void native_video_stop();
-
-	virtual bool can_use_threads() const;
-
-	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, Object *p_obj, String p_callback);
-	virtual Error dialog_input_text(String p_title, String p_description, String p_partial, Object *p_obj, String p_callback);
-
-	enum LatinKeyboardVariant {
-		LATIN_KEYBOARD_QWERTY,
-		LATIN_KEYBOARD_QWERTZ,
-		LATIN_KEYBOARD_AZERTY,
-		LATIN_KEYBOARD_QZERTY,
-		LATIN_KEYBOARD_DVORAK,
-		LATIN_KEYBOARD_NEO,
-		LATIN_KEYBOARD_COLEMAK,
-	};
-
-	virtual LatinKeyboardVariant get_latin_keyboard_variant() const;
-
-	virtual bool is_joy_known(int p_device);
-	virtual String get_joy_guid(int p_device) const;
-
-	enum EngineContext {
-		CONTEXT_EDITOR,
-		CONTEXT_PROJECTMAN,
-	};
-
-	virtual void set_context(int p_context);
-
-	//amazing hack because OpenGL needs this to be set on a separate thread..
-	//also core can't access servers, so a callback must be used
-	typedef void (*SwitchVSyncCallbackInThread)(bool);
-
-	static SwitchVSyncCallbackInThread switch_vsync_function;
-	void set_use_vsync(bool p_enable);
-	bool is_vsync_enabled() const;
-
-	//real, actual overridable function to switch vsync, which needs to be called from graphics thread if needed
-	virtual void _set_use_vsync(bool p_enable) {}
-
-	virtual OS::PowerState get_power_state();
-	virtual int get_power_seconds_left();
-	virtual int get_power_percent_left();
-
-	virtual void force_process_input(){};
 	bool has_feature(const String &p_feature);
 
-	bool is_hidpi_allowed() const { return _allow_hidpi; }
+	virtual bool is_sandboxed() const;
+
+	void set_has_server_feature_callback(HasServerFeatureCallback p_callback);
+
+	void set_restart_on_exit(bool p_restart, const List<String> &p_restart_arguments);
+	bool is_restart_on_exit_set() const;
+	List<String> get_restart_on_exit_arguments() const;
+
+	virtual bool request_permission(const String &p_name) { return true; }
+	virtual bool request_permissions() { return true; }
+	virtual Vector<String> get_granted_permissions() const { return Vector<String>(); }
+	virtual void revoke_granted_permissions() {}
+
+	// For recording / measuring benchmark data. Only enabled with tools
+	void set_use_benchmark(bool p_use_benchmark);
+	bool is_use_benchmark_set();
+	void set_benchmark_file(const String &p_benchmark_file);
+	String get_benchmark_file();
+	virtual void benchmark_begin_measure(const String &p_context, const String &p_what);
+	virtual void benchmark_end_measure(const String &p_context, const String &p_what);
+	virtual void benchmark_dump();
+
+	virtual void process_and_drop_events() {}
+
+	virtual Error setup_remote_filesystem(const String &p_server_host, int p_port, const String &p_password, String &r_project_path);
+
+	enum PreferredTextureFormat {
+		PREFERRED_TEXTURE_FORMAT_S3TC_BPTC,
+		PREFERRED_TEXTURE_FORMAT_ETC2_ASTC
+	};
+
+	virtual PreferredTextureFormat get_preferred_texture_format() const;
+
+	// Load GDExtensions specific to this platform.
+	// This is invoked by the GDExtensionManager after loading GDExtensions specified by the project.
+	virtual void load_platform_gdextensions() const {}
+
 	OS();
 	virtual ~OS();
 };
 
-VARIANT_ENUM_CAST(OS::PowerState);
-
-#endif
+#endif // OS_H

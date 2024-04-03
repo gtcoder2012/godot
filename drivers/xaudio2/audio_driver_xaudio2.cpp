@@ -1,55 +1,51 @@
-/*************************************************************************/
-/*  audio_driver_xaudio2.cpp                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  audio_driver_xaudio2.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "audio_driver_xaudio2.h"
 
-#include "os/os.h"
-#include "project_settings.h"
-
-const char *AudioDriverXAudio2::get_name() const {
-	return "XAudio2";
-}
+#include "core/config/project_settings.h"
+#include "core/os/os.h"
 
 Error AudioDriverXAudio2::init() {
-
-	active = false;
-	thread_exited = false;
-	exit_thread = false;
+	active.clear();
+	exit_thread.clear();
 	pcm_open = false;
-	samples_in = NULL;
+	samples_in = nullptr;
 
-	mix_rate = 48000;
+	mix_rate = _get_configured_mix_rate();
+
 	// FIXME: speaker_mode seems unused in the Xaudio2 driver so far
 	speaker_mode = SPEAKER_MODE_STEREO;
 	channels = 2;
 
-	int latency = GLOBAL_DEF("audio/output_latency", 25);
+	int latency = Engine::get_singleton()->get_audio_output_latency();
 	buffer_size = closest_power_of_2(latency * mix_rate / 1000);
 
 	samples_in = memnew_arr(int32_t, buffer_size * channels);
@@ -62,15 +58,10 @@ Error AudioDriverXAudio2::init() {
 
 	HRESULT hr;
 	hr = XAudio2Create(&xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR);
-	if (hr != S_OK) {
-		ERR_EXPLAIN("Error creating XAudio2 engine.");
-		ERR_FAIL_V(ERR_UNAVAILABLE);
-	}
+	ERR_FAIL_COND_V_MSG(hr != S_OK, ERR_UNAVAILABLE, "Error creating XAudio2 engine.");
+
 	hr = xaudio->CreateMasteringVoice(&mastering_voice);
-	if (hr != S_OK) {
-		ERR_EXPLAIN("Error creating XAudio2 mastering voice.");
-		ERR_FAIL_V(ERR_UNAVAILABLE);
-	}
+	ERR_FAIL_COND_V_MSG(hr != S_OK, ERR_UNAVAILABLE, "Error creating XAudio2 mastering voice.");
 
 	wave_format.nChannels = channels;
 	wave_format.cbSize = 0;
@@ -81,41 +72,32 @@ Error AudioDriverXAudio2::init() {
 	wave_format.nAvgBytesPerSec = mix_rate * wave_format.nBlockAlign;
 
 	hr = xaudio->CreateSourceVoice(&source_voice, &wave_format, 0, XAUDIO2_MAX_FREQ_RATIO, &voice_callback);
-	if (hr != S_OK) {
-		ERR_EXPLAIN("Error creating XAudio2 source voice. " + itos(hr));
-		ERR_FAIL_V(ERR_UNAVAILABLE);
-	}
+	ERR_FAIL_COND_V_MSG(hr != S_OK, ERR_UNAVAILABLE, "Error creating XAudio2 source voice. Error code: " + itos(hr) + ".");
 
-	mutex = Mutex::create();
-	thread = Thread::create(AudioDriverXAudio2::thread_func, this);
+	thread.start(AudioDriverXAudio2::thread_func, this);
 
 	return OK;
-};
+}
 
 void AudioDriverXAudio2::thread_func(void *p_udata) {
+	AudioDriverXAudio2 *ad = static_cast<AudioDriverXAudio2 *>(p_udata);
 
-	AudioDriverXAudio2 *ad = (AudioDriverXAudio2 *)p_udata;
-
-	uint64_t usdelay = (ad->buffer_size / float(ad->mix_rate)) * 1000000;
-
-	while (!ad->exit_thread) {
-
-		if (!ad->active) {
-
+	while (!ad->exit_thread.is_set()) {
+		if (!ad->active.is_set()) {
 			for (int i = 0; i < AUDIO_BUFFERS; i++) {
 				ad->xaudio_buffer[i].Flags = XAUDIO2_END_OF_STREAM;
 			}
 
 		} else {
-
 			ad->lock();
+			ad->start_counting_ticks();
 
 			ad->audio_server_process(ad->buffer_size, ad->samples_in);
 
+			ad->stop_counting_ticks();
 			ad->unlock();
 
 			for (unsigned int i = 0; i < ad->buffer_size * ad->channels; i++) {
-
 				ad->samples_out[ad->current_buffer][i] = ad->samples_in[i] >> 16;
 			}
 
@@ -132,33 +114,24 @@ void AudioDriverXAudio2::thread_func(void *p_udata) {
 				WaitForSingleObject(ad->voice_callback.buffer_end_event, INFINITE);
 			}
 		}
-	};
-
-	ad->thread_exited = true;
-};
+	}
+}
 
 void AudioDriverXAudio2::start() {
-
-	active = true;
+	active.set();
 	HRESULT hr = source_voice->Start(0);
-	if (hr != S_OK) {
-		ERR_EXPLAIN("XAudio2 start error " + itos(hr));
-		ERR_FAIL();
-	}
-};
+	ERR_FAIL_COND_MSG(hr != S_OK, "Error starting XAudio2 driver. Error code: " + itos(hr) + ".");
+}
 
 int AudioDriverXAudio2::get_mix_rate() const {
-
 	return mix_rate;
-};
+}
 
 AudioDriver::SpeakerMode AudioDriverXAudio2::get_speaker_mode() const {
-
 	return speaker_mode;
-};
+}
 
 float AudioDriverXAudio2::get_latency() {
-
 	XAUDIO2_PERFORMANCE_DATA perf_data;
 	xaudio->GetPerformanceData(&perf_data);
 	if (perf_data.CurrentLatencyInSamples) {
@@ -169,25 +142,18 @@ float AudioDriverXAudio2::get_latency() {
 }
 
 void AudioDriverXAudio2::lock() {
+	mutex.lock();
+}
 
-	if (!thread || !mutex)
-		return;
-	mutex->lock();
-};
 void AudioDriverXAudio2::unlock() {
-
-	if (!thread || !mutex)
-		return;
-	mutex->unlock();
-};
+	mutex.unlock();
+}
 
 void AudioDriverXAudio2::finish() {
-
-	if (!thread)
-		return;
-
-	exit_thread = true;
-	Thread::wait_to_finish(thread);
+	exit_thread.set();
+	if (thread.is_started()) {
+		thread.wait_to_finish();
+	}
 
 	if (source_voice) {
 		source_voice->Stop(0);
@@ -196,33 +162,19 @@ void AudioDriverXAudio2::finish() {
 
 	if (samples_in) {
 		memdelete_arr(samples_in);
-	};
+	}
 	if (samples_out[0]) {
 		for (int i = 0; i < AUDIO_BUFFERS; i++) {
 			memdelete_arr(samples_out[i]);
 		}
-	};
+	}
 
 	mastering_voice->DestroyVoice();
-
-	memdelete(thread);
-	if (mutex)
-		memdelete(mutex);
-	thread = NULL;
-};
+}
 
 AudioDriverXAudio2::AudioDriverXAudio2() {
-
-	mutex = NULL;
-	thread = NULL;
-	wave_format = { 0 };
 	for (int i = 0; i < AUDIO_BUFFERS; i++) {
 		xaudio_buffer[i] = { 0 };
 		samples_out[i] = 0;
 	}
-	current_buffer = 0;
-};
-
-AudioDriverXAudio2::~AudioDriverXAudio2(){
-
-};
+}

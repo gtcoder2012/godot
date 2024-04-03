@@ -1,136 +1,166 @@
-/*************************************************************************/
-/*  audio_stream_ogg_vorbis.h                                            */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  audio_stream_ogg_vorbis.h                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #ifndef AUDIO_STREAM_OGG_VORBIS_H
 #define AUDIO_STREAM_OGG_VORBIS_H
 
-#include "io/resource_loader.h"
-#include "os/file_access.h"
-#include "os/thread_safe.h"
-#include "scene/resources/audio_stream.h"
+#include "core/variant/variant.h"
+#include "modules/ogg/ogg_packet_sequence.h"
+#include "servers/audio/audio_stream.h"
 
-#include <vorbis/vorbisfile.h>
+#include <vorbis/codec.h>
 
-class AudioStreamPlaybackOGGVorbis : public AudioStreamPlayback {
+class AudioStreamOggVorbis;
 
-	GDCLASS(AudioStreamPlaybackOGGVorbis, AudioStreamPlayback);
+class AudioStreamPlaybackOggVorbis : public AudioStreamPlaybackResampled {
+	GDCLASS(AudioStreamPlaybackOggVorbis, AudioStreamPlaybackResampled);
+
+	uint32_t frames_mixed = 0;
+	bool active = false;
+	bool looping_override = false;
+	bool looping = false;
+	int loops = 0;
 
 	enum {
-		MIN_MIX = 1024
+		FADE_SIZE = 256
 	};
+	AudioFrame loop_fade[FADE_SIZE];
+	int loop_fade_remaining = FADE_SIZE;
 
-	FileAccess *f;
+	vorbis_info info;
+	vorbis_comment comment;
+	vorbis_dsp_state dsp_state;
+	vorbis_block block;
 
-	ov_callbacks _ov_callbacks;
-	float length;
-	static size_t _ov_read_func(void *p_dst, size_t p_data, size_t p_count, void *_f);
-	static int _ov_seek_func(void *_f, ogg_int64_t offs, int whence);
-	static int _ov_close_func(void *_f);
-	static long _ov_tell_func(void *_f);
+	bool info_is_allocated = false;
+	bool comment_is_allocated = false;
+	bool dsp_state_is_allocated = false;
+	bool block_is_allocated = false;
 
-	String file;
-	int64_t frames_mixed;
+	bool ready = false;
 
-	bool stream_loaded;
-	volatile bool playing;
-	OggVorbis_File vf;
-	int stream_channels;
-	int stream_srate;
-	int current_section;
+	bool have_samples_left = false;
+	bool have_packets_left = false;
 
-	bool paused;
-	bool loops;
-	int repeats;
+	friend class AudioStreamOggVorbis;
 
-	Error _load_stream();
-	void _clear_stream();
-	void _close_file();
+	Ref<OggPacketSequence> vorbis_data;
+	Ref<OggPacketSequencePlayback> vorbis_data_playback;
+	Ref<AudioStreamOggVorbis> vorbis_stream;
 
-	bool stream_valid;
-	float loop_restart_time;
+	int _mix_frames(AudioFrame *p_buffer, int p_frames);
+	int _mix_frames_vorbis(AudioFrame *p_buffer, int p_frames);
 
-public:
-	Error set_file(const String &p_file);
+	// Allocates vorbis data structures. Returns true upon success, false on failure.
+	bool _alloc_vorbis();
 
-	virtual void play(float p_from = 0);
-	virtual void stop();
-	virtual bool is_playing() const;
-
-	virtual void set_loop_restart_time(float p_time) { loop_restart_time = p_time; }
-
-	virtual void set_paused(bool p_paused);
-	virtual bool is_paused() const;
-
-	virtual void set_loop(bool p_enable);
-	virtual bool has_loop() const;
-
-	virtual float get_length() const;
-
-	virtual String get_stream_name() const;
-
-	virtual int get_loop_count() const;
-
-	virtual float get_playback_position() const;
-	virtual void seek(float p_time);
-
-	virtual int get_channels() const { return stream_channels; }
-	virtual int get_mix_rate() const { return stream_srate; }
-
-	virtual int get_minimum_buffer_size() const { return 0; }
-	virtual int mix(int16_t *p_buffer, int p_frames);
-
-	AudioStreamPlaybackOGGVorbis();
-	~AudioStreamPlaybackOGGVorbis();
-};
-
-class AudioStreamOGGVorbis : public AudioStream {
-
-	GDCLASS(AudioStreamOGGVorbis, AudioStream);
-
-	String file;
+protected:
+	virtual int _mix_internal(AudioFrame *p_buffer, int p_frames) override;
+	virtual float get_stream_sampling_rate() override;
 
 public:
-	Ref<AudioStreamPlayback> instance_playback() {
-		Ref<AudioStreamPlaybackOGGVorbis> pb = memnew(AudioStreamPlaybackOGGVorbis);
-		pb->set_file(file);
-		return pb;
-	}
+	virtual void start(double p_from_pos = 0.0) override;
+	virtual void stop() override;
+	virtual bool is_playing() const override;
 
-	void set_file(const String &p_file) { file = p_file; }
+	virtual int get_loop_count() const override; //times it looped
+
+	virtual double get_playback_position() const override;
+	virtual void seek(double p_time) override;
+
+	virtual void tag_used_streams() override;
+
+	virtual void set_parameter(const StringName &p_name, const Variant &p_value) override;
+	virtual Variant get_parameter(const StringName &p_name) const override;
+
+	AudioStreamPlaybackOggVorbis() {}
+	~AudioStreamPlaybackOggVorbis();
 };
 
-class ResourceFormatLoaderAudioStreamOGGVorbis : public ResourceFormatLoader {
+class AudioStreamOggVorbis : public AudioStream {
+	GDCLASS(AudioStreamOggVorbis, AudioStream);
+	OBJ_SAVE_TYPE(AudioStream); // Saves derived classes with common type so they can be interchanged.
+	RES_BASE_EXTENSION("oggvorbisstr");
+
+	friend class AudioStreamPlaybackOggVorbis;
+
+	int channels = 1;
+	double length = 0.0;
+	bool loop = false;
+	double loop_offset = 0.0;
+
+	// Performs a seek to the beginning of the stream, should not be called during playback!
+	// Also causes allocation and deallocation.
+	void maybe_update_info();
+
+	Ref<OggPacketSequence> packet_sequence;
+
+	double bpm = 0;
+	int beat_count = 0;
+	int bar_beats = 4;
+
+protected:
+	static void _bind_methods();
+
 public:
-	virtual RES load(const String &p_path, const String &p_original_path = "", Error *r_error = NULL);
-	virtual void get_recognized_extensions(List<String> *p_extensions) const;
-	virtual bool handles_type(const String &p_type) const;
-	virtual String get_resource_type(const String &p_path) const;
+	static Ref<AudioStreamOggVorbis> load_from_file(const String &p_path);
+	static Ref<AudioStreamOggVorbis> load_from_buffer(const Vector<uint8_t> &file_data);
+	void set_loop(bool p_enable);
+	virtual bool has_loop() const override;
+
+	void set_loop_offset(double p_seconds);
+	double get_loop_offset() const;
+
+	void set_bpm(double p_bpm);
+	virtual double get_bpm() const override;
+
+	void set_beat_count(int p_beat_count);
+	virtual int get_beat_count() const override;
+
+	void set_bar_beats(int p_bar_beats);
+	virtual int get_bar_beats() const override;
+
+	virtual Ref<AudioStreamPlayback> instantiate_playback() override;
+	virtual String get_stream_name() const override;
+
+	void set_packet_sequence(Ref<OggPacketSequence> p_packet_sequence);
+	Ref<OggPacketSequence> get_packet_sequence() const;
+
+	virtual double get_length() const override; //if supported, otherwise return 0
+
+	virtual bool is_monophonic() const override;
+
+	virtual void get_parameter_list(List<Parameter> *r_parameters) override;
+
+	AudioStreamOggVorbis();
+	virtual ~AudioStreamOggVorbis();
 };
 
-#endif // AUDIO_STREAM_OGG_H
+#endif // AUDIO_STREAM_OGG_VORBIS_H

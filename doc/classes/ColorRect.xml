@@ -1,25 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="ColorRect" inherits="Control" category="Core" version="3.0-beta">
+<class name="ColorRect" inherits="Control" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
-		Colored rect for canvas.
+		A control that displays a solid color rectangle.
 	</brief_description>
 	<description>
-		An object that is represented on the canvas as a rect with color. [Color] is used to set or get color info for the rect.
+		Displays a rectangle filled with a solid [member color]. If you need to display the border alone, consider using a [Panel] instead.
 	</description>
 	<tutorials>
+		<link title="2D Dodge The Creeps Demo">https://godotengine.org/asset-library/asset/515</link>
 	</tutorials>
-	<demos>
-	</demos>
-	<methods>
-	</methods>
 	<members>
-		<member name="color" type="Color" setter="set_frame_color" getter="get_frame_color">
-			The color to fill the [code]ColorRect[/code].
-			[codeblock]
-			$ColorRect.color = Color(1, 0, 0, 1) # Set ColorRect node's color to red
-			[/codeblock]
+		<member name="color" type="Color" setter="set_color" getter="get_color" default="Color(1, 1, 1, 1)" keywords="colour">
+			The fill color of the rectangle.
 		</member>
 	</members>
-	<constants>
-	</constants>
 </class>

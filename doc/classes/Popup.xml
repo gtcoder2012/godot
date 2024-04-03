@@ -1,75 +1,31 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="Popup" inherits="Control" category="Core" version="3.0-beta">
+<class name="Popup" inherits="Window" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
-		Base container control for popups and dialogs.
+		Base class for contextual windows and panels with fixed position.
 	</brief_description>
 	<description>
-		Popup is a base [Control] used to show dialogs and popups. It's a subwindow and modal by default (see [Control]) and has helpers for custom popup behavior.
+		[Popup] is a base class for contextual windows and panels with fixed position. It's a modal by default (see [member Window.popup_window]) and provides methods for implementing custom popup behavior.
 	</description>
 	<tutorials>
 	</tutorials>
-	<demos>
-	</demos>
-	<methods>
-		<method name="popup">
-			<return type="void">
-			</return>
-			<argument index="0" name="bounds" type="Rect2" default="Rect2( 0, 0, 0, 0 )">
-			</argument>
-			<description>
-				Popup (show the control in modal form).
-			</description>
-		</method>
-		<method name="popup_centered">
-			<return type="void">
-			</return>
-			<argument index="0" name="size" type="Vector2" default="Vector2( 0, 0 )">
-			</argument>
-			<description>
-				Popup (show the control in modal form) in the center of the screen, at the current size, or at a size determined by "size".
-			</description>
-		</method>
-		<method name="popup_centered_minsize">
-			<return type="void">
-			</return>
-			<argument index="0" name="minsize" type="Vector2" default="Vector2( 0, 0 )">
-			</argument>
-			<description>
-				Popup (show the control in modal form) in the center of the screen, ensuring the size is never smaller than [code]minsize[/code].
-			</description>
-		</method>
-		<method name="popup_centered_ratio">
-			<return type="void">
-			</return>
-			<argument index="0" name="ratio" type="float" default="0.75">
-			</argument>
-			<description>
-				Popup (show the control in modal form) in the center of the screen, scaled at a ratio of size of the screen.
-			</description>
-		</method>
-	</methods>
 	<members>
-		<member name="popup_exclusive" type="bool" setter="set_exclusive" getter="is_exclusive">
-		</member>
+		<member name="borderless" type="bool" setter="set_flag" getter="get_flag" overrides="Window" default="true" />
+		<member name="popup_window" type="bool" setter="set_flag" getter="get_flag" overrides="Window" default="true" />
+		<member name="transient" type="bool" setter="set_transient" getter="is_transient" overrides="Window" default="true" />
+		<member name="unresizable" type="bool" setter="set_flag" getter="get_flag" overrides="Window" default="true" />
+		<member name="visible" type="bool" setter="set_visible" getter="is_visible" overrides="Window" default="false" />
+		<member name="wrap_controls" type="bool" setter="set_wrap_controls" getter="is_wrapping_controls" overrides="Window" default="true" />
 	</members>
 	<signals>
-		<signal name="about_to_show">
-			<description>
-				This signal is emitted when a popup is about to be shown. (often used in [PopupMenu] for clearing the list of options and creating a new one according to the current context).
-			</description>
-		</signal>
 		<signal name="popup_hide">
 			<description>
-				This signal is emitted when a popup is hidden.
+				Emitted when the popup is hidden.
 			</description>
 		</signal>
 	</signals>
-	<constants>
-		<constant name="NOTIFICATION_POST_POPUP" value="80">
-			Notification sent right after the popup is shown.
-		</constant>
-		<constant name="NOTIFICATION_POPUP_HIDE" value="81">
-			Notification sent right after the popup is hidden.
-		</constant>
-	</constants>
+	<theme_items>
+		<theme_item name="panel" data_type="style" type="StyleBox">
+			Default [StyleBox] for the [Popup].
+		</theme_item>
+	</theme_items>
 </class>
